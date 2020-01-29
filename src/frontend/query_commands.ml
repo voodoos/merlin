@@ -281,40 +281,67 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     let result = List.filter_map ~f:aux path in
     (* enclosings of cursor in given expression *)
     let small_enclosings =
-      let exprs = reconstruct_identifier pipeline pos expro in
-      let env, node = Mbrowse.leaf_node (Mtyper.node_at typer pos) in
       let open Browse_raw in
-      let include_lident = match node with
-        | Pattern _ -> false
-        | _ -> true
+      let env, node = Mbrowse.leaf_node (Mtyper.node_at typer pos) in
+      let of_node node =
+        (* Types of constructors and idents can be directly extracted from `typedtree`
+           Moreover the `of_exprs` heuristic  would fail for coerced constructors *)
+        let ret typ = Some (Mbrowse.node_loc node, `Type (env, typ), `No) in
+        match node with
+        | Expression e ->
+          (match e.exp_desc with
+          | Texp_construct (_, cdesc, _) ->
+            (*Printf.eprintf "toto";
+            Printtyp.wrap_printing_env env ~verbosity (fun () ->
+              Printtyp.type_expr (Format.err_formatter) cdesc.cstr_res);
+            Format.pp_print_flush Format.err_formatter ();*)
+            ret cdesc.cstr_res
+          | Texp_ident (_, _, vdes) ->
+            ret vdes.val_type
+          | _ -> None)
+        | Pattern p ->
+          (match p.pat_desc with
+          | Tpat_construct (_, cdesc, _) ->
+            ret cdesc.cstr_res
+          | _ -> None)
+        | _ -> None
       in
-      let include_uident = match node with
-        | Module_binding _
-        | Module_binding_name _
-        | Module_declaration _
-        | Module_declaration_name _
-        | Module_type_declaration _
-        | Module_type_declaration_name _
-          -> false
-        | _ -> true
-      in
-      List.filter_map exprs ~f:(fun {Location. txt = source; loc} ->
-          match source with
-          | "" -> None
-          | source when not include_lident && Char.is_lowercase source.[0] ->
-            None
-          | source when not include_uident && Char.is_uppercase source.[0] ->
-            None
-          | source ->
-            try
-              let ppf, to_string = Format.to_string () in
-              if Type_utils.type_in_env ~verbosity env ppf source then
-                Some (loc, `String (to_string ()), `No)
-              else
-                None
-            with _ ->
+      let of_exprs exprs = (* Get type from reconstructed identifier *)
+        let include_lident = match node with
+          | Pattern _ -> false
+          | _ -> true
+        in
+        let include_uident = match node with
+          | Module_binding _
+          | Module_binding_name _
+          | Module_declaration _
+          | Module_declaration_name _
+          | Module_type_declaration _
+          | Module_type_declaration_name _
+            -> false
+          | _ -> true
+        in
+        List.filter_map exprs ~f:(fun {Location. txt = source; loc} ->
+            match source with
+            | "" -> None
+            | source when not include_lident && Char.is_lowercase source.[0] ->
               None
+            | source when not include_uident && Char.is_uppercase source.[0] ->
+              None
+            | source ->
+              try
+                let ppf, to_string = Format.to_string () in
+                if Type_utils.type_in_env ~verbosity env ppf source then
+                  Some (loc, `String (to_string ()), `No)
+                else
+                  None
+              with _ ->
+                None
         )
+      in
+      match of_node node with
+      | Some l -> [l]
+      | None -> of_exprs (reconstruct_identifier pipeline pos expro)
     in
     let normalize ({Location. loc_start; loc_end; _}, text, _tail) =
         Lexing.split_pos loc_start, Lexing.split_pos loc_end, text in
