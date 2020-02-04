@@ -290,19 +290,12 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
         match node with
         | Expression e ->
           (match e.exp_desc with
-          | Texp_construct (_, cdesc, _) ->
-            (*Printf.eprintf "toto";
-            Printtyp.wrap_printing_env env ~verbosity (fun () ->
-              Printtyp.type_expr (Format.err_formatter) cdesc.cstr_res);
-            Format.pp_print_flush Format.err_formatter ();*)
-            ret cdesc.cstr_res
-          | Texp_ident (_, _, vdes) ->
-            ret vdes.val_type
+          | Texp_construct (_, cdesc, _) -> ret cdesc.cstr_res
+          | Texp_ident (_, _, vdes) -> ret vdes.val_type
           | _ -> None)
         | Pattern p ->
           (match p.pat_desc with
-          | Tpat_construct (_, cdesc, _) ->
-            ret cdesc.cstr_res
+          | Tpat_construct (_, cdesc, _) -> ret cdesc.cstr_res
           | _ -> None)
         | _ -> None
       in
