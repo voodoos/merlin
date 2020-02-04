@@ -30,6 +30,10 @@ Various parts of the cons.ml:
     }
   ]
 
+Note: the output is duplicated because it is the result of the concatenation
+of both the ast-based and the small_enclosings (source based) heuristics.
+We aim to fix that in the future.
+
 - The pattern:
 
   $ $MERLIN single type-enclosing -position 8:6 -verbosity 0 \
