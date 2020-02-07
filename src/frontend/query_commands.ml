@@ -283,38 +283,50 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     let small_enclosings =
       let open Browse_raw in
       let env, node = Mbrowse.leaf_node (Mtyper.node_at typer pos) in
-      let of_node node =
-        (* Types of constructors and idents can be directly extracted from `typedtree`
-           Moreover the `of_exprs` heuristic  would fail for coerced constructors *)
-        let ret typ = Some (Mbrowse.node_loc node, `Type (env, typ), `No) in
+      let exprs = (reconstruct_identifier pipeline pos expro) in
+      let ident_opt =
+        let longident_to_string id = try
+          String.concat ~sep:"." (Longident.flatten id)
+          with Misc.Fatal_error _ -> ""
+        in
+        let ret typ = Mbrowse.node_loc node, `Type (env, typ), `No in
         match node with
         | Expression e ->
           (match e.exp_desc with
-          | Texp_construct (_, cdesc, _) -> ret cdesc.cstr_res
-          | Texp_ident (_, _, vdes) -> ret vdes.val_type
+          | Texp_construct ({ Location. txt; loc=_ }, cdesc, _) ->
+            Some(longident_to_string txt, ret cdesc.cstr_res)
+          | Texp_ident (_, { Location. txt; loc=_ }, vdes) ->
+            Some(longident_to_string txt, ret vdes.val_type)
           | _ -> None)
         | Pattern p ->
           (match p.pat_desc with
-          | Tpat_construct (_, cdesc, _) -> ret cdesc.cstr_res
+          | Tpat_construct ({ Location. txt; loc=_ }, cdesc, _) ->
+            Some(longident_to_string txt, ret cdesc.cstr_res)
           | _ -> None)
         | _ -> None
       in
-      let of_exprs exprs = (* Get type from reconstructed identifier *)
-        let include_lident = match node with
-          | Pattern _ -> false
-          | _ -> true
-        in
-        let include_uident = match node with
-          | Module_binding _
-          | Module_binding_name _
-          | Module_declaration _
-          | Module_declaration_name _
-          | Module_type_declaration _
-          | Module_type_declaration_name _
-            -> false
-          | _ -> true
-        in
-        List.filter_map exprs ~f:(fun {Location. txt = source; loc} ->
+      let include_lident = match node with
+        | Pattern _ -> false
+        | _ -> true
+      in
+      let include_uident = match node with
+        | Module_binding _
+        | Module_binding_name _
+        | Module_declaration _
+        | Module_declaration_name _
+        | Module_type_declaration _
+        | Module_type_declaration_name _
+          -> false
+        | _ -> true
+      in
+      let f =
+        fun {Location. txt = source; loc} ->
+          match ident_opt with
+          | Some (ident, typ) when String.equal ident source ->
+            (* Retrieve the type from the AST when it is possible *)
+            Some typ
+          | _ ->
+            (* Else use the reconstructed identifier *)
             match source with
             | "" -> None
             | source when not include_lident && Char.is_lowercase source.[0] ->
@@ -330,11 +342,8 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
                   None
               with _ ->
                 None
-        )
       in
-      match of_node node with
-      | Some l -> [l]
-      | None -> of_exprs (reconstruct_identifier pipeline pos expro)
+      List.filter_map exprs ~f
     in
     let normalize ({Location. loc_start; loc_end; _}, text, _tail) =
         Lexing.split_pos loc_start, Lexing.split_pos loc_end, text in
