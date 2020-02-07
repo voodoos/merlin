@@ -322,7 +322,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
       let f =
         fun {Location. txt = source; loc} ->
           match ident_opt with
-          | Some (ident, typ) when String.equal ident source ->
+          | Some (ident, typ) when ident = source ->
             (* Retrieve the type from the AST when it is possible *)
             Some typ
           | _ ->
