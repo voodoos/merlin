@@ -41,18 +41,6 @@ We aim to fix that in the future.
   [
     {
       "start": {
-        "line": 8,
-        "col": 4
-      },
-      "end": {
-        "line": 8,
-        "col": 5
-      },
-      "type": "t",
-      "tail": "no"
-    },
-    {
-      "start": {
         "line": 7,
         "col": 2
       },
@@ -61,6 +49,78 @@ We aim to fix that in the future.
         "col": 11
       },
       "type": "unit",
+      "tail": "no"
+    },
+    {
+      "start": {
+        "line": 6,
+        "col": 6
+      },
+      "end": {
+        "line": 8,
+        "col": 11
+      },
+      "type": "t -> unit",
+      "tail": "no"
+    }
+  ]
+
+- Non-regression test:
+
+  $ $MERLIN single type-enclosing -position 15:13 -verbosity 0 \
+  > -filename ./cons.ml < ./cons.ml | jq ".value[0:2]"
+  [
+    {
+      "start": {
+        "line": 15,
+        "col": 12
+      },
+      "end": {
+        "line": 15,
+        "col": 13
+      },
+      "type": "sig type t = A type u = A | B end",
+      "tail": "no"
+    },
+    {
+      "start": {
+        "line": 15,
+        "col": 12
+      },
+      "end": {
+        "line": 15,
+        "col": 15
+      },
+      "type": "M.t",
+      "tail": "no"
+    }
+  ]
+
+  $ $MERLIN single type-enclosing -position 15:15 -verbosity 0 \
+  > -filename ./cons.ml < ./cons.ml | jq ".value[0:2]"
+  [
+    {
+      "start": {
+        "line": 15,
+        "col": 12
+      },
+      "end": {
+        "line": 15,
+        "col": 15
+      },
+      "type": "M.t",
+      "tail": "no"
+    },
+    {
+      "start": {
+        "line": 15,
+        "col": 12
+      },
+      "end": {
+        "line": 15,
+        "col": 15
+      },
+      "type": "M.t",
       "tail": "no"
     }
   ]
