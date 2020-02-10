@@ -41,5 +41,6 @@ type t =
 
 val to_string : t -> string
 
-val inspect_browse_tree : Mbrowse.t list -> Longident.t -> Std.Lexing.position
--> t option
+val inspect_browse_tree :
+  Mbrowse.t list -> Longident.t ->
+  Std.Lexing.position -> t option
