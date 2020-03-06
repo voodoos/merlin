@@ -28,10 +28,6 @@
 
 val log : 'a Logger.printf
 
-module Namespace : sig
-  type t = [ `Type | `Mod | `Modtype | `Vals | `Constr | `Labels ]
-end
-
 val from_string
   :  config:Mconfig.t
   -> env:Env.t
