@@ -243,7 +243,8 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     let env, _ = Mbrowse.leaf_node (Mtyper.node_at typer pos) in
     let ppf, to_string = Format.to_string () in
     let verbosity = verbosity pipeline in
-    ignore (Type_utils.type_in_env ~verbosity env ppf source : bool);
+    let context = Context.Expr in
+    ignore (Type_utils.type_in_env ~verbosity ~context env ppf source : bool);
     to_string ()
 
   | Type_enclosing (expro, pos, index) ->

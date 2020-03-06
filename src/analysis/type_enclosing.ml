@@ -43,11 +43,13 @@ let from_reconstructed get_context verbosity exprs env node =
       in
       let f =
         fun {Location. txt = source; loc} ->
-          match (get_context source) with
+          let context = get_context source in
+          match context with
             (* Retrieve the type from the AST when it is possible *)
           | Some (Context.Constructor cd) ->
             Some (Mbrowse.node_loc node, `Type (env, cd.cstr_res), `No)
           | _ ->
+            let context = Option.value ~default:Context.Expr context in
             (* Else use the reconstructed identifier *)
             match source with
             | "" -> None
@@ -58,7 +60,7 @@ let from_reconstructed get_context verbosity exprs env node =
             | source ->
               try
                 let ppf, to_string = Format.to_string () in
-                if Type_utils.type_in_env ~verbosity env ppf source then
+                if Type_utils.type_in_env ~verbosity ~context env ppf source then
                   Some (loc, `String (to_string ()), `No)
                 else
                   None

@@ -212,7 +212,7 @@ let print_exn ppf exn =
     Format.pp_print_string ppf (Printexc.to_string exn)
   | Some (`Ok report) -> Location.print_main ppf report
 
-let type_in_env ?(verbosity=0) ?keywords env ppf expr =
+let type_in_env ?(verbosity=0) ?keywords ~context env ppf expr =
   let print_expr expression =
     let (str, _sg, _) =
       Env.with_cmis @@ fun () ->
@@ -235,14 +235,12 @@ let type_in_env ?(verbosity=0) ?keywords env ppf expr =
       | Parsetree.Pexp_construct (longident, _) -> `Constr longident
       | _ -> `Other
     in
+    let open Context in
     match extract_specific_parsing_info e with
     | `Ident longident ->
-      begin try
-        (* Don't catch type errors *)
-        print_expr e;
-        true
-      with exn ->
-        try
+      (match context with
+      | Type ->
+        begin try
           let p = Env.lookup_type longident.Asttypes.txt env in
           let t = Env.find_type p env in
           Printtyp.type_declaration env
@@ -250,8 +248,15 @@ let type_in_env ?(verbosity=0) ?keywords env ppf expr =
                (Path.last p))
             ppf t;
           true
-        with _ -> print_exn ppf exn; false
-      end
+        with exn -> print_exn ppf exn; false
+        end
+      | _ ->
+      begin try
+        (* Don't catch type errors *)
+        print_expr e;
+        true
+      with exn -> print_exn ppf exn; false
+      end)
 
     | `Constr longident ->
       begin try
