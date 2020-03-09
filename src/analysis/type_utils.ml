@@ -44,17 +44,6 @@ let lookup_module name env =
   let md = Env.find_module path env in
   path, md.Types.md_type, md.Types.md_attributes
 
-let lookup_modtype name env =
-  let path, mdtype = Env.lookup_modtype name env in
-  path, mdtype.Types.mtd_type
-
-let lookup_module_or_modtype name env =
-  try
-    let path, mty, _ = lookup_module name env in
-    path, Some mty
-  with Not_found ->
-    lookup_modtype name env
-
 let verbosity = ref 0
 
 module Printtyp = struct
@@ -169,6 +158,14 @@ let rec mod_smallerthan n m =
     end
   | _ -> Some 1
 
+let print_short_modtype verbosity env ppf md  =
+  match mod_smallerthan 1000 md with
+  | None when verbosity = 0 ->
+    Format.pp_print_string ppf
+      "(* large signature, repeat to confirm *)";
+  | _ ->
+    Printtyp.modtype env ppf md
+
 let print_type_with_decl ~verbosity env ppf typ =
   if verbosity > 0 then
     match (Ctype.repr typ).Types.desc with
@@ -259,39 +256,47 @@ let type_in_env ?(verbosity=0) ?keywords ~context env ppf expr =
       end)
 
     | `Constr longident ->
+      (match context with
+      (* TODO: special processing for module aliases ? *)
+      | Module_type ->
+        begin try
+          let p, _mt = Env.lookup_modtype longident.Asttypes.txt env in
+          let mtd = Env.find_modtype p env in
+          (match mtd.mtd_type with
+          | Some mt -> print_short_modtype verbosity env ppf mt
+          | None -> Format.pp_print_string ppf "(* abstract module *)");
+          true
+        with exn -> print_exn ppf exn; false
+        end
+      | Module_path ->
+        begin try
+          let path =
+            Env.lookup_module ~load:true longident.Asttypes.txt env
+          in
+          let md = Env.find_module path env in
+          print_short_modtype verbosity env ppf (md.md_type);
+          true
+        with exn -> print_exn ppf exn; false
+        end
+      | _ ->
       begin try
         print_expr e;
         true
-      with exn ->
-        try
-          (* TODO: special processing for module aliases? *)
-          match lookup_module_or_modtype longident.Asttypes.txt env with
-          | _path, None ->
-            Format.pp_print_string ppf "(* abstract module *)";
-            true
-          | _path, Some md ->
-            begin match mod_smallerthan 1000 md with
-            | None when verbosity = 0 ->
-              Format.pp_print_string ppf "(* large signature, repeat to confirm *)";
-            | _ ->
-              Printtyp.modtype env ppf md
-            end;
-            true
-        with _ ->
-          try
-            let cstr_desc =
-              Env.lookup_constructor longident.Asttypes.txt env
-            in
-                  (*
-                     Format.pp_print_string ppf name;
-                     Format.pp_print_string ppf " : ";
-                  *)
-            (* FIXME: support Reader printer *)
-            !Oprint.out_type ppf (Browse_misc.print_constructor cstr_desc);
-            true
-          with _ -> print_exn ppf exn; false
-      end
-
+        with exn ->
+            try
+              let cstr_desc =
+                Env.lookup_constructor longident.Asttypes.txt env
+              in
+                    (*
+                      Format.pp_print_string ppf name;
+                      Format.pp_print_string ppf " : ";
+                    *)
+              (* FIXME: support Reader printer *)
+              !Oprint.out_type ppf (Browse_misc.print_constructor cstr_desc);
+              true
+            with _ -> print_exn ppf exn; false
+        end
+      )
     | `Other ->
       try print_expr e; true
       with exn -> print_exn ppf exn; false
