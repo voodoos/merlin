@@ -32,13 +32,13 @@ Get type of a shadowing let binding:
   ]
 
   $ cat log
-  # 0.00 type-enclosing - from_nodes
+  # 0.01 type-enclosing - from_nodes
   unhandled node under cursor: value_binding
-  # 0.00 type-enclosing - from_nodes
+  # 0.01 type-enclosing - from_nodes
   unhandled node under cursor: structure_item
-  # 0.00 type-enclosing - from_nodes
+  # 0.01 type-enclosing - from_nodes
   unhandled node under cursor: structure
-  # 0.00 type-enclosing - reconstruct identifier
+  # 0.01 type-enclosing - reconstruct identifier
   [
     {
       "start": { "line": 4, "col": 4 },
@@ -46,9 +46,22 @@ Get type of a shadowing let binding:
       "identifier": "def"
     }
   ]
-  # 0.00 type-enclosing - from_reconstructed
+  # 0.01 type-enclosing - node_at
+  mbrowse = [ core_type; core_type; pattern (let.ml[4,14+4]..let.ml[4,14+7])
+    Tpat_constraint
+    core_type (let.ml[4,14+4]..let.ml[4,14+34]) ghost
+      Ttyp_poly
+      core_type (let.ml[4,14+10]..let.ml[4,14+15])
+        Ttyp_constr "float/4"
+        []
+    pattern (let.ml[4,14+4]..let.ml[4,14+7])
+      Tpat_var "def/1003"
+  ; value_binding; structure_item; structure ]
+  # 0.01 type-enclosing - leaf_node
   node = core_type
-  # 0.00 type-enclosing - from_reconstructed
+  # 0.01 type-enclosing - from_reconstructed
+  node = core_type
+  # 0.01 type-enclosing - from_reconstructed
   typed def
-  # 0.00 type-enclosing - small enclosing
+  # 0.01 type-enclosing - small enclosing
   result = [ File "let.ml", line 4, characters 4-7 ]

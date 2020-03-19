@@ -34,6 +34,13 @@ Get type of a shadowing let binding:
       "identifier": "def"
     }
   ]
+  # 0.01 type-enclosing - node_at
+  mbrowse = [ pattern (let.ml[4,14+4]..let.ml[4,14+7])
+    Tpat_var "def/1217"
+  ; value_binding; structure_item; structure ]
+  # 0.01 type-enclosing - leaf_node
+  node = pattern (let.ml[4,14+4]..let.ml[4,14+7])
+    Tpat_var "def/1217"
   # 0.01 type-enclosing - from_reconstructed
   node = pattern (let.ml[4,14+4]..let.ml[4,14+7])
     Tpat_var "def/1217"

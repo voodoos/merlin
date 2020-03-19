@@ -274,6 +274,12 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
         )
     in
     let env, node = Mbrowse.leaf_node (Mtyper.node_at typer pos) in
+    Logger.log ~section:Type_enclosing.log_section
+        ~title:"node_at" "mbrowse = %s"
+    (Mbrowse.print () (Mtyper.node_at typer pos));
+    Logger.log ~section:Type_enclosing.log_section
+        ~title:"leaf_node" "node = %s"
+    (Browse_raw.string_of_node node);
     let small_enclosings = Type_enclosing.from_reconstructed verbosity exprs env node in
     Logger.log ~section:Type_enclosing.log_section ~title:"small enclosing" "%a"
       Logger.fmt (fun fmt ->
