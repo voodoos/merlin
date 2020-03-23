@@ -20,7 +20,7 @@
   $ $MERLIN single type-expression -expression "t" -position end -filename test.ml < test.ml
   {
     "class": "return",
-    "value": "type t = T",
+    "value": "Unbound value t",
     "notifications": []
   }
 
@@ -59,7 +59,7 @@
   $ $MERLIN single type-expression -expression "M" -position end -filename test.ml < test.ml
   {
     "class": "return",
-    "value": "(module List)",
+    "value": "Unbound constructor M",
     "notifications": []
   }
 
@@ -74,8 +74,7 @@
   > grep -v "^ *\(val\|type\) "
   {
     "class": "return",
-    "value": "sig
-  end",
+    "value": "Unbound constructor MT",
     "notifications": []
   }
 
