@@ -1,5 +1,8 @@
 open Std
 
+let log_section = "type-enclosing"
+let {Logger.log} = Logger.for_section log_section
+
 let from_nodes path =
     let aux (env, node, tail) =
       let open Browse_raw in
@@ -27,6 +30,8 @@ let from_nodes path =
 
 let from_reconstructed get_context verbosity exprs env node =
       let open Browse_raw in
+      log ~title:"from_reconstructed" "node = %s"
+        (Browse_raw.string_of_node node);
       let include_lident = match node with
         | Pattern _ -> false
         | _ -> true
@@ -44,6 +49,9 @@ let from_reconstructed get_context verbosity exprs env node =
       let f =
         fun {Location. txt = source; loc} ->
           let context = get_context source in
+          Option.iter context ~f:(fun ctx ->
+            log ~title:"from_reconstructed" "context = %s"
+            (Context.to_string ctx));
           match context with
             (* Retrieve the type from the AST when it is possible *)
           | Some (Context.Constructor cd) ->
@@ -52,18 +60,26 @@ let from_reconstructed get_context verbosity exprs env node =
             let context = Option.value ~default:Context.Expr context in
             (* Else use the reconstructed identifier *)
             match source with
-            | "" -> None
+            | "" -> 
+              log ~title:"from_reconstructed" "no reconstructed identifier";
+              None
             | source when not include_lident && Char.is_lowercase source.[0] ->
+              log ~title:"from_reconstructed" "skipping lident";
               None
             | source when not include_uident && Char.is_uppercase source.[0] ->
+              log ~title:"from_reconstructed" "skipping uident";
               None
             | source ->
               try
                 let ppf, to_string = Format.to_string () in
-                if Type_utils.type_in_env ~verbosity ~context env ppf source then
+                if Type_utils.type_in_env ~verbosity ~context env ppf source then (
+                  log ~title:"from_reconstructed" "typed %s" source;
                   Some (loc, `String (to_string ()), `No)
-                else
+                )
+                else (
+                  log ~title:"from_reconstructed" "FAILED to type %s" source;
                   None
+                )
               with _ ->
                 None
       in
