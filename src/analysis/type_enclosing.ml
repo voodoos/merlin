@@ -30,8 +30,11 @@ let from_nodes path =
 
 let from_reconstructed get_context verbosity exprs env node =
       let open Browse_raw in
-      log ~title:"from_reconstructed" "node = %s"
-        (Browse_raw.string_of_node node);
+      log ~title:"from_reconstructed" "node = %s\nexprs = [%s]"
+        (Browse_raw.string_of_node node)
+        (String.concat ~sep:";" (List.map exprs ~f:(fun l ->
+           l.Location.txt))
+        );
       let include_lident = match node with
         | Pattern _ -> false
         | _ -> true
@@ -50,11 +53,13 @@ let from_reconstructed get_context verbosity exprs env node =
         fun {Location. txt = source; loc} ->
           let context = get_context source in
           Option.iter context ~f:(fun ctx ->
-            log ~title:"from_reconstructed" "context = %s"
-            (Context.to_string ctx));
+            log ~title:"from_reconstructed" "source = %s; context = %s"
+            source (Context.to_string ctx));
           match context with
             (* Retrieve the type from the AST when it is possible *)
           | Some (Context.Constructor cd) ->
+            log ~title:"from_reconstructed" "ctx: constructor %s"
+              cd.cstr_name;
             Some (Mbrowse.node_loc node, `Type (env, cd.cstr_res), `No)
           | _ ->
             let context = Option.value ~default:Context.Expr context in
