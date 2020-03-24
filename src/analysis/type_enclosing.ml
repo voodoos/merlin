@@ -28,6 +28,27 @@ let from_nodes path =
     in
     List.filter_map ~f:aux path
 
+let inspect_node env node =
+  let longident_to_string id = try
+    String.concat ~sep:"." (Longident.flatten id)
+    with Misc.Fatal_error _ -> ""
+  in
+  let ret typ = Mbrowse.node_loc node, `Type (env, typ), `No in
+  match node with
+  | Expression e ->
+    (match e.exp_desc with
+    | Texp_construct ({ Location. txt; loc=_ }, cdesc, _) ->
+      Some(longident_to_string txt, ret cdesc.cstr_res)
+    | Texp_ident (_, { Location. txt; loc=_ }, vdes) ->
+      Some(longident_to_string txt, ret vdes.val_type)
+    | _ -> None)
+  | Pattern p ->
+    (match p.pat_desc with
+    | Tpat_construct ({ Location. txt; loc=_ }, cdesc, _) ->
+      Some(longident_to_string txt, ret cdesc.cstr_res)
+    | _ -> None)
+  | _ -> None
+        
 let from_reconstructed get_context verbosity exprs env node =
       let open Browse_raw in
       log ~title:"from_reconstructed" "node = %s\nexprs = [%s]"
@@ -52,6 +73,13 @@ let from_reconstructed get_context verbosity exprs env node =
       let f =
         fun {Location. txt = source; loc} ->
           let context = get_context source in
+          let context = match inspect_node env node with
+            | None -> log ~title:"from_reconstructed" "Node is not lid"; context
+            | Some (lid, _) -> 
+              log ~title:"from_reconstructed" " Node lid: %s" lid;
+              if String.is_prefixed ~by:source lid then Some Context.Module_path
+              else context
+          in
           Option.iter context ~f:(fun ctx ->
             log ~title:"from_reconstructed" "source = %s; context = %s"
             source (Context.to_string ctx));
