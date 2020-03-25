@@ -292,7 +292,16 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     let result = Type_enclosing.from_nodes path in
 
     (* enclosings of cursor in given expression *)
-    let env, node = Mbrowse.leaf_node (Mtyper.node_at typer pos) in
+    let node_at = Mtyper.node_at typer pos in
+    let () = log  ~title:"small-enclosings" "node_at: [%s]"
+      (String.concat ~sep:";" (List.map 
+        (Mbrowse.deepest_before pos [node_at]) 
+        ~f:(fun (_, node) ->
+          Browse_raw.string_of_node node
+      )
+      ));
+    in
+    let env, node = Mbrowse.leaf_node (Option.get (Mbrowse.drop_leaf node_at))  in
     let small_enclosings =
       Type_enclosing.from_reconstructed get_context verbosity exprs env
    node  in

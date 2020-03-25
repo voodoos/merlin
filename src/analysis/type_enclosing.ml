@@ -28,7 +28,7 @@ let from_nodes path =
     in
     List.filter_map ~f:aux path
 
-let inspect_node env node =
+let inspect_node env source node =
   let longident_to_string id = try
     String.concat ~sep:"." (Longident.flatten id)
     with Misc.Fatal_error _ -> ""
@@ -37,17 +37,19 @@ let inspect_node env node =
   match node with
   | Expression e ->
     (match e.exp_desc with
-    | Texp_construct ({ Location. txt; loc=_ }, cdesc, _) ->
-      Some(longident_to_string txt, ret cdesc.cstr_res)
-    | Texp_ident (_, { Location. txt; loc=_ }, vdes) ->
-      Some(longident_to_string txt, ret vdes.val_type)
-    | _ -> None)
+    | Texp_construct ({ Location. txt; loc=_ }, _, _)
+    | Texp_ident (_, { Location. txt; loc=_ }, _) ->
+      if String.is_prefixed ~by:source (longident_to_string txt) then
+      `Module_path
+      else `None
+    | _ ->
+    Printf.eprintf "exp"; `None)
   | Pattern p ->
     (match p.pat_desc with
     | Tpat_construct ({ Location. txt; loc=_ }, cdesc, _) ->
-      Some(longident_to_string txt, ret cdesc.cstr_res)
-    | _ -> None)
-  | _ -> None
+      `Pat_construct(longident_to_string txt, ret cdesc.cstr_res)
+    | _ -> `None)
+  | _ -> `None
         
 let from_reconstructed get_context verbosity exprs env node =
       let open Browse_raw in
@@ -73,12 +75,10 @@ let from_reconstructed get_context verbosity exprs env node =
       let f =
         fun {Location. txt = source; loc} ->
           let context = get_context source in
-          let context = match inspect_node env node with
-            | None -> log ~title:"from_reconstructed" "Node is not lid"; context
-            | Some (lid, _) -> 
-              log ~title:"from_reconstructed" " Node lid: %s" lid;
-              if String.is_prefixed ~by:source lid then Some Context.Module_path
-              else context
+          let context = match inspect_node env source node with
+            | `None -> context
+            | `Module_path -> Some Context.Module_path
+            | `Pat_construct _ -> context
           in
           Option.iter context ~f:(fun ctx ->
             log ~title:"from_reconstructed" "source = %s; context = %s"
