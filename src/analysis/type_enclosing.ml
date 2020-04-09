@@ -79,6 +79,7 @@ let from_reconstructed ~nodes ~cursor ~verbosity exprs =
         log ~title:"from_reconstructed" "ctx: constructor %s"
           cd.cstr_name;
         Some (Mbrowse.node_loc node, Type (env, cd.cstr_res), `No)
+      | Some Context.Str -> None
       | _ ->
         let context = Option.value ~default:Context.Expr context in
         (* Else use the reconstructed identifier *)

@@ -41,6 +41,7 @@ type t =
   | Module_type
   | Patt
   | Type
+  | Str
   | Unknown
 
 let to_string = function
@@ -50,6 +51,7 @@ let to_string = function
   | Module_path -> "module path"
   | Module_type -> "module type"
   | Patt -> "pattern"
+  | Str -> "string"
   | Type -> "type"
   | Unknown -> "unknown"
 
@@ -121,6 +123,7 @@ let inspect_expression ~cursor ~lid e : t =
       Expr
     else
       Module_path
+  | Texp_constant (Const_string _) -> Str
   | _ ->
     Expr
 

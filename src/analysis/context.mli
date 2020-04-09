@@ -37,6 +37,7 @@ type t =
   | Module_type
   | Patt
   | Type
+  | Str
   | Unknown
 
 val to_string : t -> string
