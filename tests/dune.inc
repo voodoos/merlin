@@ -930,6 +930,21 @@
 (alias (name runtest) (deps (alias type-enclosing-constructors_and_paths-cons)))
 
 (alias
+ (name type-enclosing-misc-issue1116)
+ (deps (:t ./test-dirs/type-enclosing/misc/issue1116.t)
+       (source_tree ./test-dirs/type-enclosing/misc)
+       %{bin:ocamlmerlin}
+       %{bin:ocamlmerlin-server})
+ (action
+   (chdir ./test-dirs/type-enclosing/misc
+     (setenv MERLIN %{exe:merlin-wrapper}
+     (setenv OCAMLC %{ocamlc}
+       (progn
+         (run %{bin:mdx} test --syntax=cram %{t})
+         (diff? %{t} %{t}.corrected)))))))
+(alias (name runtest) (deps (alias type-enclosing-misc-issue1116)))
+
+(alias
  (name type-enclosing-misc-let)
  (deps (:t ./test-dirs/type-enclosing/misc/let.t)
        (source_tree ./test-dirs/type-enclosing/misc)
