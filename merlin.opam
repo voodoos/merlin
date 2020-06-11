@@ -16,6 +16,7 @@ depends: [
   "yojson" {>= "1.6.0"}
   "mdx" {with-test & >= "1.3.0"}
   "conf-jq" {with-test}
+  "menhir" {with-test}
 ]
 synopsis:
   "Editor helper, provides completion, typing and source browsing in Vim and Emacs"
