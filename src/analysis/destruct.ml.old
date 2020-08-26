@@ -196,6 +196,11 @@ let rec needs_parentheses = function
       end
     | _ -> needs_parentheses ts
 
+let patt_is_comput patt = 
+  match Raw_compat.Pattern.view patt with
+  | Raw_compat.Pattern.Tpat_exception _ -> true
+  | _ -> false
+
 let rec get_every_pattern = function
   | [] -> assert false
   | parent :: parents ->
@@ -213,7 +218,7 @@ let rec get_every_pattern = function
           | Case _ ->
               Mbrowse.fold_node (fun _env node acc ->
                 match node with
-                | Pattern { pat_desc = Typedtree.Tpat_exception _; _ } -> 
+                | Pattern p when patt_is_comput p -> 
                   (* We are not interested in exception patterns *)
                   acc
                 | Pattern p -> p :: acc
@@ -425,7 +430,7 @@ let node config source node parents =
         config source (Pretty_expression result) in
     let str = if needs_parentheses then "(" ^ str ^ ")" else str in
     loc, str
-  | Pattern { pat_desc = Typedtree.Tpat_exception _; _ } ->
+  | Pattern patt when patt_is_comput patt -> 
     raise (Not_allowed "exception pattern")
   | Pattern patt  ->
     let last_case_loc, patterns = get_every_pattern parents in
