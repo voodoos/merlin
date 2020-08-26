@@ -213,8 +213,11 @@ let rec get_every_pattern = function
           | Case _ ->
               Mbrowse.fold_node (fun _env node acc ->
                 match node with
-              | Pattern p -> p :: acc
-              | _ -> acc
+                | Pattern { pat_desc = Typedtree.Tpat_exception _; _ } -> 
+                  (* We are not interested in exception patterns *)
+                  acc
+                | Pattern p -> p :: acc
+                | _ -> acc
               ) env node acc
           | _ -> acc
         ) Env.empty parent []
@@ -422,7 +425,9 @@ let node config source node parents =
         config source (Pretty_expression result) in
     let str = if needs_parentheses then "(" ^ str ^ ")" else str in
     loc, str
-  | Pattern patt ->
+  | Pattern { pat_desc = Typedtree.Tpat_exception _; _ } ->
+    raise (Not_allowed "exception pattern")
+  | Pattern patt  ->
     let last_case_loc, patterns = get_every_pattern parents in
     List.iter patterns ~f:(fun p ->
       let p = filter_pat_attr (Untypeast.untype_pattern p) in
