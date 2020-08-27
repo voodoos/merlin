@@ -1,3 +1,17 @@
+merlin 3.3.8
+============
+Thu Aug 27 14:48:42 CEST 2020
+
+  + merlin binary
+    - dune: restore compatibility with dune 1.8.0 (#1157, #1153)
+
+merlin 3.3.7
+============
+Tue Aug 25 15:13:42 CEST 2020
+
+  + ocaml support
+    - full support from OCaml 4.02 to OCaml 4.11 (#1153)
+
 merlin 3.3.6
 ============
 Fri Jun 12 10:51:42 CEST 2020
@@ -6,7 +20,7 @@ Fri Jun 12 10:51:42 CEST 2020
     - dune: remove duplicated rules for profile=release (#1143)
   + test suite
     - fix a test that required Dune 2.5 (#1146)
-    - fix another test that lacked reproducibility (#1146) 
+    - fix another test that lacked reproducibility (#1146)
 
 merlin 3.3.5
 ============
