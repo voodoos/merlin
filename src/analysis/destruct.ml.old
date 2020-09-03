@@ -196,7 +196,7 @@ let rec needs_parentheses = function
       end
     | _ -> needs_parentheses ts
 
-let patt_is_comput patt = 
+let patt_is_comput patt =
   match Raw_compat.Pattern.view patt with
   | Raw_compat.Pattern.Tpat_exception _ -> true
   | _ -> false
@@ -218,9 +218,6 @@ let rec get_every_pattern = function
           | Case _ ->
               Mbrowse.fold_node (fun _env node acc ->
                 match node with
-                | Pattern p when patt_is_comput p -> 
-                  (* We are not interested in exception patterns *)
-                  acc
                 | Pattern p -> p :: acc
                 | _ -> acc
               ) env node acc
@@ -430,8 +427,6 @@ let node config source node parents =
         config source (Pretty_expression result) in
     let str = if needs_parentheses then "(" ^ str ^ ")" else str in
     loc, str
-  | Pattern patt when patt_is_comput patt -> 
-    raise (Not_allowed "exception pattern")
   | Pattern patt  ->
     let last_case_loc, patterns = get_every_pattern parents in
     List.iter patterns ~f:(fun p ->
@@ -439,7 +434,12 @@ let node config source node parents =
       log ~title:"EXISTING" "%t"
         (fun () -> Mreader.print_pretty config source (Pretty_pattern p))
     ) ;
-    let pss = List.map patterns ~f:(fun x -> [ x ]) in
+    let pss = List.filter_map patterns ~f:(fun x ->
+      if patt_is_comput x then
+        None
+      else
+        Some [ x ])
+    in
     begin match Parmatch.complete_partial pss with
     | Some pat ->
       let pat  = qualify_constructors Printtyp.shorten_type_path pat in
