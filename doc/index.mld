@@ -1,0 +1,28 @@
+{1 Presentation  }
+[Merlin](https://ocaml.github.io/merlin/) is an editor service that provides
+modern IDE features for OCaml.
+
+
+Emacs and Vim support is provided out-of-the-box. External contributors added
+support for Visual Studio Code, Sublime Text and Atom.
+
+{2 Installation}
+
+{2 Features}
+
+{2 Editor support}
+
+{3:idx-vim VIM}
+Merlin supports VIM out of the box. {!page:vim}
+
+{3:idx-emacs Emacs}
+{!emacs}
+
+{3:idx-vscode Visual Studio Code }
+Support for Visual Studio Code and VSCodium is not directly provided by Merlin.
+You can check the {{:https://github.com/ocamllabs/vscode-ocaml-platform}OCaml
+Platform} extension and the associated
+{{:https://github.com/ocaml/ocaml-lsp}OCaml-LSP} project. These tools use Merlin
+under the hood to provide coding assistance.
+
+{!modules: vim }

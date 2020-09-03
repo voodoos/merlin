@@ -1,0 +1,7 @@
+{1 Vscode support }
+
+Support for Visual Studio Code and VSCodium is not directly provided by Merlin.
+You can check the {{:https://github.com/ocamllabs/vscode-ocaml-platform}OCaml
+Platform} extension and the associated
+{{:https://github.com/ocaml/ocaml-lsp}OCaml-LSP} project. These tools use Merlin
+under the hood to provide coding assistance.
