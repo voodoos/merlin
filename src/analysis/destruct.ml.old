@@ -428,7 +428,7 @@ let node config source node parents =
         config source (Pretty_expression result) in
     let str = if needs_parentheses then "(" ^ str ^ ")" else str in
     loc, str
-  | Pattern patt  ->
+  | Pattern patt ->
     let last_case_loc, patterns = get_every_pattern parents in
     List.iter patterns ~f:(fun p ->
       let p = filter_pat_attr (Untypeast.untype_pattern p) in
