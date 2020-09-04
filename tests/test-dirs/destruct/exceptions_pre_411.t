@@ -1,5 +1,5 @@
 (enabled_if (and (>= %{ocaml_version} 4.08.0) (< %{ocaml_version} 4.11.0)))
-FIXME
+
   $ $MERLIN single case-analysis -start 3:4 -end 3:8 -filename complete.ml -log-file /tmp/mlog2 <<EOF \
   > let _ = \
   >   match (None : int option) with \
@@ -25,7 +25,7 @@ FIXME
     "notifications": []
   }
 
-FIXME
+
   $ $MERLIN single case-analysis -start 4:4 -end 4:8 -filename complete.ml -log-file /tmp/mlog2 <<EOF \
   > let _ = \
   >   match (None : int option) with \
@@ -102,6 +102,8 @@ FIXME: `Some 0` certainly is a missing case but we can do better:
     ],
     "notifications": []
   }
+
+Same two tests but with the exception pattern at the end
 
   $ $MERLIN single case-analysis -start 4:9 -end 4:11 -filename no_comp_pat.ml <<EOF \
   > let _ = \

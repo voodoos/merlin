@@ -89,6 +89,8 @@ FIXME: `Some 0` certainly is a missing case but we can do better:
     "notifications": []
   }
 
+Same two tests but with the exception pattern at the end
+
   $ $MERLIN single case-analysis -start 4:9 -end 4:11 -filename no_comp_pat.ml <<EOF \
   > let _ = \
   >   match (None : unit option) with \
