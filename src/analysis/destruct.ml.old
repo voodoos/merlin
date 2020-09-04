@@ -218,6 +218,7 @@ let rec get_every_pattern = function
           | Case _ ->
               Mbrowse.fold_node (fun _env node acc ->
                 match node with
+                | Pattern p when patt_is_comput p -> acc
                 | Pattern p -> p :: acc
                 | _ -> acc
               ) env node acc
@@ -434,12 +435,7 @@ let node config source node parents =
       log ~title:"EXISTING" "%t"
         (fun () -> Mreader.print_pretty config source (Pretty_pattern p))
     ) ;
-    let pss = List.filter_map patterns ~f:(fun x ->
-      if patt_is_comput x then
-        None
-      else
-        Some [ x ])
-    in
+    let pss = List.map patterns ~f:(fun x -> [ x ]) in
     begin match Parmatch.complete_partial pss with
     | Some pat ->
       let pat  = qualify_constructors Printtyp.shorten_type_path pat in
