@@ -1,4 +1,4 @@
-(enabled_if (< %{ocaml_version} 4.08.0))
+(enabled_if (and (>= %{ocaml_version} 4.08.0) (< %{ocaml_version} 4.11.0)))
 FIXME
   $ $MERLIN single case-analysis -start 3:4 -end 3:8 -filename complete.ml -log-file /tmp/mlog2 <<EOF \
   > let _ = \
@@ -11,16 +11,16 @@ FIXME
     "value": [
       {
         "start": {
-          "line": 2,
-          "col": 2
+          "line": 4,
+          "col": 16
         },
         "end": {
           "line": 4,
           "col": 16
         }
       },
-      "match match (None : int option) with | Some 3 -> () | exception _ -> () with
-  | () -> (??)"
+      "
+  | Some 0|None -> (??)"
     ],
     "notifications": []
   }
@@ -33,8 +33,21 @@ FIXME
   >   | Some _ -> () \
   > EOF
   {
-    "class": "error",
-    "value": "Nothing to do",
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 4,
+          "col": 16
+        },
+        "end": {
+          "line": 4,
+          "col": 16
+        }
+      },
+      "
+  | None -> (??)"
+    ],
     "notifications": []
   }
 
@@ -45,8 +58,21 @@ FIXME
   >   | None -> () \
   > EOF
   {
-    "class": "error",
-    "value": "Nothing to do",
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 4,
+          "col": 14
+        },
+        "end": {
+          "line": 4,
+          "col": 14
+        }
+      },
+      "
+  | Some _ -> (??)"
+    ],
     "notifications": []
   }
 
@@ -59,7 +85,20 @@ FIXME: `Some 0` certainly is a missing case but we can do better:
   >   | Some 3 -> () \
   > EOF
   {
-    "class": "error",
-    "value": "Nothing to do",
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 4,
+          "col": 16
+        },
+        "end": {
+          "line": 4,
+          "col": 16
+        }
+      },
+      "
+  | Some 0|None -> (??)"
+    ],
     "notifications": []
   }
