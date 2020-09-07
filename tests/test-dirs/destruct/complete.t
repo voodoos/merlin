@@ -237,3 +237,60 @@ FIXME
     ],
     "notifications": []
   }
+
+
+FIXME
+
+  $ cat >typ6.ml <<EOF          \
+  > let f (x : int option) =   \
+  >   match x with              \
+  >   | None -> ()              \
+  >   | Some 1 -> ()              \
+  > EOF
+
+  $ $MERLIN single case-analysis -start 4:4 -end 4:4 -filename typ6.ml <typ6.ml | \
+  > sed -e 's/, /,/g' | sed -e 's/ *| */|/g' | tr -d '\n' | jq '.'
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 4,
+          "col": 16
+        },
+        "end": {
+          "line": 4,
+          "col": 16
+        }
+      },
+      "|Some 0 -> (??)"
+    ],
+    "notifications": []
+  }
+
+  $ cat >typ7.ml <<EOF          \
+  > let f (x : string option) =   \
+  >   match x with              \
+  >   | None -> ()              \
+  >   | Some "" -> ()              \
+  > EOF
+
+  $ $MERLIN single case-analysis -start 4:4 -end 4:4 -filename typ7.ml <typ7.ml | \
+  > sed -e 's/, /,/g' | sed -e 's/ *| */|/g' | tr -d '\n' | jq '.'
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 4,
+          "col": 17
+        },
+        "end": {
+          "line": 4,
+          "col": 17
+        }
+      },
+      "|Some \"*\" -> (??)"
+    ],
+    "notifications": []
+  }
