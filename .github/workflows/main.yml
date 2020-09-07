@@ -16,6 +16,8 @@ on:
 jobs:
   # This workflow contains a single job called "build"
   build:
+    env: 
+     OPAM_VERSION: 2.1
     strategy:
       fail-fast: false
       matrix:
