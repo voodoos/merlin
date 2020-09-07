@@ -8,9 +8,8 @@ env:
   global:
   - EXTRA_DEPS="dot-merlin-reader"
   - PINS="dot-merlin-reader.dev:."
-  matrix:
   - OCAML_VERSION=4.11
-    PACKAGE=merlin
+  - PACKAGE=merlin
 os:
   - linux
   - macos
