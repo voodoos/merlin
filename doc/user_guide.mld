@@ -1,0 +1,39 @@
+{0 Merlin user guide}
+{{:https://ocaml.github.io/merlin/}Merlin} is an editor
+service that provides modern IDE features for OCaml.
+
+Emacs and Vim support is provided out-of-the-box. External contributors added
+support for Sublime Text and Atom. If you are looking for Visual Studio Code
+support you can try the OCaml Platform extension. TODO: link
+
+{1 Contents }
+- {{!start}Getting Started}
+- Editor bindings
+- {{!commands}Command reference}
+- {{!index}API reference}
+- Protocol documentation
+
+{1:start Getting Started}
+
+
+If you have a working {{:https://opam.ocaml.org/}Opam} installation, Merlin is
+only two commands away:
+
+{[
+opam install merlin
+opam user-setup install
+]}
+
+{{:https://github.com/OCamlPro/opam-user-setup}opam-user-setup} takes care of
+configuring Emacs and Vim to make best use of your current install.
+
+You can also [configure the editor](#editor-setup) yourself, if you prefer.
+
+{2 Editor bindings}
+
+
+
+Odoc wishlist:
+- syntactic coloring for other languages
+- did you mean [ {!{https://github.com/OCamlPro/opam-user-setup} ] is a wrong hint
+- custiom links in sidebar

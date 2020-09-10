@@ -1,0 +1,59 @@
+{0 Command reference}
+{%html: <style>
+table, th, td {
+  border: 1px solid black;
+  padding: 0.5rem;
+}
+table.center {
+  margin-left: auto;
+  margin-right: auto;
+}
+thead {
+  background-color: #F9F9F9;
+  font-weight: bold;
+}
+td pre {
+  margin: auto;
+}
+td.cmd_description {
+  border-bottom: double;
+}
+</style> %}
+
+{%html:
+<table style="width: 100%;">
+  <thead>
+    <tr>
+      <th>Action</th>
+      <th>Emacs</th>
+      <th>Vim</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Type enclosing</td>
+      <td><pre>M-x merlin-destruct?</pre></td>
+      <td><pre>:MerlinDestruct?</pre></td>
+    </tr>
+    <tr>
+      <td class="cmd_description" colspan="3">This is how you break things</td>
+    </tr>
+    <tr>
+      <td>Destruct</td>
+      <td><pre>M-x merlin-destruct?</pre></td>
+      <td><pre>:MerlinDestruct?</pre></td>
+    </tr>
+    <tr>
+      <td class="cmd_description" colspan="3">This is how you break things</td>
+    </tr>
+    <tr>
+      <td>Destruct</td>
+      <td><pre>M-x merlin-destruct?</pre></td>
+      <td><pre>:MerlinDestruct?</pre></td>
+    </tr>
+    <tr>
+      <td colspan="3">This is how you break things</td>
+    </tr>
+  </tbody>
+</table>
+ %}
