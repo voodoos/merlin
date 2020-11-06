@@ -20,6 +20,17 @@ td.cmd_description {
 }
 </style> %}
 
+{%html: <script>
+function toggle(id) {
+  var x = document.getElementById(id);
+  if (x.style.display === "none") {
+    x.style.display = "table-row";
+  } else {
+    x.style.display = "none";
+  }
+}
+</script> %}
+
 {%html:
 <table style="width: 100%;">
   <thead>
@@ -27,13 +38,27 @@ td.cmd_description {
       <th>Action</th>
       <th>Emacs</th>
       <th>Vim</th>
+      <th>VSCode</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Type enclosing</td>
+      <td onclick="toggle('type_enclosing')">Type enclosing</td>
       <td><pre>M-x merlin-destruct?</pre></td>
       <td><pre>:MerlinDestruct?</pre></td>
+      <td></td>
+    </tr>
+    <tr id="type_enclosing">
+      <td class="cmd_description" colspan="4">Returns the type of the ident
+      under the cursor. It will highlight the ident and display its type. You
+      can then call C-<up> (and C-<down>) to climb the typed tree and see type
+      of bigger expressions surrounding the cursor.</td>
+    </tr>
+    <tr>
+      <td>Destruct</td>
+      <td><pre>M-x merlin-destruct?</pre></td>
+      <td><pre>:MerlinDestruct?</pre></td>
+      <td></td>
     </tr>
     <tr>
       <td class="cmd_description" colspan="3">This is how you break things</td>
@@ -42,17 +67,10 @@ td.cmd_description {
       <td>Destruct</td>
       <td><pre>M-x merlin-destruct?</pre></td>
       <td><pre>:MerlinDestruct?</pre></td>
+      <td></td>
     </tr>
     <tr>
-      <td class="cmd_description" colspan="3">This is how you break things</td>
-    </tr>
-    <tr>
-      <td>Destruct</td>
-      <td><pre>M-x merlin-destruct?</pre></td>
-      <td><pre>:MerlinDestruct?</pre></td>
-    </tr>
-    <tr>
-      <td colspan="3">This is how you break things</td>
+      <td colspan="4">This is how you break things</td>
     </tr>
   </tbody>
 </table>
