@@ -1,0 +1,136 @@
+{0 User Guide}
+
+{{:https://ocaml.github.io/merlin/}Merlin} is an editor
+service that provides modern IDE features for OCaml.
+
+Emacs and Vim support is provided out-of-the-box. External contributors added
+support for Sublime Text and Atom. If you are looking for Visual Studio Code
+support you can try the {{:https://marketplace.visualstudio.com/items?itemName=ocamllabs.ocaml-platform}OCaml Platform extension}.
+
+{1 Contents }
+
+- {{!start}Installation}
+- {{!config}Project configuration}
+- {{!plugins}Editors plugins}
+- {{!commands}Essential commands}
+- {{!index}API reference}
+- Protocol documentation
+
+{1:start Installation}
+
+If you have a working {{:https://opam.ocaml.org/}Opam} installation, Merlin is
+only two commands away:
+
+{[
+opam install merlin
+opam user-setup install
+]}
+
+{{:https://github.com/OCamlPro/opam-user-setup}opam-user-setup} takes care of
+configuring Emacs and Vim to make best use of your current install.
+
+You can also your {{!plugins}favorite editor} yourself if you prefer.
+
+{1:config Project configuration}
+
+To provide precise and complete informations,
+Merlin need to be informed of the configuration and structure of your projects.
+
+{2 Dune projects}
+
+When you use Dune to build your project you do not need to care about writing
+Merlin configuration. Each time a build is triggered Dune will generate (if
+needed) the appropriate Merlin configuration in each of the source folders. You
+can also trigger this generation by running [dune build @check]. Moreover,
+starting with Dune 2.8.0 and Merlin 3.4.0, the configuration files will not be
+promoted to the sources anymore and remain hidden in the build directory.
+
+{2 Manual configuration}
+
+The configuration should be written in a [.merlin] file in
+the directory containing your source files. The main configuration directives are:
+
+- [S], the source path directives tell Merlin where to find source files
+- [B], the build path directives tell Merlin where to find the cmi files of the
+other modules of your project
+- [PKG], the package directives tell Merlin which findlib package are in use
+- [FLG], the flags directives can specify both Merlin specific flags and
+standard OCaml flags
+
+For more details about the configuration syntax and advanced usage, you can refer to the
+{{:https://github.com/ocaml/merlin/wiki/project-configuration}corresponding wiki page}.
+
+{1:commands Basic commands}
+
+This section lists some essential Merlin's commands along with their default
+bindings in Emacs, Vim and VSCode. More detailed usage informations can be found
+on the previously linked documentation pages for the specifics editors plugins.
+
+{%html:
+<table style="width: 100%;">
+  <thead>
+    <tr>
+      <th>Action</th>
+      <th>Emacs</th>
+      <th>Vim</th>
+      <th>VSCode</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td onclick="toggle('type_enclosing')">Type&nbsp;enclosing</td>
+      <td><pre>M-x merlin-type-enclosing</pre></td>
+      <td><pre>:MerlinTypeOf</pre></td>
+      <td>Mouse&nbsp;over</td>
+    </tr>
+    <tr class="cmd_description" id="type_enclosing">
+      <td colspan="4">Returns the type of the ident
+      under the cursor. It will highlight the ident and display its type. In Emacs and Vim it is
+      possible to climb the typed tree and see the type of bigger expressions.</td>
+    </tr>
+    <tr>
+      <td onclick="toggle('destruct')">Case&nbsp;analysis</td>
+      <td><pre>M-x merlin-destruct</pre></td>
+      <td><pre>:MerlinDestruct</pre></td>
+      <td><pre>alt-d</pre></td>
+    </tr>
+    <tr class="cmd_description" id="destruct">
+      <td colspan="4">This command groups several match-related functions:
+        <ul>
+          <li>When targeting an identifier Merlin will attempt to replace it
+          with a fitting <code>match</code> expression to reason about its type.</li>
+          <li>When targeting a non-exhaustive <code>match</code> expression Merlin
+          will attempt to complete it. </li>
+          <li>When targeting a wildcard pattern <code>_</code> in a <code>match</code>expression Merlin
+          will attempt to complete it. </li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td onclick="toggle('locate')">Locate</td>
+      <td><pre>M-x merlin-locate</pre></td>
+      <td><pre>:MerlinLocate</pre></td>
+      <td><pre>F12</pre></td>
+    </tr>
+    <tr class="cmd_description" id="locate">
+      <td colspan="4">When called on an identifier will try to bring you to the place were it is introduced (i.e. defined or bound).</td>
+    </tr>
+  </tbody>
+</table>
+ %}
+
+{1:plugins Editor integrations}
+
+
+Some editors have a richer command set, you can find in-depth installation
+instructions, configuration information and command reference for specific
+merlin editor plugins byon the following pages:
+
+- {{:https://github.com/ocaml/merlin/wiki/emacs-from-scratch}Merlin for Emacs}
+- {{:https://github.com/ocaml/merlin/wiki/vim-from-scratch}Merlin for Vim}
+- {{:https://github.com/ocamllabs/vscode-ocaml-platform}Ocaml Platform for VSCode}
+
+Odoc wishlist:
+- syntactic coloring for other languages
+- did you mean [ {!{https://github.com/OCamlPro/opam-user-setup} ] is a wrong hint
+- custiom links in sidebar

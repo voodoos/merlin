@@ -1,2 +1,15 @@
 (documentation
  (package merlin))
+
+(rule
+ (deps )
+ (targets )
+ (action (with-stdout-to user_guide.mld (progn
+  (cat user_guide.mld.template)
+  (echo "{%html: <style>")
+  (cat styles.css)
+  (echo "</style>%}")
+  (echo "{%html: <script>")
+  (cat scripts.js)
+  (echo "</script>%}")
+ ))))
