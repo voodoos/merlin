@@ -139,6 +139,10 @@ let dump (type a) : a t -> json =
       "start", mk_position pos_start;
       "end", mk_position pos_end;
     ]
+  | Construct (pos) ->
+    mk "construct" [
+      "position", mk_position pos
+    ]
   | Outline -> mk "outline" []
   | Errors { lexing; parsing; typing } ->
     let args =
@@ -373,6 +377,14 @@ let json_of_response (type a) (query : a t) (response : a) : json =
   | Phrase _, pos ->
     `Assoc ["pos", Lexing.json_of_position pos]
   | Case_analysis _, ({ Location. loc_start ; loc_end; _ }, str) ->
+    let assoc =
+      `Assoc [
+        "start", Lexing.json_of_position loc_start  ;
+        "end", Lexing.json_of_position loc_end ;
+      ]
+    in
+    `List [ assoc ; `String str ]
+  | Construct _, ({ Location. loc_start ; loc_end; _ }, str) ->
     let assoc =
       `Assoc [
         "start", Lexing.json_of_position loc_start  ;
