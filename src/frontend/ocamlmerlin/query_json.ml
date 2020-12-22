@@ -384,14 +384,14 @@ let json_of_response (type a) (query : a t) (response : a) : json =
       ]
     in
     `List [ assoc ; `String str ]
-  | Construct _, ({ Location. loc_start ; loc_end; _ }, str) ->
+  | Construct _, ({ Location. loc_start ; loc_end; _ }, strs) ->
     let assoc =
       `Assoc [
         "start", Lexing.json_of_position loc_start  ;
         "end", Lexing.json_of_position loc_end ;
       ]
     in
-    `List [ assoc ; `String str ]
+    `List [ assoc ; `List (List.map ~f:Json.string strs) ]
   | Outline, outlines ->
     `List (json_of_outline outlines)
   | Shape _, shapes ->

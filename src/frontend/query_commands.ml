@@ -619,7 +619,18 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
         Destruct.node config source node (List.map ~f:snd parents)
     end
 
-  | Construct _ -> assert false
+  | Construct pos ->
+    let typer = Mpipeline.typer_result pipeline in
+    let typedtree = Mtyper.get_typedtree typer in
+    let pos = Mpipeline.get_lexing_pos pipeline pos in
+    let structures = Mbrowse.enclosing pos
+      [Mbrowse.of_typedtree typedtree] in
+    begin match structures with
+    | [] -> failwith "No node at given range"
+    | node :: parents ->
+      let loc = Mbrowse.node_loc (snd node) in
+      (loc, Construct.node ~parents ~pos node)
+    end
 
   | Outline ->
     let typer = Mpipeline.typer_result pipeline in

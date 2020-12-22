@@ -164,7 +164,7 @@ type _ t =
   | Case_analysis(* *)
     : Msource.position * Msource.position -> (Location.t * string) t
   | Construct
-    : Msource.position -> (Location.t * string) t
+    : Msource.position -> (Location.t * string list) t
   | Outline(* *)
     :  outline t
   | Shape(* *)
