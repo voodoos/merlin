@@ -49,6 +49,14 @@ module Gen = struct
     in
     Ast_helper.Exp.construct lid exps
 
+  (* [make_record] builds the PAST repr of a record with holes *)
+  let make_record env path labels =
+    let labels = List.map labels ~f:(fun label ->
+      let lid = Location.mknoloc (Util.prefix env path label.lbl_name) in
+      lid, Ast_helper.Exp.hole ()
+    ) in
+    Ast_helper.Exp.record labels None
+
   (* [make_value] builds the PAST repr of a value applied to holes *)
   let make_value env (name, path, value_description, params) =
     let lid = Location.mknoloc (Util.prefix env path name) in
@@ -72,9 +80,10 @@ module Gen = struct
       let def = Env.find_type_descrs path env in
       begin match def with
       | constrs, [] -> constr env typ path constrs
+      | [], labels -> record env typ path labels
       | _ -> []
       end
-    | _ -> [] in
+    | (*todo*) _ -> [] in
     List.append matching_values constructed_from_type |> List.rev
 
   and constr env typ path constrs =
@@ -82,6 +91,12 @@ module Gen = struct
       (String.concat ~sep:"; "
         (List.map constrs ~f:(fun c -> c.Types.cstr_name)));
     List.map constrs ~f:(make_constr env path)
+
+  and record env typ path labels =
+  log ~title:"record labels" "[%s]"
+    (String.concat ~sep:"; "
+      (List.map labels ~f:(fun l -> l.Types.lbl_name)));
+  [make_record env path labels]
 end
 
 let node ~parents ~pos (env, node) =
