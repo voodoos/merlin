@@ -56,3 +56,15 @@ $ cat >c2.ml <<EOF
 > EOF
 
 $ $MERLIN single construct -position 1:22 -filename c2.ml <c2.ml
+
+#############
+## RECORDS ##
+#############
+
+  $ cat >c2.ml <<EOF
+  > type r = { a : string; b : int option }
+  > let nice_candidate = Some 3
+  > let x : r = _
+  > EOF
+
+  $ $MERLIN single construct -position 3:13 -filename c2.ml -log-file - <c2.ml
