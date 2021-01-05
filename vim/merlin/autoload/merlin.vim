@@ -527,6 +527,10 @@ function! merlin#NextHole()
   MerlinPy merlin.vim_next_hole()
 endfunction
 
+function! merlin#Construct()
+  MerlinPy merlin.vim_construct()
+endfunction
+
 function! merlin#Restart()
   MerlinPy merlin.vim_restart()
 endfunction
@@ -602,6 +606,9 @@ function! merlin#Register()
   """ Holes  ---------------------------------------------------------------
   command! -buffer -nargs=0 MerlinNextHole call merlin#NextHole()
   command! -buffer -nargs=0 MerlinPreviousHole call merlin#PreviousHole()
+
+  """ Construct  ---------------------------------------------------------------
+  command! -buffer -nargs=0 MerlinConstruct call merlin#Construct()
 
   """ Locate  ------------------------------------------------------------------
   command! -buffer -complete=customlist,merlin#ExpandPrefix -nargs=? MerlinLocate call merlin#Locate(<q-args>)

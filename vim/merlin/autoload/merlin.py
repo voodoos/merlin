@@ -664,6 +664,35 @@ def vim_next_hole(min = 0, max = float('inf')):
       vim.current.window.cursor = (hline, hcol)
       print(holes[0]['type'])
 
+def vim_construct():
+    global enclosing_types
+    global current_enclosing
+
+    if enclosing_types == []:
+        to_line, to_col = vim.current.window.cursor
+        try:
+            enclosing_types = command("type-enclosing", "-position", fmtpos((to_line,to_col)))
+            if enclosing_types != []:
+                current_enclosing = 0
+            else:
+                atom, _, _ = bounds_of_ocaml_atom_at_pos(to_line - 1, to_col)
+                print("didn't manage to destruct '%s'" % atom)
+                return
+        except MerlinExc as e:
+            try_print_error(e)
+            return
+
+    tmp = enclosing_types[current_enclosing]
+    try:
+        result = command("construct", "-position", fmtpos(tmp['start']))
+        tmp = result[0]
+        txt = result[1]
+        replace_buffer_portion(tmp['start'], tmp['end'], txt[0])
+    except MerlinExc as e:
+        try_print_error(e)
+
+    vim_type_reset()
+
 def vim_type_enclosing():
     global enclosing_types
     global current_enclosing
