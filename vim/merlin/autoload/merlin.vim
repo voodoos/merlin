@@ -265,7 +265,8 @@ function! merlin#PolaritySearch(debug,query)
   let s:search_result = []
   MerlinPy merlin.vim_polarity_search(vim.eval("a:query"), "s:search_result")
   if a:debug != 1 && s:search_result != []
-    call feedkeys("i=merlin#PolarityComplete()","n")
+    call feedkeys("i=merlin#PolarityComplete()
+","n")
   endif
 endfunction
 
@@ -510,6 +511,10 @@ function! merlin#Destruct()
   MerlinPy merlin.vim_case_analysis()
 endfunction
 
+function! merlin#Construct()
+  MerlinPy merlin.vim_construct()
+endfunction
+
 function! merlin#Restart()
   MerlinPy merlin.vim_restart()
 endfunction
@@ -581,6 +586,9 @@ function! merlin#Register()
 
   """ Destruct  ----------------------------------------------------------------
   command! -buffer -nargs=0 MerlinDestruct call merlin#Destruct()
+
+  """ Construct  ---------------------------------------------------------------
+  command! -buffer -nargs=0 MerlinConstruct call merlin#Construct()
 
   """ Locate  ------------------------------------------------------------------
   command! -buffer -complete=customlist,merlin#ExpandPrefix -nargs=? MerlinLocate call merlin#Locate(<q-args>)
