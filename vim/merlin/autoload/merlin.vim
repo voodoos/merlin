@@ -527,8 +527,31 @@ function! merlin#NextHole()
   MerlinPy merlin.vim_next_hole()
 endfunction
 
+function! merlin#ConstructComplete(findstart, base)
+  if a:findstart
+    let start = col('.') - 1
+    return start
+  endif
+  return b:constr_result
+endfunction
+
+function! merlin#ConstructDone()
+  " execute "normal :s/\<c-v>\<c-@>/\<c-v>\<c-m>/ge\<cr>"
+  setlocal omnifunc=merlin#Complete
+endfunction
+
 function! merlin#Construct()
   MerlinPy merlin.vim_construct()
+  " We start Omnicomplete witht the custom complete function
+  setlocal omnifunc=merlin#ConstructComplete
+  startinsert
+  call feedkeys("\<c-x>\<c-o>")
+
+  " When it's done we switch back to merlin default completion
+  augroup MerlinConstruct
+    au!
+    autocmd CompleteDone <buffer> call merlin#ConstructDone()
+  augroup END
 endfunction
 
 function! merlin#Restart()

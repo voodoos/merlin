@@ -667,7 +667,8 @@ def vim_next_hole(min = 0, max = float('inf')):
 def vim_construct():
     global enclosing_types
     global current_enclosing
-
+    vimvar = "b:constr_result"
+    vim.command("let %s = []" % vimvar)
     if enclosing_types == []:
         to_line, to_col = vim.current.window.cursor
         try:
@@ -686,8 +687,11 @@ def vim_construct():
     try:
         result = command("construct", "-position", fmtpos(tmp['start']))
         tmp = result[0]
-        txt = result[1]
-        replace_buffer_portion(tmp['start'], tmp['end'], txt[0])
+        txts = result[1]
+        # replace_buffer_portion(tmp['start'], tmp['end'], txt[0])
+        for txt in txts:
+          vim.command("let l:tmp = {'word':'%s'}" % txt)
+          vim.command("call add(%s, l:tmp)" % vimvar)
     except MerlinExc as e:
         try_print_error(e)
 
