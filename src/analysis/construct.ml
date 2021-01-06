@@ -32,6 +32,48 @@ module Util = struct
       | None -> acc
     in
     Env.fold_values aux None env []
+
+  (* Todo the following functions certainly need optimisation.
+      (note the these optimisations must preserver
+      the ordering of the results) *)
+
+  (* Given a list [l] of n elements which are lists of choices,
+    [combination l] is a list of all possible combinations of
+    these choces. For example:
+
+    let l = [["a";"b"];["1";"2"]; ["x"]];;
+    combinations l;;
+    - : string list list =
+    [["a"; "1"; "x"]; ["b"; "1"; "x"];
+     ["a"; "2"; "x"]; ["b"; "2"; "x"]]
+
+    If the input is the empty lsit, the result is
+    the empty list singleton list.
+    *)
+  let combinations =
+    List.fold_left  ~init:[[]] ~f:(
+      fun acc_l choices_arg_i ->
+      List.fold_left choices_arg_i ~init:[] ~f:(
+        fun acc choice_arg_i ->
+          let choices = List.map acc_l
+             ~f:(fun l -> l @ [choice_arg_i])
+          in
+          acc @ choices
+        )
+      )
+
+  let panache2 l1 l2 =
+    let rec aux acc l1 l2 =
+      match l1, l2 with
+      | [], [] -> List.rev acc
+      | tl, [] | [], tl -> List.rev_append acc tl
+      | a::tl1, b::tl2 -> aux (a::b::acc) tl1 tl2
+  in aux [] l1 l2
+
+  (* Given a list [l] of n lists, [panache l] flattens the list
+    by starting with the first element of it, then the second one etc. *)
+  let panache l =
+    List.fold_left ~init:[] ~f:panache2 l
 end
 
 module Gen = struct
