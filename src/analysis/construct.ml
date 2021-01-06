@@ -10,6 +10,10 @@ module Util = struct
     (*todo*)
     Longident.Lident name
 
+  let type_to_string t =
+    Printtyp.type_expr (Format.str_formatter) t;
+    Format.flush_str_formatter ()
+
   (** [find_values_for_type env typ] searches the environment [env] for values
   with return type compatible with [typ] *)
   let find_values_for_type env typ =
@@ -79,18 +83,6 @@ end
 module Gen = struct
   open Types
 
-  (* [make_constr] builds the PAST repr of a type constructor applied to holes *)
-  let make_constr env path constr =
-    let lid = Location.mknoloc (Util.prefix env path constr.cstr_name) in
-    let exps = match constr.cstr_args with
-    | [] -> None
-    | [_] ->  Some (Ast_helper.Exp.hole ())
-    | l -> Some (Ast_helper.Exp.tuple (
-      List.map l ~f:(fun _ -> Ast_helper.Exp.hole ())
-    ))
-    in
-    Ast_helper.Exp.construct lid exps
-
   (* [make_record] builds the PAST repr of a record with holes *)
   let make_record env path labels =
     let labels = List.map labels ~f:(fun label ->
@@ -110,31 +102,57 @@ module Gen = struct
 
   (* Given a typed hole, there is two relevant forms of constructions:
     - Use the type's definition to propose the correct type constructors,
-    - Look for values in the environnement with this correct return type. *)
-  let rec expression env typ =
+    - Look for values in the environnement with compatible return type. *)
+  let rec expression ?(depth = 1) env typ =
+    log ~title:"construct expr" "Looking for expressions of type %s"
+      (Printtyp.type_expr Format.str_formatter typ; Format.flush_str_formatter ());
     let typ = Btype.repr typ in
     let matching_values = List.map
       (Util.find_values_for_type env typ)
-      ~f:(make_value env)
+      ~f:(make_value env) |> List.rev
     in
     let constructed_from_type = match typ.desc with
     | Tconstr (path, params, _) ->
       let def = Env.find_type_descrs path env in
       begin match def with
-      | constrs, [] -> constr env typ path constrs
-      | [], labels -> record env typ path labels
+      | constrs, [] -> constr ~depth env typ path constrs
+      | [], labels -> record ~depth env typ path labels
       | _ -> []
       end
     | (*todo*) _ -> [] in
-    List.append matching_values constructed_from_type |> List.rev
+    Util.panache2 (constructed_from_type) matching_values
 
-  and constr env typ path constrs =
+  and exp_or_hole ~depth env typ =
+    if depth > 0 then
+      Ast_helper.Exp.hole () ::(expression ~depth:(depth - 1) env typ)
+    else [ Ast_helper.Exp.hole () ]
+
+  and constr ~depth env typ path constrs =
     log ~title:"constructors" "[%s]"
       (String.concat ~sep:"; "
         (List.map constrs ~f:(fun c -> c.Types.cstr_name)));
-    List.map constrs ~f:(make_constr env path)
+    (* todo for gadt not all constr will be good *)
+    List.map constrs ~f:(make_constr ~depth env path typ)
+    |> Util.panache
 
-  and record env typ path labels =
+    (* [make_constr] builds the PAST repr of a type constructor applied to holes *)
+  and make_constr ~depth env path typ constr =
+    Ctype.unify env constr.cstr_res typ; (* todo handle errors *)
+    Printf.eprintf "C: %s (%s) [%s]\n%!"
+      constr.cstr_name (Util.type_to_string constr.cstr_res)
+      (List.map ~f:Util.type_to_string constr.cstr_args |> String.concat ~sep:"; ");
+    let lid = Location.mknoloc (Util.prefix env path constr.cstr_name) in
+    let args = List.map constr.cstr_args ~f:(exp_or_hole ~depth env) in
+    let combinations = Util.combinations args in
+    let exps =
+      List.map combinations ~f:(function
+    | [] -> None
+    | [e] ->Some (e)
+    | l -> Some (Ast_helper.Exp.tuple l)
+      ) in
+    List.map ~f:(Ast_helper.Exp.construct lid) exps
+
+  and record ~depth env typ path labels =
   log ~title:"record labels" "[%s]"
     (String.concat ~sep:"; "
       (List.map labels ~f:(fun l -> l.Types.lbl_name)));
