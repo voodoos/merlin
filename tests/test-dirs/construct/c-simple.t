@@ -70,13 +70,16 @@ Test lazy : FIXME
     ],
     "notifications": []
   }
+
 #############
 ## RECORDS ##
 #############
 
+Test 2.1
+
   $ cat >c2.ml <<EOF
   > type r = { a : string; b : int option }
-  > let nice_candidate = Some 3
+  > let nice_candidate = {a = "a"; b = None }
   > let x : r = _
   > EOF
 
@@ -95,7 +98,74 @@ Test lazy : FIXME
         }
       },
       [
+        "nice_candidate ",
         "{ a = _; b = _ }"
+      ]
+    ],
+    "notifications": []
+  }
+
+#################
+## ARROW TYPES ##
+#################
+
+Test 3.1
+
+  $ cat >c31.ml <<EOF
+  > let nice_candidate s = int_of_string s
+  > let x : string -> int = _
+  > EOF
+
+  $ $MERLIN single construct -position 2:25 -filename c31.ml <c31.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 2,
+          "col": 24
+        },
+        "end": {
+          "line": 2,
+          "col": 25
+        }
+      },
+      [
+        "nice_candidate ",
+        "fun _ -> _",
+        "fun _ -> nice_candidate _"
+      ]
+    ],
+    "notifications": []
+  }
+
+Test 3.2
+
+  $ cat >c3é.ml <<EOF
+  > let nice_candidate s = int_of_string s
+  > let nicer_candidate ~v:s = int_of_string s
+  > let x : v:string -> int = _
+  > EOF
+
+  $ $MERLIN single construct -position 3:25 -filename c3é.ml <c3é.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 3,
+          "col": 26
+        },
+        "end": {
+          "line": 3,
+          "col": 27
+        }
+      },
+      [
+        "nicer_candidate ",
+        "fun ~v:_ -> _",
+        "fun ~v:_ -> nice_candidate _",
+        "fun ~v:_ -> nicer_candidate ~v:_"
       ]
     ],
     "notifications": []
