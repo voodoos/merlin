@@ -135,25 +135,26 @@ module Gen = struct
       (String.concat ~sep:"; "
         (List.map constrs ~f:(fun c -> c.Types.cstr_name)));
     (* todo for gadt not all constr will be good *)
+    (* [make_constr] builds the PAST repr of a type constructor applied to holes *)
+    let make_constr ~depth env path typ constr =
+      Ctype.unify env constr.cstr_res typ; (* todo handle errors *)
+      (* Printf.eprintf "C: %s (%s) [%s]\n%!"
+        constr.cstr_name (Util.type_to_string constr.cstr_res)
+        (List.map ~f:Util.type_to_string constr.cstr_args |> String.concat ~sep:"; "); *)
+      let lid = Location.mknoloc (Util.prefix env path constr.cstr_name) in
+      let args = List.map constr.cstr_args ~f:(exp_or_hole ~depth env) in
+      let combinations = Util.combinations args in
+      let exps =
+        List.map combinations ~f:(function
+      | [] -> None
+      | [e] ->Some (e)
+      | l -> Some (Ast_helper.Exp.tuple l)
+        ) in
+      List.map ~f:(Ast_helper.Exp.construct lid) exps
+      in
     List.map constrs ~f:(make_constr ~depth env path typ)
     |> Util.panache
 
-    (* [make_constr] builds the PAST repr of a type constructor applied to holes *)
-  and make_constr ~depth env path typ constr =
-    Ctype.unify env constr.cstr_res typ; (* todo handle errors *)
-    (* Printf.eprintf "C: %s (%s) [%s]\n%!"
-      constr.cstr_name (Util.type_to_string constr.cstr_res)
-      (List.map ~f:Util.type_to_string constr.cstr_args |> String.concat ~sep:"; "); *)
-    let lid = Location.mknoloc (Util.prefix env path constr.cstr_name) in
-    let args = List.map constr.cstr_args ~f:(exp_or_hole ~depth env) in
-    let combinations = Util.combinations args in
-    let exps =
-      List.map combinations ~f:(function
-    | [] -> None
-    | [e] ->Some (e)
-    | l -> Some (Ast_helper.Exp.tuple l)
-      ) in
-    List.map ~f:(Ast_helper.Exp.construct lid) exps
 
   and record ~depth env typ path labels =
   log ~title:"record labels" "[%s]"
