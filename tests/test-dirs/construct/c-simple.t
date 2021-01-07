@@ -12,8 +12,6 @@ Test 1.1 :
   > EOF
 
   $ $MERLIN single construct -position 4:22 -filename c1.ml <c1.ml
-  C: None (int option) []
-  C: Some (int option) [int]
   {
     "class": "return",
     "value": [
