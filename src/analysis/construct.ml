@@ -140,9 +140,9 @@ module Gen = struct
     (* [make_constr] builds the PAST repr of a type constructor applied to holes *)
   and make_constr ~depth env path typ constr =
     Ctype.unify env constr.cstr_res typ; (* todo handle errors *)
-    Printf.eprintf "C: %s (%s) [%s]\n%!"
+    (* Printf.eprintf "C: %s (%s) [%s]\n%!"
       constr.cstr_name (Util.type_to_string constr.cstr_res)
-      (List.map ~f:Util.type_to_string constr.cstr_args |> String.concat ~sep:"; ");
+      (List.map ~f:Util.type_to_string constr.cstr_args |> String.concat ~sep:"; "); *)
     let lid = Location.mknoloc (Util.prefix env path constr.cstr_name) in
     let args = List.map constr.cstr_args ~f:(exp_or_hole ~depth env) in
     let combinations = Util.combinations args in
