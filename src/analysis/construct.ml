@@ -17,6 +17,7 @@ module Util = struct
   (** [find_values_for_type env typ] searches the environment [env] for values
   with return type compatible with [typ] *)
   let find_values_for_type env typ =
+    let lid = None (* Some (Longident.parse ".") *) in
     let aux name path descr acc =
       (* [check_type| checks return type compatibility and lists parameters *)
       let rec check_type type_expr params =
@@ -30,12 +31,13 @@ module Util = struct
       end
       in
       (* TODO we should probably sort the result better *)
-      (* And filter out results like "snd" *)
-      match check_type descr.val_type [] with
-      | Some num_params -> (name, path, descr, num_params) :: acc
-      | None -> acc
+      (* Also the PAth filter is too restrictive. *)
+      match path, check_type descr.val_type [] with
+      | Path.Pident _, Some params ->
+        (name, path, descr, params) :: acc
+      | _, _ -> acc
     in
-    Env.fold_values aux None env []
+    Env.fold_values aux lid env []
 
   (* Todo the following functions certainly need optimisation.
       (note the these optimisations must preserver
@@ -75,7 +77,7 @@ module Util = struct
   in aux [] l1 l2
 
   (* Given a list [l] of n lists, [panache l] flattens the list
-    by starting with the first element of it, then the second one etc. *)
+    by starting with the first element of each, then the second one etc. *)
   let panache l =
     List.fold_left ~init:[] ~f:panache2 l
 end
