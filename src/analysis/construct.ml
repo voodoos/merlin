@@ -84,12 +84,13 @@ end
 
 module Gen = struct
   open Types
+  let hole = Ast_helper.Exp.hole ()
 
   (* [make_record] builds the PAST repr of a record with holes *)
   let make_record env path labels =
     let labels = List.map labels ~f:(fun label ->
       let lid = Location.mknoloc (Util.prefix env path label.lbl_name) in
-      lid, Ast_helper.Exp.hole ()
+      lid, hole
     ) in
     Ast_helper.Exp.record labels None
 
@@ -121,6 +122,12 @@ module Gen = struct
       | [], labels -> record ~depth env typ path labels
       | _ -> []
       end
+    | Tarrow (label, tyleft, tyright, _) ->
+      (* todo add arg to env *)
+      let exps = exp_or_hole ~depth env tyright in
+      (* todo use names for args *)
+      List.map exps ~f:(fun exp ->
+      Ast_helper.Exp.fun_ label None (Ast_helper.Pat.any ()) exp)
     | (*todo*) _ -> [] in
     Util.panache2 (constructed_from_type) matching_values
 
