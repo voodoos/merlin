@@ -96,7 +96,6 @@ module Gen = struct
   (* [make_value] builds the PAST repr of a value applied to holes *)
   let make_value env (name, path, value_description, params) =
     let lid = Location.mknoloc (Util.prefix env path name) in
-    (* Todo handle labeled params *)
     let params = List.map params
       ~f:(fun label -> label, Ast_helper.Exp.hole ())
     in
@@ -116,6 +115,7 @@ module Gen = struct
     let constructed_from_type = match typ.desc with
     | Tconstr (path, params, _) ->
       let def = Env.find_type_descrs path env in
+      (* todo lazy ? *)
       begin match def with
       | constrs, [] -> constr ~depth env typ path constrs
       | [], labels -> record ~depth env typ path labels
@@ -125,6 +125,7 @@ module Gen = struct
     Util.panache2 (constructed_from_type) matching_values
 
   and exp_or_hole ~depth env typ =
+    (* If max_depth has not been reached we resurse, else we return a hole *)
     if depth > 0 then
       Ast_helper.Exp.hole () ::(expression ~depth:(depth - 1) env typ)
     else [ Ast_helper.Exp.hole () ]
