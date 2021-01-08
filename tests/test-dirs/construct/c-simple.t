@@ -141,13 +141,13 @@ Test 3.1
 
 Test 3.2
 
-  $ cat >c3é.ml <<EOF
+  $ cat >c32.ml <<EOF
   > let nice_candidate s = int_of_string s
   > let nicer_candidate ~v:s = int_of_string s
   > let x : v:string -> int = _
   > EOF
 
-  $ $MERLIN single construct -position 3:25 -filename c3é.ml <c3é.ml
+  $ $MERLIN single construct -position 3:25 -filename c32.ml <c32.ml
   {
     "class": "return",
     "value": [
@@ -163,9 +163,9 @@ Test 3.2
       },
       [
         "nicer_candidate ",
-        "fun ~v:_ -> _",
-        "fun ~v:_ -> nice_candidate _",
-        "fun ~v:_ -> nicer_candidate ~v:_"
+        "fun ~v -> _",
+        "fun ~v -> nicer_candidate ~v:_",
+        "fun ~v -> nice_candidate _"
       ]
     ],
     "notifications": []
