@@ -31,7 +31,7 @@ module Util = struct
       end
       in
       (* TODO we should probably sort the result better *)
-      (* Also the PAth filter is too restrictive. *)
+      (* Also the Path filter is too restrictive. *)
       match path, check_type descr.val_type [] with
       | Path.Pident _, Some params ->
         (name, path, descr, params) :: acc
@@ -102,10 +102,22 @@ module Gen = struct
     in
     Ast_helper.Exp.(apply (ident lid) params)
 
+  (* [make_arg] tries to provide a nice default name for function args *)
+  let make_arg label ty =
+    let open Asttypes in
+    match label with
+    | Labelled s | Optional s ->
+        (* Pun for labelled arguments *)
+        Ast_helper.Pat.var ( Location.mknoloc s), s
+    | Nolabel ->
+      (* Type-derived name for other arguments *)
+      (* todo *)
+      Ast_helper.Pat.any (), "todo"
+
   (* Given a typed hole, there is two relevant forms of constructions:
     - Use the type's definition to propose the correct type constructors,
     - Look for values in the environnement with compatible return type. *)
-  let rec expression ?(depth = 1) env typ =
+  let rec expression ?(depth = 2) env typ =
     log ~title:"construct expr" "Looking for expressions of type %s"
       (Printtyp.type_expr Format.str_formatter typ; Format.flush_str_formatter ());
     let typ = Btype.repr typ in
@@ -123,11 +135,20 @@ module Gen = struct
       | _ -> []
       end
     | Tarrow (label, tyleft, tyright, _) ->
-      (* todo add arg to env *)
+      let argument, name = make_arg label tyleft in
+      (* todo does not work *)
+       let value_description = {
+          val_type = tyleft;
+          val_kind = Val_reg;
+          val_loc = Location.none;
+          val_attributes = [];
+          val_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
+        }
+      in
+      let env = Env.add_value (Ident.create_local name) value_description env in
       let exps = exp_or_hole ~depth env tyright in
       (* todo use names for args *)
-      List.map exps ~f:(fun exp ->
-      Ast_helper.Exp.fun_ label None (Ast_helper.Pat.any ()) exp)
+      List.map exps ~f:(Ast_helper.Exp.fun_ label None argument)
     | (*todo*) _ -> [] in
     Util.panache2 (constructed_from_type) matching_values
 
