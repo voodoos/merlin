@@ -84,7 +84,11 @@ end
 
 module Gen = struct
   open Types
-  let hole = Ast_helper.Exp.hole ()
+  let hole =
+    (* Todo: we could, as it is done in the original PR,
+      try some last minute replacement for base types.val_type
+      (for example if the hole is of type int, use 0. *)
+    Ast_helper.Exp.hole ()
 
   (* [make_record] builds the PAST repr of a record with holes *)
   let make_record env path labels =
@@ -119,19 +123,21 @@ module Gen = struct
     - Look for values in the environnement with compatible return type. *)
   let rec expression ?(depth = 2) env typ =
     log ~title:"construct expr" "Looking for expressions of type %s"
-      (Printtyp.type_expr Format.str_formatter typ; Format.flush_str_formatter ());
-    let typ = Btype.repr typ in
+      (Util.type_to_string typ);
+    let rtyp = Btype.repr typ in
     let matching_values = List.map
       (Util.find_values_for_type env typ)
       ~f:(make_value env) |> List.rev
     in
-    let constructed_from_type = match typ.desc with
+    let constructed_from_type = match rtyp.desc with
+    | Tlink texp    -> expression ~depth env texp
+    | Tunivar _ | Tvar _ -> [ hole ]
     | Tconstr (path, params, _) ->
       let def = Env.find_type_descrs path env in
       (* todo lazy ? *)
       begin match def with
-      | constrs, [] -> constr ~depth env typ path constrs
-      | [], labels -> record ~depth env typ path labels
+      | constrs, [] -> constr ~depth env rtyp path constrs
+      | [], labels -> record ~depth env rtyp path labels
       | _ -> []
       end
     | Tarrow (label, tyleft, tyright, _) ->
@@ -192,6 +198,7 @@ module Gen = struct
 end
 
 let node ~parents ~pos (env, node) =
+  (* Todo check if we are on a "hole" or not *)
   match node with
   | Browse_raw.Expression { exp_type = typ; exp_env = env ; _ } ->
     Gen.expression env typ |> List.map ~f:Pprintast.string_of_expression
