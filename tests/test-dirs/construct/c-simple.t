@@ -170,3 +170,38 @@ Test 3.2
     ],
     "notifications": []
   }
+
+
+################
+## TYPES VARS ##
+################
+
+Test 4.1 FIXME
+
+  $ cat >c41.ml <<EOF
+  > type 'a t = A of 'a 
+  > let x = A _
+  > EOF
+
+  $ $MERLIN single construct -position 2:11 -filename c41.ml <c41.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 2,
+          "col": 10
+        },
+        "end": {
+          "line": 2,
+          "col": 11
+        }
+      },
+      [
+        "fun _ -> _",
+        "fun _ -> true",
+        "fun _ -> false"
+      ]
+    ],
+    "notifications": []
+  }
