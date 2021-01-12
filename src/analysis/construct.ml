@@ -125,21 +125,25 @@ module Gen = struct
   let rec expression ?(depth = 2) env typ =
     log ~title:"construct expr" "Looking for expressions of type %s"
       (Util.type_to_string typ);
+    let no_values = ref false in
     let rtyp = Ctype.full_expand env typ |> Btype.repr in
-    let (constructed_from_type, no_values) = match rtyp.desc with
+    let constructed_from_type = match rtyp.desc with
     | Tlink _ | Tsubst _ ->
       (* todo can these happen after expand/repr ? *)
       assert false
-    | Tpoly (texp, _)  -> (expression ~depth env texp, true)
-    | Tunivar _ | Tvar _ -> ([], true)
+    | Tpoly (texp, _)  ->
+      no_values := true;
+      expression ~depth env texp
+    | Tunivar _ | Tvar _ ->
+      no_values := true;
+      []
     | Tconstr (path, params, _) ->
       (* todo lazy ? *)
       let def = Env.find_type_descrs path env in
-      let exps = match def with
+      begin match def with
       | constrs, [] -> constr ~depth env rtyp path constrs
       | [], labels -> record ~depth env rtyp path labels
-      | _ -> []
-      in (exps, false)
+      | _ -> [] end
     | Tarrow (label, tyleft, tyright, _) ->
       let argument, name = make_arg label tyleft in
       (* todo does not work *)
@@ -154,16 +158,17 @@ module Gen = struct
       let env = Env.add_value (Ident.create_local name) value_description env in
       let exps = exp_or_hole ~depth env tyright in
       (* todo use names for args *)
-      (List.map exps ~f:(Ast_helper.Exp.fun_ label None argument), false)
+      List.map exps ~f:(Ast_helper.Exp.fun_ label None argument)
     | Ttuple types ->
       let choices = List.map types ~f:(exp_or_hole ~depth env)
         |> Util.combinations
       in
-      (List.map choices  ~f:Ast_helper.Exp.tuple, false)
-    | (*todo*) _ -> ([], true)
+      List.map choices  ~f:Ast_helper.Exp.tuple
+    (* | Tvariant *)
+    | (*todo*) _ -> []
     in
     let matching_values =
-      if no_values then [] else
+      if !no_values then [] else
       List.map (Util.find_values_for_type env typ)
         ~f:(make_value env) |> List.rev
     in
