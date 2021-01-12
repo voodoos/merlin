@@ -28,10 +28,10 @@ Test 1.1 :
       },
       [
         "Some _",
-        "nice_candidate_with_arg _",
         "None",
-        "nice_candidate_with_labeled_arg ~x:_",
         "Some (y )",
+        "nice_candidate_with_arg _",
+        "nice_candidate_with_labeled_arg ~x:_",
         "nice_candidate "
       ]
     ],
@@ -132,8 +132,8 @@ Test 3.1
       },
       [
         "fun _ -> _",
-        "nice_candidate ",
-        "fun _ -> nice_candidate _"
+        "fun _ -> nice_candidate _",
+        "nice_candidate "
       ]
     ],
     "notifications": []
@@ -163,9 +163,9 @@ Test 3.2
       },
       [
         "fun ~v -> _",
-        "nicer_candidate ",
         "fun ~v -> nicer_candidate ~v:_",
-        "fun ~v -> nice_candidate _"
+        "fun ~v -> nice_candidate _",
+        "nicer_candidate "
       ]
     ],
     "notifications": []
