@@ -84,6 +84,7 @@ end
 
 module Gen = struct
   open Types
+
   let hole =
     (* Todo: we could, as it is done in the original PR,
       try some last minute replacement for base types.val_type
@@ -124,6 +125,7 @@ module Gen = struct
   let rec expression ?(depth = 2) env typ =
     log ~title:"construct expr" "Looking for expressions of type %s"
       (Util.type_to_string typ);
+    let typ  = Ctype.full_expand env typ in
     let rtyp = Btype.repr typ in
     let (constructed_from_type, no_values) = match rtyp.desc with
     | Tlink texp    -> (expression ~depth env texp, true)
@@ -151,6 +153,11 @@ module Gen = struct
       let exps = exp_or_hole ~depth env tyright in
       (* todo use names for args *)
       (List.map exps ~f:(Ast_helper.Exp.fun_ label None argument), false)
+    | Ttuple types ->
+      let choices = List.map types ~f:(exp_or_hole ~depth env)
+        |> Util.combinations
+      in
+      (List.map choices  ~f:Ast_helper.Exp.tuple, false)
     | (*todo*) _ -> ([], true)
     in
     let matching_values =
