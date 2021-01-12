@@ -123,7 +123,9 @@ Test lazy : FIXME
           "col": 20
         }
       },
-      []
+      [
+        "lazy _"
+      ]
     ],
     "notifications": []
   }
