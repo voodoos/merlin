@@ -125,10 +125,12 @@ module Gen = struct
   let rec expression ?(depth = 2) env typ =
     log ~title:"construct expr" "Looking for expressions of type %s"
       (Util.type_to_string typ);
-    let typ  = Ctype.full_expand env typ in
-    let rtyp = Btype.repr typ in
+    let rtyp = Ctype.full_expand env typ |> Btype.repr in
     let (constructed_from_type, no_values) = match rtyp.desc with
-    | Tlink texp    -> (expression ~depth env texp, true)
+    | Tlink _ | Tsubst _ ->
+      (* todo can these happen after expand/repr ? *)
+      assert false
+    | Tpoly (texp, _)  -> (expression ~depth env texp, true)
     | Tunivar _ | Tvar _ -> ([ hole ], true)
     | Tconstr (path, params, _) ->
       (* todo lazy ? *)
