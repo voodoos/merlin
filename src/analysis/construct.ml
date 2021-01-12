@@ -131,7 +131,7 @@ module Gen = struct
       (* todo can these happen after expand/repr ? *)
       assert false
     | Tpoly (texp, _)  -> (expression ~depth env texp, true)
-    | Tunivar _ | Tvar _ -> ([ hole ], true)
+    | Tunivar _ | Tvar _ -> ([], true)
     | Tconstr (path, params, _) ->
       (* todo lazy ? *)
       let def = Env.find_type_descrs path env in

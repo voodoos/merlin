@@ -40,11 +40,68 @@ Test 1.1 :
 
 Test 1.2
 
-$ cat >c2.ml <<EOF
-> let x : int option =
-> EOF
+  $ cat >c2.ml <<EOF
+  > let x : int list = _
+  > EOF
 
-$ $MERLIN single construct -position 1:22 -filename c2.ml <c2.ml
+  $ $MERLIN single construct -position 1:20 -filename c2.ml <c2.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 1,
+          "col": 19
+        },
+        "end": {
+          "line": 1,
+          "col": 20
+        }
+      },
+      [
+        "_ :: _",
+        "[]",
+        "_ :: _ :: _",
+        "[_]",
+        "_ :: _ :: _ :: _",
+        "[_; _]"
+      ]
+    ],
+    "notifications": []
+  }
+
+Test 1.3
+
+  $ cat >c3.ml <<EOF
+  > let x : 'a list = _
+  > EOF
+
+  $ $MERLIN single construct -position 1:19 -filename c3.ml <c3.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 1,
+          "col": 18
+        },
+        "end": {
+          "line": 1,
+          "col": 19
+        }
+      },
+      [
+        "_ :: _",
+        "[]",
+        "_ :: _ :: _",
+        "[_]",
+        "_ :: _ :: _ :: _",
+        "[_; _]"
+      ]
+    ],
+    "notifications": []
+  }
+
 
 Test lazy : FIXME
 
@@ -171,51 +228,19 @@ Test 3.2
     "notifications": []
   }
 
-################
-## TYPES VARS ##
-################
-
-Test 4.1 FIXME
-
-  $ cat >c41.ml <<EOF
-  > type 'a t = A of 'a 
-  > let x = A _
-  > EOF
-
-  $ $MERLIN single construct -position 2:11 -filename c41.ml <c41.ml
-  {
-    "class": "return",
-    "value": [
-      {
-        "start": {
-          "line": 2,
-          "col": 10
-        },
-        "end": {
-          "line": 2,
-          "col": 11
-        }
-      },
-      [
-        "_"
-      ]
-    ],
-    "notifications": []
-  }
-
 ############
 ## TUPLES ##
 ############
 
-Test 5.1
+Test 4.1
 
-  $ cat >c51.ml <<EOF
+  $ cat >c41.ml <<EOF
   > type tup = int * float * (string option)
   > let some_float = 4.2
   > let x : tup = _
   > EOF
 
-  $ $MERLIN single construct -position 3:14 -filename c51.ml <c51.ml
+  $ $MERLIN single construct -position 3:14 -filename c41.ml <c41.ml
   {
     "class": "return",
     "value": [
@@ -240,3 +265,66 @@ Test 5.1
     ],
     "notifications": []
   }
+
+###################
+## MISCELLANEOUS ##
+###################
+
+Test M.1 : Type vars
+
+  $ cat >cM1.ml <<EOF
+  > type 'a t = A of 'a 
+  > let x = A _
+  > EOF
+
+  $ $MERLIN single construct -position 2:11 -filename cM1.ml <cM1.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 2,
+          "col": 10
+        },
+        "end": {
+          "line": 2,
+          "col": 11
+        }
+      },
+      []
+    ],
+    "notifications": []
+  }
+
+Test M.2 : 
+
+  $ cat >cM2.ml <<EOF
+  > let x : type a . a list = _
+  > EOF
+
+  $ $MERLIN single construct -position 1:26 -filename cM2.ml <cM2.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 1,
+          "col": 4
+        },
+        "end": {
+          "line": 1,
+          "col": 27
+        }
+      },
+      [
+        "_ :: _",
+        "[]",
+        "_ :: _ :: _",
+        "[_]",
+        "_ :: _ :: _ :: _",
+        "[_; _]"
+      ]
+    ],
+    "notifications": []
+  }
+
