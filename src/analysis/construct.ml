@@ -136,7 +136,11 @@ module Gen = struct
       expression ~depth env texp
     | Tunivar _ | Tvar _ ->
       no_values := true;
-      []
+      [ ]
+    | Tconstr (path, [texp], _) when path = Predef.path_lazy_t ->
+      (* Special case for lazy *)
+      let exps = exp_or_hole ~depth env texp in
+      List.map exps ~f:Ast_helper.Exp.lazy_
     | Tconstr (path, params, _) ->
       (* todo lazy ? *)
       let def = Env.find_type_descrs path env in
