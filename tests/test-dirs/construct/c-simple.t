@@ -198,9 +198,7 @@ Test 4.1 FIXME
         }
       },
       [
-        "fun _ -> _",
-        "fun _ -> true",
-        "fun _ -> false"
+        "_"
       ]
     ],
     "notifications": []
