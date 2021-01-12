@@ -156,7 +156,7 @@ module Gen = struct
       (* todo use names for args *)
       List.map exps ~f:(Ast_helper.Exp.fun_ label None argument)
     | (*todo*) _ -> [] in
-    Util.panache2 (constructed_from_type) matching_values
+    Util.panache2 matching_values constructed_from_type
 
   and exp_or_hole ~depth env typ =
     (* If max_depth has not been reached we resurse, else we return a hole *)

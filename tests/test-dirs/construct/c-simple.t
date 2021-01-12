@@ -27,12 +27,12 @@ Test 1.1 :
         }
       },
       [
-        "nice_candidate_with_arg _",
         "Some _",
-        "nice_candidate_with_labeled_arg ~x:_",
+        "nice_candidate_with_arg _",
         "None",
-        "nice_candidate ",
-        "Some (y )"
+        "nice_candidate_with_labeled_arg ~x:_",
+        "Some (y )",
+        "nice_candidate "
       ]
     ],
     "notifications": []
@@ -98,8 +98,8 @@ Test 2.1
         }
       },
       [
-        "nice_candidate ",
-        "{ a = _; b = _ }"
+        "{ a = _; b = _ }",
+        "nice_candidate "
       ]
     ],
     "notifications": []
@@ -131,8 +131,8 @@ Test 3.1
         }
       },
       [
-        "nice_candidate ",
         "fun _ -> _",
+        "nice_candidate ",
         "fun _ -> nice_candidate _"
       ]
     ],
@@ -162,8 +162,8 @@ Test 3.2
         }
       },
       [
-        "nicer_candidate ",
         "fun ~v -> _",
+        "nicer_candidate ",
         "fun ~v -> nicer_candidate ~v:_",
         "fun ~v -> nice_candidate _"
       ]
