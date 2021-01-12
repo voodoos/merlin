@@ -171,7 +171,6 @@ Test 3.2
     "notifications": []
   }
 
-
 ################
 ## TYPES VARS ##
 ################
@@ -199,6 +198,44 @@ Test 4.1 FIXME
       },
       [
         "_"
+      ]
+    ],
+    "notifications": []
+  }
+
+############
+## TUPLES ##
+############
+
+Test 5.1
+
+  $ cat >c51.ml <<EOF
+  > type tup = int * float * (string option)
+  > let some_float = 4.2
+  > let x : tup = _
+  > EOF
+
+  $ $MERLIN single construct -position 3:14 -filename c51.ml <c51.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 3,
+          "col": 14
+        },
+        "end": {
+          "line": 3,
+          "col": 15
+        }
+      },
+      [
+        "(_, _, _)",
+        "(_, (some_float ), _)",
+        "(_, _, (Some _))",
+        "(_, (some_float ), (Some _))",
+        "(_, _, None)",
+        "(_, (some_float ), None)"
       ]
     ],
     "notifications": []
