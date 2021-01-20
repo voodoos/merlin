@@ -28,11 +28,7 @@ Test 1.1 :
       },
       [
         "Some _",
-        "None",
-        "Some (y )",
-        "nice_candidate_with_arg _",
-        "nice_candidate_with_labeled_arg ~x:_",
-        "nice_candidate "
+        "None"
       ]
     ],
     "notifications": []
@@ -60,11 +56,7 @@ Test 1.2
       },
       [
         "_ :: _",
-        "[]",
-        "_ :: _ :: _",
-        "[_]",
-        "_ :: _ :: _ :: _",
-        "[_; _]"
+        "[]"
       ]
     ],
     "notifications": []
@@ -92,11 +84,7 @@ Test 1.3
       },
       [
         "_ :: _",
-        "[]",
-        "_ :: _ :: _",
-        "[_]",
-        "_ :: _ :: _ :: _",
-        "[_; _]"
+        "[]"
       ]
     ],
     "notifications": []
@@ -157,8 +145,7 @@ Test 2.1
         }
       },
       [
-        "{ a = _; b = _ }",
-        "nice_candidate "
+        "{ a = _; b = _ }"
       ]
     ],
     "notifications": []
@@ -190,9 +177,7 @@ Test 3.1
         }
       },
       [
-        "fun _ -> _",
-        "fun _ -> nice_candidate _",
-        "nice_candidate "
+        "fun _ -> _"
       ]
     ],
     "notifications": []
@@ -221,10 +206,7 @@ Test 3.2
         }
       },
       [
-        "fun ~v -> _",
-        "fun ~v -> nicer_candidate ~v:_",
-        "fun ~v -> nice_candidate _",
-        "nicer_candidate "
+        "fun ~v -> _"
       ]
     ],
     "notifications": []
@@ -257,12 +239,7 @@ Test 4.1
         }
       },
       [
-        "(_, _, _)",
-        "(_, (some_float ), _)",
-        "(_, _, (Some _))",
-        "(_, (some_float ), (Some _))",
-        "(_, _, None)",
-        "(_, (some_float ), None)"
+        "(_, _, _)"
       ]
     ],
     "notifications": []
@@ -298,13 +275,11 @@ Test 5.1
       },
       [
         "`B _",
-        "`A",
-        "some_v "
+        "`A"
       ]
     ],
     "notifications": []
   }
- 
 
 ###################
 ## MISCELLANEOUS ##
@@ -313,7 +288,7 @@ Test 5.1
 Test M.1 : Type vars
 
   $ cat >cM1.ml <<EOF
-  > type 'a t = A of 'a 
+  > type 'a t = A of 'a
   > let x = A _
   > EOF
 
@@ -336,13 +311,13 @@ Test M.1 : Type vars
     "notifications": []
   }
 
-Test M.2 : 
+Test M.2 : FIXME wrong position
 
-  $ cat >cM2.ml <<EOF
+  $ cat >M2.ml <<EOF
   > let x : type a . a list = _
   > EOF
 
-  $ $MERLIN single construct -position 1:26 -filename cM2.ml <cM2.ml
+  $ $MERLIN single construct -position 1:26 -filename M2.ml <M2.ml
   {
     "class": "return",
     "value": [
@@ -358,11 +333,7 @@ Test M.2 :
       },
       [
         "_ :: _",
-        "[]",
-        "_ :: _ :: _",
-        "[_]",
-        "_ :: _ :: _ :: _",
-        "[_; _]"
+        "[]"
       ]
     ],
     "notifications": []
