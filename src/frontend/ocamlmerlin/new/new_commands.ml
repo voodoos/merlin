@@ -105,14 +105,30 @@ The return value has the shape \
   command "construct"
     ~spec: [
       arg "-position" "<position> Position where construct should happen"
-          (marg_position (fun pos _pos -> pos));
+          (marg_position (fun pos (_pos, with_values, max_depth) ->
+            (pos, with_values, max_depth)));
+      optional "-with-values" "<none|local> Use values from the environment"
+        (Marg.param "<none|local>"
+          (fun with_values (pos, _with_values, max_depth) ->
+            match with_values with
+            | "none" -> (pos, None, max_depth)
+            | "local" -> (pos, Some `Local, max_depth)
+            | _ -> failwith "-with-values should be one of none or local"
+          ));
+      optional "-max-depth" "<int> Max depth for the search"
+          (Marg.param "int" (fun max_depth (pos, with_values,_max_depth) ->
+              match int_of_string max_depth with
+              | max_depth -> (pos, with_values, Some max_depth)
+              | exception _ ->
+                failwith "max-depth should be an integer"
+            ));
     ]
     ~doc:"Blah blah todoz"
-    ~default:(`Offset (-1))
-    begin fun buffer -> function
+    ~default:(`Offset (-1), None, None)
+    begin fun buffer (pos, with_values, max_depth) ->
+      match pos with
       | `Offset (-1) -> failwith "-position <pos> is mandatory"
-      | pos ->
-        run buffer (Query_protocol.Construct pos)
+      | pos -> run buffer (Query_protocol.Construct (pos, with_values, max_depth))
     end
   ;
 

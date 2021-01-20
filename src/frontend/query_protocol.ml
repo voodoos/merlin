@@ -166,7 +166,8 @@ type _ t =
   | Holes(* *)
     : (Location.t * string) list t
   | Construct
-    : Msource.position -> (Location.t * string list) t
+    : Msource.position * [`None | `Local] option * int option
+    -> (Location.t * string list) t
   | Outline(* *)
     :  outline t
   | Shape(* *)
