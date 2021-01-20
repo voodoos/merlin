@@ -12,27 +12,94 @@ Test 1.1 :
   > let x : int option = _
   > EOF
 
-  $ $MERLIN single construct -position 5:22 -filename c1.ml <c1.ml
-  {
-    "class": "return",
-    "value": [
-      {
-        "start": {
-          "line": 5,
-          "col": 21
-        },
-        "end": {
-          "line": 5,
-          "col": 22
-        }
+  $ $MERLIN single construct -position 5:22 -filename c1.ml <c1.ml |
+  >  jq ".value"
+  [
+    {
+      "start": {
+        "line": 5,
+        "col": 21
       },
-      [
-        "Some _",
-        "None"
-      ]
-    ],
-    "notifications": []
-  }
+      "end": {
+        "line": 5,
+        "col": 22
+      }
+    },
+    [
+      "Some _",
+      "None"
+    ]
+  ]
+
+With depth 2:
+
+  $ $MERLIN single construct -max-depth 2 -position 5:22 -filename c1.ml <c1.ml |
+  >  jq ".value"
+  [
+    {
+      "start": {
+        "line": 5,
+        "col": 21
+      },
+      "end": {
+        "line": 5,
+        "col": 22
+      }
+    },
+    [
+      "Some _",
+      "None"
+    ]
+  ]
+
+With values:
+
+  $ $MERLIN single construct -with-values local -position 5:22 -filename c1.ml <c1.ml |
+  >  jq ".value"
+  [
+    {
+      "start": {
+        "line": 5,
+        "col": 21
+      },
+      "end": {
+        "line": 5,
+        "col": 22
+      }
+    },
+    [
+      "Some _",
+      "None",
+      "nice_candidate_with_arg _",
+      "nice_candidate_with_labeled_arg ~x:_",
+      "nice_candidate "
+    ]
+  ]
+
+With depth 2 and values:
+
+  $ $MERLIN single construct -max-depth 2 -with-values local -position 5:22 -filename c1.ml <c1.ml |
+  >  jq ".value"
+  [
+    {
+      "start": {
+        "line": 5,
+        "col": 21
+      },
+      "end": {
+        "line": 5,
+        "col": 22
+      }
+    },
+    [
+      "Some _",
+      "None",
+      "Some (y )",
+      "nice_candidate_with_arg _",
+      "nice_candidate_with_labeled_arg ~x:_",
+      "nice_candidate "
+    ]
+  ]
 
 Test 1.2
 
