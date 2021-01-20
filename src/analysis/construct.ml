@@ -168,7 +168,7 @@ module Gen = struct
         |> Util.combinations
       in
       List.map choices  ~f:Ast_helper.Exp.tuple
-    (* | Tvariant *)
+    | Tvariant row_desc -> variant ~depth env rtyp row_desc
     | (*todo*) _ -> []
     in
     let matching_values =
@@ -209,6 +209,28 @@ module Gen = struct
     List.map constrs ~f:(make_constr ~depth env path typ)
     |> Util.panache
 
+    and variant ~depth env typ row_desc =
+      let fields =
+        List.filter
+          ~f:(fun (lbl, row_field) -> match row_field with
+            | Rpresent _
+            | Reither (true, [], _, _)
+            | Reither (false, [_], _, _) -> true
+            | _ -> false)
+          row_desc.row_fields
+      in
+      match fields with
+      | [] -> raise (Not_allowed "empty variant type")
+      | row_descrs ->
+        List.map row_descrs ~f:(fun (lbl, row_field) ->
+          (match row_field with
+            | Reither (false, [ty], _, _) | Rpresent (Some ty) ->
+              List.map ~f:(fun s -> Some s) (exp_or_hole ~depth env ty)
+            | _ -> [None])
+            |> List.map ~f:(fun e ->
+              Ast_helper.Exp.variant lbl e)
+            )
+        |> List.flatten
 
   and record ~depth env typ path labels =
   log ~title:"record labels" "[%s]"
