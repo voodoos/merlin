@@ -147,7 +147,6 @@ module Gen = struct
         let exps = exp_or_hole env texp in
         List.map exps ~f:Ast_helper.Exp.lazy_
       | Tconstr (path, params, _) ->
-        (* todo lazy ? *)
         let def = Env.find_type_descrs path env in
         begin match def with
         | constrs, [] -> constr env rtyp path constrs
@@ -189,7 +188,7 @@ module Gen = struct
     and exp_or_hole env typ =
       (* If max_depth has not been reached we resurse, else we return a hole *)
       if depth > 1 then
-        Ast_helper.Exp.hole () ::(at_depth ~depth:(depth - 1) env typ)
+        Ast_helper.Exp.hole () :: (at_depth ~depth:(depth - 1) env typ)
       else [ Ast_helper.Exp.hole () ]
 
     and constr env typ path constrs =
@@ -198,7 +197,7 @@ module Gen = struct
           (List.map constrs ~f:(fun c -> c.Types.cstr_name)));
       (* todo for gadt not all constr will be good *)
       (* [make_constr] builds the PAST repr of a type constructor applied to holes *)
-      let make_constr ~depth env path typ constr =
+      let make_constr env path typ constr =
         Ctype.unify env constr.cstr_res typ; (* todo handle errors *)
         (* Printf.eprintf "C: %s (%s) [%s]\n%!"
           constr.cstr_name (Util.type_to_string constr.cstr_res)
@@ -213,8 +212,8 @@ module Gen = struct
         | l -> Some (Ast_helper.Exp.tuple l)
           ) in
         List.map ~f:(Ast_helper.Exp.construct lid) exps
-        in
-      List.map constrs ~f:(make_constr ~depth env path typ)
+      in
+      List.map constrs ~f:(make_constr env path typ)
       |> Util.panache
 
       and variant env typ row_desc =
