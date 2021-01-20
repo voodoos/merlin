@@ -3,6 +3,8 @@ open Typedtree
 
 let {Logger. log} = Logger.for_section "construct"
 
+exception Not_allowed of string
+
 module Util = struct
   open Types
 
@@ -169,7 +171,10 @@ module Gen = struct
       in
       List.map choices  ~f:Ast_helper.Exp.tuple
     | Tvariant row_desc -> variant ~depth env rtyp row_desc
-    | (*todo*) _ -> []
+    | Tpackage (path, lids, tys) -> failwith "Not implemented"
+    | Tobject _ ->  failwith "Not implemented"
+    | Tfield _ ->  failwith "Not implemented"
+    | Tnil -> failwith "Not implemented"
     in
     let matching_values =
       if !no_values then [] else
