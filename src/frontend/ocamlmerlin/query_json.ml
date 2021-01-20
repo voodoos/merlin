@@ -139,9 +139,15 @@ let dump (type a) : a t -> json =
       "start", mk_position pos_start;
       "end", mk_position pos_end;
     ]
-  | Construct (pos) ->
+  | Construct (pos, with_values, max_depth) ->
+    let max_depth = Option.value ~default:1 max_depth in
     mk "construct" [
-      "position", mk_position pos
+      "position", mk_position pos;
+      "with_values", (match with_values with
+      | Some `None | None -> `String "none"
+      | Some `Local -> `String "local"
+      );
+      "max_depth", `Int max_depth
     ]
   | Outline -> mk "outline" []
   | Errors { lexing; parsing; typing } ->

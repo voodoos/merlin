@@ -99,7 +99,8 @@ type _ t =
   | Phrase : [ `Next | `Prev ] * Msource.position -> Lexing.position t
   | Case_analysis : Msource.position *
       Msource.position -> (Location.t * string) t
-  | Construct : Msource.position -> (Location.t * string list) t
+  | Construct : Msource.position * [`None | `Local] option * int option
+  -> (Location.t * string list) t
   | Outline : outline t
   | Shape : Msource.position -> shape list t
   | Errors : error_filter -> Location.error list t
