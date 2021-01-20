@@ -103,7 +103,7 @@ Test 1.3
   }
 
 
-Test lazy : FIXME
+Test lazy
 
   $ cat >lazy.ml <<EOF
   > let x : int lazy = _
@@ -267,6 +267,44 @@ Test 4.1
     ],
     "notifications": []
   }
+
+####################
+## POLY. VARIANTS ##
+####################
+
+TODO we need more tests here
+
+Test 5.1
+
+  $ cat >c51.ml <<EOF
+  > type v = [ \`A | \`B of string ]
+  > let some_v = \`B "totoro"
+  > let x : v = _
+  > EOF
+
+  $ $MERLIN single construct -position 3:13 -filename c51.ml <c51.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 3,
+          "col": 12
+        },
+        "end": {
+          "line": 3,
+          "col": 13
+        }
+      },
+      [
+        "`B _",
+        "`A",
+        "some_v "
+      ]
+    ],
+    "notifications": []
+  }
+ 
 
 ###################
 ## MISCELLANEOUS ##
