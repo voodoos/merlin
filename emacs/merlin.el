@@ -1358,6 +1358,50 @@ strictly within, or nil if there is no such element."
                              (cons (region-beginning) (region-end))
                              (cons (point) (point)))))
 
+;;;;;;;;;;;;;;;
+;; CONSTRUCT ;;
+;;;;;;;;;;;;;;;
+
+(defvar merlin--construct-r-d-start nil)
+(defvar merlin--construct-r-d-stop nil)
+
+
+(defun merlin--construct-replace (begin end newtext)
+  (progn (advice-remove 'completion--replace #'merlin--construct-replace)
+         (completion--replace
+          merlin--construct-r-d-start
+          merlin--construct-r-d-stop
+          newtext)))
+
+(defun merlin--construct-complete (start stop results)
+  (let ((start (merlin--point-of-pos start))
+        (stop  (merlin--point-of-pos stop)))
+    (progn
+      (setq merlin--construct-r-d-start start)
+      (setq merlin--construct-r-d-stop stop)
+      (advice-add 'completion--replace
+                  :override
+                  #'merlin--construct-replace)
+      (with-output-to-temp-buffer "*Constructions*"
+        (display-completion-list results)))))
+
+;; todo what if no completion is chosen ? We need to remove the advice !
+
+(defun merlin--construct-point (point)
+  "Execute a construct on POINT"
+  (let ((result (merlin/call "construct"
+                             "-position" (merlin/unmake-point (point)))))
+    (when result
+      (let* ((loc   (car result))
+             (start (cdr (assoc 'start loc)))
+             (stop  (cdr (assoc 'end loc))))
+        (merlin--construct-complete start stop (cadr result))))))
+
+(defun merlin-construct ()
+  "Construct over the current hole"
+  (interactive)
+  (merlin--construct-point (cons (point) (point))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; PACKAGE, PROJECT AND FLAGS MANAGEMENT ;;
