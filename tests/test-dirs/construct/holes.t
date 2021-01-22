@@ -1,4 +1,4 @@
-  $ cat >h1.ml <<EOFÏ
+  $ cat >h1.ml <<EOF
   > EOF
 
   $ $MERLIN single holes -filename h1.ml <h1.ml |
