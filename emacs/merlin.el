@@ -1362,26 +1362,15 @@ strictly within, or nil if there is no such element."
 ;; CONSTRUCT ;;
 ;;;;;;;;;;;;;;;
 
-(defvar merlin--construct-r-d-start nil)
-(defvar merlin--construct-r-d-stop nil)
-
-
-(defun merlin--construct-replace (begin end newtext)
-  (progn (advice-remove 'completion--replace #'merlin--construct-replace)
-         (completion--replace
-          merlin--construct-r-d-start
-          merlin--construct-r-d-stop
-          newtext)))
 
 (defun merlin--construct-complete (start stop results)
-  (let ((start (merlin--point-of-pos start))
-        (stop  (merlin--point-of-pos stop)))
+  (lexical-let ((start (merlin--point-of-pos start))
+                (stop  (merlin--point-of-pos stop)))
     (progn
-      (setq merlin--construct-r-d-start start)
-      (setq merlin--construct-r-d-stop stop)
-      (advice-add 'completion--replace
-                  :override
-                  #'merlin--construct-replace)
+      (defun merlin--construct-replace (b e newtext)
+        (progn (advice-remove 'completion--replace #'merlin--construct-replace)
+               (completion--replace start stop newtext)))
+      (advice-add 'completion--replace :override #'merlin--construct-replace)
       (with-output-to-temp-buffer "*Constructions*"
         (display-completion-list results)))))
 
