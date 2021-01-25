@@ -321,6 +321,16 @@ def command_occurrences(pos):
     except MerlinExc as e:
         try_print_error(e)
 
+def command_holes():
+    try:
+        lst_or_err = command("holes")
+        if not isinstance(lst_or_err, list):
+            print(lst_or_err)
+        else:
+            return lst_or_err
+    except MerlinExc as e:
+        try_print_error(e)
+
 ######## VIM FRONTEND
 
 def vim_complete_prepare(str):
@@ -614,34 +624,47 @@ def vim_case_analysis():
 
     vim_type_reset()
 
+def vim_previous_hole():
+    line, col = vim.current.window.cursor
+    lst = command_holes()
+    holes = map(lambda x: x['start'], lst.reverse())
+    for pos in holes:
+      hnum = pos['line']
+      hcol = pos['col']
+      if (hnum, hcol) < (line, col):
+        vim.current.window.cursor = (hnum, hcol)
+        break
+
+def vim_next_hole( or_go_to = None):
+    line, col = vim.current.window.cursor
+    lst = command_holes()
+    holes = map(lambda x: x['start'], lst)
+    for pos in holes:
+      hnum = pos['line']
+      hcol = pos['col']
+      if (hnum, hcol) > (line, col):
+        vim.current.window.cursor = (hnum, hcol)
+        break
+
+    if vim.current.window.cursor == (line, col):
+      if or_go_to is not None:
+        vim.current.window.cursor = or_go_to
+
+
 def vim_construct():
-    global enclosing_types
-    global current_enclosing
     vimvar = "b:constr_result"
     vim.command("let %s = []" % vimvar)
-    if enclosing_types == []:
-        to_line, to_col = vim.current.window.cursor
-        try:
-            enclosing_types = command("type-enclosing", "-position", fmtpos((to_line,to_col)))
-            if enclosing_types != []:
-                current_enclosing = 0
-            else:
-                atom, _, _ = bounds_of_ocaml_atom_at_pos(to_line - 1, to_col)
-                print("didn't manage to destruct '%s'" % atom)
-                return
-        except MerlinExc as e:
-            try_print_error(e)
-            return
-
-    tmp = enclosing_types[current_enclosing]
+    line, col = vim.current.window.cursor
     try:
-      result = command("construct", "-position", fmtpos(tmp['start']))
+      result = command("construct", "-position", fmtpos((line, col)))
       loc = result[0]
       txts = result[1]
 
       if len(txts) == 1:
         # If there is only one answer we replace it immediately
-        replace_buffer_portion(loc['start'], loc['end'], txts[0])
+        replace_buffer_portion(loc['start'], loc['end'], txts[0], reindent = False)
+        vim.current.window.cursor = (loc['start']['line'], loc['start']['col'])
+        vim_next_hole()
       elif len(txts) > 1:
         # If there is more we remove the hole
         replace_buffer_portion(loc['start'], loc['end'], " ", reindent = False)
@@ -654,7 +677,6 @@ def vim_construct():
     except MerlinExc as e:
         try_print_error(e)
 
-    vim_type_reset()
 
 def vim_type_enclosing():
     global enclosing_types
