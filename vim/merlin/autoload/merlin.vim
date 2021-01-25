@@ -537,11 +537,17 @@ endfunction
 
 function! merlin#ConstructDone()
   " execute "normal :s/\<c-v>\<c-@>/\<c-v>\<c-m>/ge\<cr>"
+  " After the subtitution we try to go to the the next hole
+  call setpos('.', g:destruct_saved_pos)
+  MerlinPy merlin.vim_next_hole()
+  :call feedkeys("\<esc>")
+  " And we hook back the standard completion
   setlocal omnifunc=merlin#Complete
 endfunction
 
 function! merlin#Construct()
   MerlinPy merlin.vim_construct()
+  let g:destruct_saved_pos = getpos(".")
 
   " If multiple choices where found they are in the b:constr_result list
   if len(b:constr_result) > 0
@@ -553,9 +559,18 @@ function! merlin#Construct()
     " When it's done we switch back to merlin default completion
     augroup MerlinConstruct
       au!
+  let saved_pos = getpos(".")
       autocmd CompleteDone <buffer> call merlin#ConstructDone()
     augroup END
   endif
+endfunction
+
+function! merlin#PreviousHole()
+  MerlinPy merlin.vim_previous_hole()
+endfunction
+
+function! merlin#NextHole()
+  MerlinPy merlin.vim_next_hole()
 endfunction
 
 function! merlin#Restart()
@@ -635,6 +650,8 @@ function! merlin#Register()
   command! -buffer -nargs=0 MerlinPreviousHole call merlin#PreviousHole()
 
   """ Construct  ---------------------------------------------------------------
+  command! -buffer -nargs=0 MerlinNextHole call merlin#NextHole()
+  command! -buffer -nargs=0 MerlinPreviousHole call merlin#PreviousHole()
   command! -buffer -nargs=0 MerlinConstruct call merlin#Construct()
 
   """ Locate  ------------------------------------------------------------------

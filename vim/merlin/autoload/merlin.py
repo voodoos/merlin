@@ -665,35 +665,24 @@ def vim_next_hole(min = 0, max = float('inf')):
       hcol = holes[0]['start']['col']
       vim.current.window.cursor = (hline, hcol)
       print(holes[0]['type'])
+    elif max < float('inf'):
+      vim.current.window.cursor = (max, 1)
+      print(holes[0]['type'])
 
 def vim_construct():
-    global enclosing_types
-    global current_enclosing
     vimvar = "b:constr_result"
     vim.command("let %s = []" % vimvar)
-    if enclosing_types == []:
-        to_line, to_col = vim.current.window.cursor
-        try:
-            enclosing_types = command("type-enclosing", "-position", fmtpos((to_line,to_col)))
-            if enclosing_types != []:
-                current_enclosing = 0
-            else:
-                atom, _, _ = bounds_of_ocaml_atom_at_pos(to_line - 1, to_col)
-                print("didn't manage to destruct '%s'" % atom)
-                return
-        except MerlinExc as e:
-            try_print_error(e)
-            return
-
-    tmp = enclosing_types[current_enclosing]
+    line, col = vim.current.window.cursor
     try:
-      result = command("construct", "-position", fmtpos(tmp['start']))
+      result = command("construct", "-position", fmtpos((line, col)))
       loc = result[0]
       txts = result[1]
 
       if len(txts) == 1:
         # If there is only one answer we replace it immediately
         replace_buffer_portion(loc['start'], loc['end'], txts[0])
+        vim.current.window.cursor = (loc['start']['line'], loc['start']['col'])
+        vim_next_hole()
       elif len(txts) > 1:
         # If there is more we remove the hole
         replace_buffer_portion(loc['start'], loc['end'], " ", jump = False)
@@ -706,7 +695,6 @@ def vim_construct():
     except MerlinExc as e:
         try_print_error(e)
 
-    vim_type_reset()
 
 def vim_type_enclosing():
     global enclosing_types
