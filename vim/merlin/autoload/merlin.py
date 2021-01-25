@@ -567,7 +567,7 @@ def vim_type_reset():
     enclosing_types = [] # reset
     current_enclosing = -1
 
-def replace_buffer_portion_and_jump_to_hole(start, end, txt):
+def replace_buffer_portion(start, end, txt, jump = True):
     (encode,decode) = vim_codec()
 
     start_line = start['line'] - 1
@@ -593,8 +593,9 @@ def replace_buffer_portion_and_jump_to_hole(start, end, txt):
     vim.current.window.cursor = (start['line'], 0)
     vim.command('normal %d==' % nb_lines)
 
-    # We look for a hole to move the cursor to in the range we replaced
-    vim_next_hole(start_line, start_line + nb_lines)
+    if jump:
+      # We look for a hole to move the cursor to in the range we replaced
+      vim_next_hole(start_line, start_line + nb_lines)
 
 def vim_case_analysis():
     global enclosing_types
@@ -620,7 +621,8 @@ def vim_case_analysis():
                                           "-end", fmtpos(tmp['end']))
         tmp = result[0]
         txt = result[1]
-        replace_buffer_portion_and_jump_to_hole(tmp['start'], tmp['end'], txt)
+        replace_buffer_portion(tmp['start'], tmp['end'], txt)
+
 
     except MerlinExc as e:
         try_print_error(e)
@@ -685,13 +687,22 @@ def vim_construct():
 
     tmp = enclosing_types[current_enclosing]
     try:
-        result = command("construct", "-position", fmtpos(tmp['start']))
-        tmp = result[0]
-        txts = result[1]
-        # replace_buffer_portion(tmp['start'], tmp['end'], txt[0])
+      result = command("construct", "-position", fmtpos(tmp['start']))
+      loc = result[0]
+      txts = result[1]
+
+      if len(txts) == 1:
+        # If there is only one answer we replace it immediately
+        replace_buffer_portion(loc['start'], loc['end'], txts[0])
+      elif len(txts) > 1:
+        # If there is more we remove the hole
+        replace_buffer_portion(loc['start'], loc['end'], " ", jump = False)
+        vim.current.window.cursor = (loc['start']['line'], loc['start']['col'])
+
+        # and write the alternatives in the b:constr_result list:
         for txt in txts:
-          vim.command("let l:tmp = {'word':'%s'}" % txt)
-          vim.command("call add(%s, l:tmp)" % vimvar)
+          vim.command("call add(%s, {'word':'%s'})" % (vimvar, txt))
+
     except MerlinExc as e:
         try_print_error(e)
 

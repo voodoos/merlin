@@ -542,16 +542,20 @@ endfunction
 
 function! merlin#Construct()
   MerlinPy merlin.vim_construct()
-  " We start Omnicomplete witht the custom complete function
-  setlocal omnifunc=merlin#ConstructComplete
-  startinsert
-  call feedkeys("\<c-x>\<c-o>")
 
-  " When it's done we switch back to merlin default completion
-  augroup MerlinConstruct
-    au!
-    autocmd CompleteDone <buffer> call merlin#ConstructDone()
-  augroup END
+  " If multiple choices where found they are in the b:constr_result list
+  if len(b:constr_result) > 0
+    " We start Omnicomplete with the custom complete function
+    setlocal omnifunc=merlin#ConstructComplete
+    startinsert
+    call feedkeys("\<c-x>\<c-o>")
+
+    " When it's done we switch back to merlin default completion
+    augroup MerlinConstruct
+      au!
+      autocmd CompleteDone <buffer> call merlin#ConstructDone()
+    augroup END
+  endif
 endfunction
 
 function! merlin#Restart()
