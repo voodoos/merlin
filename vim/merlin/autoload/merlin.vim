@@ -541,6 +541,7 @@ function! merlin#ConstructDone()
   call setpos('.', g:destruct_saved_pos)
   MerlinPy merlin.vim_next_hole()
   :call feedkeys("\<esc>")
+  :call feedkeys("\<Right>")
   " And we hook back the standard completion
   setlocal omnifunc=merlin#Complete
 endfunction

@@ -685,7 +685,7 @@ def vim_construct():
         vim_next_hole()
       elif len(txts) > 1:
         # If there is more we remove the hole
-        replace_buffer_portion(loc['start'], loc['end'], " ", jump = False)
+        replace_buffer_portion(loc['start'], loc['end'], "", jump = False)
         vim.current.window.cursor = (loc['start']['line'], loc['start']['col'])
 
         # and write the alternatives in the b:constr_result list:
