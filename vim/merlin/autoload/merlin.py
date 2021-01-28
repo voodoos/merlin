@@ -646,9 +646,9 @@ def vim_next_hole( or_go_to = None):
         vim.current.window.cursor = (hnum, hcol)
         break
 
-    if vim.current.window.cursor == (line, col):
-      if or_go_to is not None:
-        vim.current.window.cursor = or_go_to
+    # if vim.current.window.cursor == (line, col):
+    #   if or_go_to is not None:
+    #     vim.current.window.cursor = or_go_to
 
 
 def vim_construct():
@@ -667,7 +667,7 @@ def vim_construct():
         vim_next_hole()
       elif len(txts) > 1:
         # If there is more we remove the hole
-        replace_buffer_portion(loc['start'], loc['end'], " ", reindent = False)
+        replace_buffer_portion(loc['start'], loc['end'], "", reindent = False)
         vim.current.window.cursor = (loc['start']['line'], loc['start']['col'])
 
         # and write the alternatives in the b:constr_result list:
