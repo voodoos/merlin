@@ -624,60 +624,6 @@ def vim_case_analysis():
 
     vim_type_reset()
 
-def vim_previous_hole():
-    line, col = vim.current.window.cursor
-    lst = command_holes()
-    holes = map(lambda x: x['start'], lst.reverse())
-    for pos in holes:
-      hnum = pos['line']
-      hcol = pos['col']
-      if (hnum, hcol) < (line, col):
-        vim.current.window.cursor = (hnum, hcol)
-        break
-
-def vim_next_hole( or_go_to = None):
-    line, col = vim.current.window.cursor
-    lst = command_holes()
-    holes = map(lambda x: x['start'], lst)
-    for pos in holes:
-      hnum = pos['line']
-      hcol = pos['col']
-      if (hnum, hcol) > (line, col):
-        vim.current.window.cursor = (hnum, hcol)
-        break
-
-    # if vim.current.window.cursor == (line, col):
-    #   if or_go_to is not None:
-    #     vim.current.window.cursor = or_go_to
-
-
-def vim_construct():
-    vimvar = "b:constr_result"
-    vim.command("let %s = []" % vimvar)
-    line, col = vim.current.window.cursor
-    try:
-      result = command("construct", "-position", fmtpos((line, col)))
-      loc = result[0]
-      txts = result[1]
-
-      if len(txts) == 1:
-        # If there is only one answer we replace it immediately
-        replace_buffer_portion(loc['start'], loc['end'], txts[0], reindent = False)
-        vim.current.window.cursor = (loc['start']['line'], loc['start']['col'])
-        vim_next_hole()
-      elif len(txts) > 1:
-        # If there is more we remove the hole
-        replace_buffer_portion(loc['start'], loc['end'], "", reindent = False)
-        vim.current.window.cursor = (loc['start']['line'], loc['start']['col'])
-
-        # and write the alternatives in the b:constr_result list:
-        for txt in txts:
-          vim.command("call add(%s, {'word':'%s'})" % (vimvar, txt))
-
-    except MerlinExc as e:
-        try_print_error(e)
-
-
 def vim_type_enclosing():
     global enclosing_types
     global current_enclosing
@@ -703,6 +649,64 @@ def vim_type_enclosing():
     except MerlinExc as e:
         try_print_error(e)
         return '{}'
+
+def vim_previous_hole():
+    line, col = vim.current.window.cursor
+    lst = command_holes()
+    holes = map(lambda x: x['start'], lst.reverse())
+    for pos in holes:
+      hnum = pos['line']
+      hcol = pos['col']
+      if (hnum, hcol) < (line, col):
+        vim.current.window.cursor = (hnum, hcol)
+        typ = json.loads(vim_type_enclosing())
+        print typ['type']
+        break
+
+def vim_next_hole( or_go_to = None):
+    line, col = vim.current.window.cursor
+    lst = command_holes()
+    holes = map(lambda x: x['start'], lst)
+    for pos in holes:
+      hnum = pos['line']
+      hcol = pos['col']
+      if (hnum, hcol) > (line, col):
+        vim.current.window.cursor = (hnum, hcol)
+        typ = json.loads(vim_type_enclosing())
+        print typ['type']
+        break
+
+    # if vim.current.window.cursor == (line, col):
+    #   if or_go_to is not None:
+    #     vim.current.window.cursor = or_go_to
+
+
+def vim_construct():
+    vimvar = "b:constr_result"
+    vim.command("let %s = []" % vimvar)
+    line, col = vim.current.window.cursor
+    try:
+      result = command("construct", "-position", fmtpos((line, col)))
+      loc = result[0]
+      txts = result[1]
+
+      if len(txts) == 1:
+        # If there is only one answer we replace it immediately
+        replace_buffer_portion(loc['start'], loc['end'], txts[0], reindent = False)
+        vim.current.window.cursor = (loc['start']['line'], loc['start']['col'])
+        vim_next_hole()
+      elif len(txts) > 1:
+        # If there is more we remove the hole
+        # TODO should only if a completion is chosen
+        replace_buffer_portion(loc['start'], loc['end'], "", reindent = False)
+        vim.current.window.cursor = (loc['start']['line'], loc['start']['col'])
+
+        # and write the alternatives in the b:constr_result list:
+        for txt in txts:
+          vim.command("call add(%s, {'word':'%s'})" % (vimvar, txt))
+
+    except MerlinExc as e:
+        try_print_error(e)
 
 def easy_matcher_wide(start, stop):
     startl = ""
