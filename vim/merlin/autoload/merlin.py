@@ -629,6 +629,32 @@ def vim_case_analysis():
 
     vim_type_reset()
 
+def vim_type_enclosing():
+    global enclosing_types
+    global current_enclosing
+    vim_type_reset()
+    try:
+        to_line, to_col = vim.current.window.cursor
+        enclosing_types = command2(
+                ["type-enclosing",
+                 "-position", fmtpos((to_line,to_col)),
+                 "-index", "0"
+                ],
+                track_verbosity=True
+                )
+        if enclosing_types != []:
+            return vim_next_enclosing()
+        else:
+            atom, start, stop = bounds_of_ocaml_atom_at_pos(to_line - 1, to_col)
+            tmp = {'start': {'line':to_line, 'col':start},
+                   'end':   {'line':to_line, 'col':stop }}
+            tmp['matcher'] = make_matcher(tmp['start'], tmp['end'])
+            tmp['atom'] = atom
+            return json.dumps(tmp)
+    except MerlinExc as e:
+        try_print_error(e)
+        return '{}'
+
 def vim_previous_hole():
     line, col = vim.current.window.cursor
     holes = command_holes()
@@ -694,33 +720,6 @@ def vim_construct():
 
     except MerlinExc as e:
         try_print_error(e)
-
-
-def vim_type_enclosing():
-    global enclosing_types
-    global current_enclosing
-    vim_type_reset()
-    try:
-        to_line, to_col = vim.current.window.cursor
-        enclosing_types = command2(
-                ["type-enclosing",
-                 "-position", fmtpos((to_line,to_col)),
-                 "-index", "0"
-                ],
-                track_verbosity=True
-                )
-        if enclosing_types != []:
-            return vim_next_enclosing()
-        else:
-            atom, start, stop = bounds_of_ocaml_atom_at_pos(to_line - 1, to_col)
-            tmp = {'start': {'line':to_line, 'col':start},
-                   'end':   {'line':to_line, 'col':stop }}
-            tmp['matcher'] = make_matcher(tmp['start'], tmp['end'])
-            tmp['atom'] = atom
-            return json.dumps(tmp)
-    except MerlinExc as e:
-        try_print_error(e)
-        return '{}'
 
 def easy_matcher_wide(start, stop):
     startl = ""
