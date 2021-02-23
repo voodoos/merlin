@@ -10,9 +10,13 @@ exception Not_allowed of string
 module Util = struct
   open Types
 
-  let prefix _env _path name =
-    (*todo*)
-    Longident.Lident name
+  let prefix env path name =
+    let path = Printtyp.shorten_type_path env path in
+    let lid  = Untypeast.lident_of_path path in
+    match lid with
+    | Lident _ -> Longident.Lident name
+    | Ldot (lid, _) -> Ldot (lid, name)
+    | _ -> assert false
 
   let type_to_string t =
     Printtyp.type_expr (Format.str_formatter) t;
@@ -120,7 +124,7 @@ module Gen = struct
         Ast_helper.Pat.var ( Location.mknoloc s), s
     | Nolabel ->
       (* Type-derived name for other arguments *)
-      (* todo *)
+      (* todo *) (* todo check they are not in use *)
       Ast_helper.Pat.any (), "todo"
 
   (* Given a typed hole, there is two relevant forms of constructions:
@@ -252,6 +256,5 @@ let node ?(max_depth = 1) ~vscope ~parents ~pos (env, node) =
   (* Todo check if we are on a "hole" or not *)
   match node with
   | Browse_raw.Expression { exp_type = typ; exp_env = env ; exp_desc = Texp_hole; _ } ->
-
     Gen.expression vscope ~depth:max_depth env typ |> List.map ~f:Pprintast.string_of_expression
   | _ -> []
