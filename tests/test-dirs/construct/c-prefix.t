@@ -55,7 +55,7 @@ Test 1.2 :
       }
     },
     [
-      "Prefix.B",
-      "Prefix.A _"
+      "B",
+      "A _"
     ]
   ]
