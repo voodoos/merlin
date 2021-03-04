@@ -10,13 +10,8 @@ exception Not_allowed of string
 module Util = struct
   open Types
 
-  let prefix env path name =
-    let path = Printtyp.shorten_type_path env path in
-    let lid  = Untypeast.lident_of_path path in
-    match lid with
-    | Lident _ -> Longident.Lident name
-    | Ldot (lid, _) -> Ldot (lid, name)
-    | _ -> assert false
+  let prefix env ~env_check path name =
+    Destruct.Path_utils.to_shortest_lid ~env ~env_check ~name path
 
   let type_to_string t =
     Printtyp.type_expr (Format.str_formatter) t;
@@ -102,14 +97,20 @@ module Gen = struct
   (* [make_record] builds the PAST repr of a record with holes *)
   let make_record env path labels =
     let labels = List.map labels ~f:(fun label ->
-      let lid = Location.mknoloc (Util.prefix env path label.lbl_name) in
+      let lid = Location.mknoloc (
+          Util.prefix env ~env_check:Env.find_label_by_name path label.lbl_name
+        )
+      in
       lid, hole
     ) in
     Ast_helper.Exp.record labels None
 
   (* [make_value] builds the PAST repr of a value applied to holes *)
   let make_value env (name, path, value_description, params) =
-    let lid = Location.mknoloc (Util.prefix env path name) in
+    let lid = Location.mknoloc (
+        Util.prefix env ~env_check:Env.find_value_by_name path name
+      )
+    in
     let params = List.map params
       ~f:(fun label -> label, Ast_helper.Exp.hole ())
     in
@@ -206,7 +207,10 @@ module Gen = struct
         (* Printf.eprintf "C: %s (%s) [%s]\n%!"
           constr.cstr_name (Util.type_to_string constr.cstr_res)
           (List.map ~f:Util.type_to_string constr.cstr_args |> String.concat ~sep:"; "); *)
-        let lid = Location.mknoloc (Util.prefix env path constr.cstr_name) in
+        let lid = Location.mknoloc (
+            Util.prefix env ~env_check:Env.find_constructor_by_name path constr.cstr_name
+          )
+        in
         let args = List.map constr.cstr_args ~f:(exp_or_hole env) in
         let combinations = Util.combinations args in
         let exps =
