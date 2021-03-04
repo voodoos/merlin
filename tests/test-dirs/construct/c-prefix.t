@@ -30,7 +30,6 @@ Test 1.1 :
     ]
   ]
 
-FIXME We should not print complete prefix of opened modules
 Test 1.2 :
 
   $ cat >c12.ml <<EOF
@@ -59,3 +58,44 @@ Test 1.2 :
       "A _"
     ]
   ]
+
+Test 1.3 :
+
+  $ cat >c13.ml <<EOF
+  > module Prefix = struct
+  >   type t = A of int | B
+  >   type r = { a : t }
+  > end
+  > let x : Prefix.t = _
+  > let x : Prefix.r = _
+  > open Prefix
+  > let x : t = _
+  > let x : r = _
+  > EOF
+
+  $ $MERLIN single construct -position 5:20 -filename c13.ml <c13.ml |
+  >  jq ".value[1]"
+  [
+    "Prefix.B",
+    "Prefix.A _"
+  ]
+
+  $ $MERLIN single construct -position 6:20 -filename c13.ml <c13.ml |
+  >  jq ".value[1]"
+  [
+    "{ Prefix.a = _ }"
+  ]
+
+  $ $MERLIN single construct -position 8:13 -filename c13.ml <c13.ml |
+  >  jq ".value[1]"
+  [
+    "B",
+    "A _"
+  ]
+
+  $ $MERLIN single construct -position 9:13 -filename c13.ml <c13.ml |
+  >  jq ".value[1]"
+  [
+    "{ a = _ }"
+  ]
+
