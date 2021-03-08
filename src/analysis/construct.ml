@@ -89,28 +89,21 @@ module Gen = struct
   open Types
 
   let hole =
-    (* Todo: we could, as it is done in the original PR,
-      try some last minute replacement for base types.val_type
-      (for example if the hole is of type int, use 0. *)
     Ast_helper.Exp.hole ()
 
-  (* [make_record] builds the PAST repr of a record with holes *)
-  let make_record env path labels =
-    let labels = List.map labels ~f:(fun label ->
-      let lid = Location.mknoloc (
-          Util.prefix env ~env_check:Env.find_label_by_name path label.lbl_name
-        )
-      in
-      lid, hole
-    ) in
+  (* [record] generates the PAST repr of a record with holes *)
+  let record env path labels =
+    let labels = List.map labels ~f:(fun { lbl_name; _ } ->
+      let env_check = Env.find_label_by_name in
+      let lid = Util.prefix env ~env_check path lbl_name in
+      Location.mknoloc lid, hole)
+    in
     Ast_helper.Exp.record labels None
 
-  (* [make_value] builds the PAST repr of a value applied to holes *)
-  let make_value env (name, path, value_description, params) =
-    let lid = Location.mknoloc (
-        Util.prefix env ~env_check:Env.find_value_by_name path name
-      )
-    in
+  (* [value] generates the PAST repr of a value applied to holes *)
+  let value env (name, path, value_description, params) =
+    let env_check = Env.find_value_by_name in
+    let lid = Location.mknoloc (Util.prefix env ~env_check path name) in
     let params = List.map params
       ~f:(fun label -> label, Ast_helper.Exp.hole ())
     in
@@ -128,75 +121,20 @@ module Gen = struct
       (* todo *) (* todo check they are not in use *)
       Ast_helper.Pat.any (), "todo"
 
-  (* Given a typed hole, there is two relevant forms of constructions:
-    - Use the type's definition to propose the correct type constructors,
-    - Look for values in the environnement with compatible return type. *)
+  (* [expression values_scope ~depth env ty] generates a list of PAST
+  expressions that could fill a hole of type [ty] in the environment [env].
+  [depth] regulates the deep construction of recursive values. If
+  [values_scope] is set to [Local] the returned list will also contains
+  local values to choose from *)
   let expression = fun vscope -> let rec at_depth ~depth =
-    let rec exp env typ =
-      log ~title:"construct expr" "Looking for expressions of type %s"
-        (Util.type_to_string typ);
-      let no_values = ref (vscope = Null) in
-      let rtyp = Ctype.full_expand env typ |> Btype.repr in
-      let constructed_from_type = match rtyp.desc with
-      | Tlink _ | Tsubst _ ->
-        (* todo can these happen after expand/repr ? *)
-        assert false
-      | Tpoly (texp, _)  ->
-        no_values := true;
-        exp env texp
-      | Tunivar _ | Tvar _ ->
-        no_values := true;
-        [ ]
-      | Tconstr (path, [texp], _) when path = Predef.path_lazy_t ->
-        (* Special case for lazy *)
-        let exps = exp_or_hole env texp in
-        List.map exps ~f:Ast_helper.Exp.lazy_
-      | Tconstr (path, params, _) ->
-        let def = Env.find_type_descrs path env in
-        begin match def with
-        | constrs, [] -> constr env rtyp path constrs
-        | [], labels -> record env rtyp path labels
-        | _ -> [] end
-      | Tarrow (label, tyleft, tyright, _) ->
-        let argument, name = make_arg label tyleft in
-        (* todo does not work *)
-        let value_description = {
-            val_type = tyleft;
-            val_kind = Val_reg;
-            val_loc = Location.none;
-            val_attributes = [];
-            val_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
-          }
-        in
-        let env = Env.add_value (Ident.create_local name) value_description env in
-        let exps = exp_or_hole env tyright in
-        (* todo use names for args *)
-        List.map exps ~f:(Ast_helper.Exp.fun_ label None argument)
-      | Ttuple types ->
-        let choices = List.map types ~f:(exp_or_hole env)
-          |> Util.combinations
-        in
-        List.map choices  ~f:Ast_helper.Exp.tuple
-      | Tvariant row_desc -> variant env rtyp row_desc
-      | Tpackage (path, lids, tys) -> failwith "Not implemented"
-      | Tobject _ ->  failwith "Not implemented"
-      | Tfield _ ->  failwith "Not implemented"
-      | Tnil -> failwith "Not implemented"
-      in
-      let matching_values =
-        if !no_values then [] else
-        List.map (Util.find_values_for_type env typ)
-          ~f:(make_value env) |> List.rev
-      in
-      List.append constructed_from_type matching_values
-
-    and exp_or_hole env typ =
+    let exp_or_hole env typ =
       (* If max_depth has not been reached we resurse, else we return a hole *)
       if depth > 1 then
         Ast_helper.Exp.hole () :: (at_depth ~depth:(depth - 1) env typ)
       else [ Ast_helper.Exp.hole () ]
+    in
 
-    and constr env typ path constrs =
+    let constructor env typ path constrs =
       log ~title:"constructors" "[%s]"
         (String.concat ~sep:"; "
           (List.map constrs ~f:(fun c -> c.Types.cstr_name)));
@@ -223,37 +161,101 @@ module Gen = struct
       in
       List.map constrs ~f:(make_constr env path typ)
       |> Util.panache
+    in
 
-      and variant env typ row_desc =
-        let fields =
-          List.filter
-            ~f:(fun (lbl, row_field) -> match row_field with
-              | Rpresent _
-              | Reither (true, [], _, _)
-              | Reither (false, [_], _, _) -> true
-              | _ -> false)
-            row_desc.row_fields
-        in
-        match fields with
-        | [] -> raise (Not_allowed "empty variant type")
-        | row_descrs ->
-          List.map row_descrs ~f:(fun (lbl, row_field) ->
-            (match row_field with
-              | Reither (false, [ty], _, _) | Rpresent (Some ty) ->
-                List.map ~f:(fun s -> Some s) (exp_or_hole env ty)
-              | _ -> [None])
-              |> List.map ~f:(fun e ->
-                Ast_helper.Exp.variant lbl e)
-              )
-          |> List.flatten
+    let variant env typ row_desc =
+      let fields =
+        List.filter
+          ~f:(fun (lbl, row_field) -> match row_field with
+            | Rpresent _
+            | Reither (true, [], _, _)
+            | Reither (false, [_], _, _) -> true
+            | _ -> false)
+          row_desc.row_fields
+      in
+      match fields with
+      | [] -> raise (Not_allowed "empty variant type")
+      | row_descrs ->
+        List.map row_descrs ~f:(fun (lbl, row_field) ->
+          (match row_field with
+            | Reither (false, [ty], _, _) | Rpresent (Some ty) ->
+              List.map ~f:(fun s -> Some s) (exp_or_hole env ty)
+            | _ -> [None])
+            |> List.map ~f:(fun e ->
+              Ast_helper.Exp.variant lbl e)
+            )
+        |> List.flatten
+    in
 
-    and record env typ path labels =
-    log ~title:"record labels" "[%s]"
-      (String.concat ~sep:"; "
-        (List.map labels ~f:(fun l -> l.Types.lbl_name)));
-    [make_record env path labels]
-  in exp in at_depth
+    let record env typ path labels =
+      log ~title:"record labels" "[%s]"
+        (String.concat ~sep:"; "
+          (List.map labels ~f:(fun l -> l.Types.lbl_name)));
+      [record env path labels]
+    in
 
+    (* Given a typed hole, there is two relevant forms of constructions:
+      - Use the type's definition to propose the correct type constructors,
+      - Look for values in the environnement with compatible return type. *)
+    fun env typ ->
+      log ~title:"construct expr" "Looking for expressions of type %s"
+        (Util.type_to_string typ);
+      let no_values = ref (vscope = Null) in
+      let rtyp = Ctype.full_expand env typ |> Btype.repr in
+      let constructed_from_type = match rtyp.desc with
+        | Tlink _ | Tsubst _ ->
+          (* todo can these happen after expand/repr ? *)
+          assert false
+        | Tpoly (texp, _)  ->
+          no_values := true;
+          exp_or_hole env texp
+        | Tunivar _ | Tvar _ ->
+          no_values := true;
+          [ ]
+        | Tconstr (path, [texp], _) when path = Predef.path_lazy_t ->
+          (* Special case for lazy *)
+          let exps = exp_or_hole env texp in
+          List.map exps ~f:Ast_helper.Exp.lazy_
+        | Tconstr (path, params, _) ->
+          let def = Env.find_type_descrs path env in
+          begin match def with
+          | constrs, [] -> constructor env rtyp path constrs
+          | [], labels -> record env rtyp path labels
+          | _ -> [] end
+        | Tarrow (label, tyleft, tyright, _) ->
+          let argument, name = make_arg label tyleft in
+          (* todo does not work *)
+          let value_description = {
+              val_type = tyleft;
+              val_kind = Val_reg;
+              val_loc = Location.none;
+              val_attributes = [];
+              val_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
+            }
+          in
+          let env = Env.add_value (Ident.create_local name) value_description env in
+          let exps = exp_or_hole env tyright in
+          (* todo use names for args *)
+          List.map exps ~f:(Ast_helper.Exp.fun_ label None argument)
+        | Ttuple types ->
+          let choices = List.map types ~f:(exp_or_hole env)
+            |> Util.combinations
+          in
+          List.map choices  ~f:Ast_helper.Exp.tuple
+        | Tvariant row_desc -> variant env rtyp row_desc
+        | Tpackage (path, lids, tys) -> failwith "Not implemented"
+        | Tobject _ ->  failwith "Not implemented"
+        | Tfield _ ->  failwith "Not implemented"
+        | Tnil -> failwith "Not implemented"
+      in
+      let matching_values =
+        if !no_values then [] else
+        List.map (Util.find_values_for_type env typ)
+          ~f:(value env) |> List.rev
+      in
+      List.append constructed_from_type matching_values
+   in
+   at_depth
 end
 
 let node ?(max_depth = 1) ~vscope ~parents ~pos (env, node) =
