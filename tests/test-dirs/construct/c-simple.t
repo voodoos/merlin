@@ -48,7 +48,8 @@ With depth 2:
     },
     [
       "Some _",
-      "None"
+      "None",
+      "Some 0"
     ]
   ]
 
@@ -94,6 +95,7 @@ With depth 2 and values:
     [
       "Some _",
       "None",
+      "Some 0",
       "Some (y )",
       "nice_candidate_with_arg _",
       "nice_candidate_with_labeled_arg ~x:_",
@@ -406,3 +408,29 @@ Test M.2 : FIXME wrong position
     "notifications": []
   }
 
+Test M.3 : Basic types
+
+  $ cat >M3.ml <<EOF
+  > let x : int = _
+  > EOF
+
+  $ $MERLIN single construct -position 1:14 -filename M3.ml <M3.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "start": {
+          "line": 1,
+          "col": 14
+        },
+        "end": {
+          "line": 1,
+          "col": 15
+        }
+      },
+      [
+        "0"
+      ]
+    ],
+    "notifications": []
+  }
