@@ -10,6 +10,30 @@ exception Not_allowed of string
 module Util = struct
   open Types
 
+  let predef_types =
+    (* Taken from old PR *)
+    let tbl = Hashtbl.create 14 in
+    let () =
+      let mk s =
+        Ast_helper.Exp.construct (Location.mknoloc (Longident.Lident s)) None
+      in
+      List.iter ~f:(fun (k, v) -> Hashtbl.add tbl k v) [
+        Predef.path_int, mk "0" ;
+        Predef.path_char, mk "'c'" ;
+        Predef.path_string, mk "\"\"" ;
+        Predef.path_float, mk "0.0" ;
+        Predef.path_bool, mk "true" ;
+        Predef.path_unit, mk "()" ;
+        Predef.path_exn, mk "exn" ;
+        Predef.path_array, mk "[| |]" ;
+        Predef.path_nativeint, mk "0n" ;
+        Predef.path_int32, mk "0l" ;
+        Predef.path_int64, mk "0L" ;
+        Predef.path_lazy_t, mk "(lazy)" ;
+      ]
+    in
+    tbl
+
   let prefix env ~env_check path name =
     Destruct.Path_utils.to_shortest_lid ~env ~env_check ~name path
 
@@ -42,13 +66,13 @@ module Util = struct
     in
     Env.fold_values aux lid env []
 
-  (* Todo the following functions might need optimisation. (note that these
-    optimisations must preserver the ordering of the results). They are used
-    to present more varied results firts when asking for values. *)
+  (* TODO the following functions might need optimisation. (note that these
+    optimisations should preserve the ordering of the results). They are used
+    to present more varied results first when asking for values. *)
 
   (* Given a list [l] of n elements which are lists of choices,
     [combination l] is a list of all possible combinations of
-    these choces. For example:
+    these choices. For example:
 
     let l = [["a";"b"];["1";"2"]; ["x"]];;
     combinations l;;
@@ -122,16 +146,18 @@ module Gen = struct
       Ast_helper.Pat.any (), "todo"
 
   (* [expression values_scope ~depth env ty] generates a list of PAST
-  expressions that could fill a hole of type [ty] in the environment [env].
-  [depth] regulates the deep construction of recursive values. If
-  [values_scope] is set to [Local] the returned list will also contains
-  local values to choose from *)
+    expressions that could fill a hole of type [ty] in the environment [env].
+    [depth] regulates the deep construction of recursive values. If
+    [values_scope] is set to [Local] the returned list will also contains
+    local values to choose from *)
   let expression = fun vscope -> let rec at_depth ~depth =
     let exp_or_hole env typ =
-      (* If max_depth has not been reached we resurse, else we return a hole *)
       if depth > 1 then
+        (* If max_depth has not been reached we resurse *)
         Ast_helper.Exp.hole () :: (at_depth ~depth:(depth - 1) env typ)
-      else [ Ast_helper.Exp.hole () ]
+      else
+        (* else we return a hole *)
+        [ Ast_helper.Exp.hole () ]
     in
 
     let constructor env typ path constrs =
@@ -217,11 +243,16 @@ module Gen = struct
           let exps = exp_or_hole env texp in
           List.map exps ~f:Ast_helper.Exp.lazy_
         | Tconstr (path, params, _) ->
-          let def = Env.find_type_descrs path env in
-          begin match def with
-          | constrs, [] -> constructor env rtyp path constrs
-          | [], labels -> record env rtyp path labels
-          | _ -> [] end
+          (* If this is a basic type we propose a default value *)
+          begin try
+            [ Hashtbl.find Util.predef_types path ]
+          with Not_found ->
+            let def = Env.find_type_descrs path env in
+            match def with
+            | constrs, [] -> constructor env rtyp path constrs
+            | [], labels -> record env rtyp path labels
+            | _ -> []
+          end
         | Tarrow (label, tyleft, tyright, _) ->
           let argument, name = make_arg label tyleft in
           (* todo does not work *)
@@ -244,8 +275,8 @@ module Gen = struct
           List.map choices  ~f:Ast_helper.Exp.tuple
         | Tvariant row_desc -> variant env rtyp row_desc
         | Tpackage (path, lids, tys) -> failwith "Not implemented"
-        | Tobject _ ->  failwith "Not implemented"
-        | Tfield _ ->  failwith "Not implemented"
+        | Tobject _ -> failwith "Not implemented"
+        | Tfield _ -> failwith "Not implemented"
         | Tnil -> failwith "Not implemented"
       in
       let matching_values =
