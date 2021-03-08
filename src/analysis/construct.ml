@@ -3,7 +3,7 @@ open Typedtree
 
 let {Logger. log} = Logger.for_section "construct"
 
-type vscope = Null | Local
+type values_scope = Null | Local
 
 exception Not_allowed of string
 
@@ -42,9 +42,9 @@ module Util = struct
     in
     Env.fold_values aux lid env []
 
-  (* Todo the following functions certainly need optimisation.
-      (note the these optimisations must preserver
-      the ordering of the results) *)
+  (* Todo the following functions might need optimisation. (note that these
+    optimisations must preserver the ordering of the results). They are used
+    to present more varied results firts when asking for values. *)
 
   (* Given a list [l] of n elements which are lists of choices,
     [combination l] is a list of all possible combinations of
@@ -257,7 +257,6 @@ module Gen = struct
 end
 
 let node ?(max_depth = 1) ~vscope ~parents ~pos (env, node) =
-  (* Todo check if we are on a "hole" or not *)
   match node with
   | Browse_raw.Expression { exp_type = typ; exp_env = env ; exp_desc = Texp_hole; _ } ->
     Gen.expression vscope ~depth:max_depth env typ |> List.map ~f:Pprintast.string_of_expression
