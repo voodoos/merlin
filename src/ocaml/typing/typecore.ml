@@ -3845,6 +3845,23 @@ and type_expect_
          exp_attributes = sexp.pexp_attributes;
          exp_env = env }
 
+  | Pexp_extension ({ txt = "merlin.hole"; _ } as s, payload) ->
+    let attr = Ast_helper.Attr.mk s payload in
+    re { exp_desc = Texp_ident
+                      (Path.Pident (Ident.create_local "*type-hole*"),
+                        Location.mkloc (Longident.Lident "*type-hole*") loc,
+                        { Types.
+                          val_type = ty_expected;
+                          val_kind = Val_reg;
+                          val_loc = loc;
+                          val_attributes = [];
+                          val_uid = Uid.internal_not_actually_unique;
+                        });
+          exp_loc = loc; exp_extra = [];
+          exp_type = instance ty_expected;
+          exp_attributes = attr :: sexp.pexp_attributes;
+          exp_env = env }
+
   | Pexp_extension ext ->
       raise (Error_forward (Builtin_attributes.error_of_extension ext))
 

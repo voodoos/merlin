@@ -38,7 +38,7 @@ The hole is filled with Pexp_hole.
   $ echo "let _ =" | \
   > $MERLIN single dump -what source -filename hole_1.ml | \
   > tr -d '\n' | jq '.value'
-  "let _ = _"
+  "let _ = [%merlin.hole ]"
 
 A bit trickier: the recovery is tempted to put a ->. (unreachable), but the
 penalty should prevent it.
