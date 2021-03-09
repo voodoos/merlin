@@ -651,7 +651,8 @@ let expr_of_lwt_bindings ~loc lbs body =
   let default_loc = ref Location.none
 
   let default_expr () =
-    Exp.mk ~loc:!default_loc (Pexp_hole)
+    let id = Location.mkloc "merlin.hole" !default_loc in
+    Exp.mk ~loc:!default_loc (Pexp_extension (id, PStr []))
 
   let default_pattern () = Pat.any ~loc:!default_loc ()
 
