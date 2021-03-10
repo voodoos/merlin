@@ -894,9 +894,12 @@ let node_of_binary_part env part =
   | Partial_module_type x ->
     Module_type x
 
-let rec all_holes (env, node) =
-  let f env node acc = match node with
-    | Expression { exp_desc = Texp_hole; exp_loc; _}  -> exp_loc :: acc
-    | _ -> List.rev_append (all_holes (env, node)) acc
+let all_holes (env, node) =
+  let rec aux acc (env, node) =
+    let f env node acc = match node with
+      | Expression { exp_desc = Texp_hole; exp_loc; _}  -> exp_loc :: acc
+      | _ -> aux acc (env, node)
+    in
+    fold_node f env node acc
   in
-  fold_node f env node [] |> List.rev
+  aux [] (env, node) |> List.rev
