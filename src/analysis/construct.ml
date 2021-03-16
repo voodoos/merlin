@@ -42,7 +42,7 @@ module Util = struct
     Format.flush_str_formatter ()
 
   (** [find_values_for_type env typ] searches the environment [env] for values
-  with return type compatible with [typ] *)
+  with a return type compatible with [typ] *)
   let find_values_for_type env typ =
     let lid = None (* Some (Longident.parse ".") *) in
     let aux name path descr acc =
@@ -57,7 +57,7 @@ module Util = struct
           | _ -> None
       end
       in
-      (* TODO we should probably sort the result better *)
+      (* TODO we should probably sort the results better *)
       (* Also the Path filter is too restrictive. *)
       match path, check_type descr.val_type [] with
       | Path.Pident _, Some params ->
@@ -66,9 +66,10 @@ module Util = struct
     in
     Env.fold_values aux lid env []
 
-  (* TODO the following functions might need optimisation. (note that these
-    optimisations should preserve the ordering of the results). They are used
-    to present more varied results first when asking for values. *)
+  (* TODO the following function could be optimized. (note that these
+    optimisations should preserve the ordering of the results).
+    It is used to present all possible mixes of arguments when calling
+    construct recursively on a pultiple holes. *)
 
   (* Given a list [l] of n elements which are lists of choices,
     [combination l] is a list of all possible combinations of
@@ -80,7 +81,7 @@ module Util = struct
     [["a"; "1"; "x"]; ["b"; "1"; "x"];
      ["a"; "2"; "x"]; ["b"; "2"; "x"]]
 
-    If the input is the empty lsit, the result is
+    If the input is the empty list, the result is
     the empty list singleton list.
     *)
   let combinations =
@@ -230,7 +231,6 @@ module Gen = struct
       let rtyp = Ctype.full_expand env typ |> Btype.repr in
       let constructed_from_type = match rtyp.desc with
         | Tlink _ | Tsubst _ ->
-          (* todo can these happen after expand/repr ? *)
           assert false
         | Tpoly (texp, _)  ->
           no_values := true;
@@ -243,7 +243,7 @@ module Gen = struct
           let exps = exp_or_hole env texp in
           List.map exps ~f:Ast_helper.Exp.lazy_
         | Tconstr (path, params, _) ->
-          (* If this is a basic type we propose a default value *)
+          (* If this is a "basic" type we propose a default value *)
           begin try
             [ Hashtbl.find Util.predef_types path ]
           with Not_found ->
@@ -255,7 +255,6 @@ module Gen = struct
           end
         | Tarrow (label, tyleft, tyright, _) ->
           let argument, name = make_arg label tyleft in
-          (* todo does not work *)
           let value_description = {
               val_type = tyleft;
               val_kind = Val_reg;
@@ -291,6 +290,7 @@ end
 
 let node ?(max_depth = 1) ~vscope ~parents ~pos (env, node) =
   match node with
-  | Browse_raw.Expression { exp_type = typ; exp_env = env ; exp_desc = Texp_hole; _ } ->
-    Gen.expression vscope ~depth:max_depth env typ |> List.map ~f:Pprintast.string_of_expression
+  | Browse_raw.Expression { exp_type; exp_env ; exp_desc = Texp_hole; _ } ->
+    Gen.expression vscope ~depth:max_depth exp_env exp_type
+    |> List.map ~f:Pprintast.string_of_expression
   | _ -> []
