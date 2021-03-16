@@ -10,7 +10,7 @@ type error.
   }
 
 This incomplete expression should generate only a parser error.
-The hole is filled with Pexp_hole.
+The hole is filled with merlin.hole.
 
   $ echo "let _ =" | \
   > $MERLIN single errors -filename hole_1.ml
