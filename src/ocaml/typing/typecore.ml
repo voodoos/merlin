@@ -2464,7 +2464,7 @@ let check_partial_application statement exp =
             | Texp_setinstvar _ | Texp_override _ | Texp_assert _
             | Texp_lazy _ | Texp_object _ | Texp_pack _ | Texp_unreachable
             | Texp_extension_constructor _ | Texp_ifthenelse (_, _, None)
-            | Texp_function _ | Texp_hole ->
+            | Texp_function _ ->
                 check_statement ()
             | Texp_match (_, cases, _) ->
                 List.iter (fun {c_rhs; _} -> check c_rhs) cases
@@ -2478,6 +2478,7 @@ let check_partial_application statement exp =
             | Texp_apply _ | Texp_send _ | Texp_new _ | Texp_letop _ ->
                 Location.prerr_warning exp_loc
                   Warnings.Ignored_partial_application
+            | Texp_hole -> ()
           end
         in
         check exp
