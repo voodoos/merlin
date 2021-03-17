@@ -116,15 +116,6 @@ module Gen = struct
   let hole =
     Ast_helper.Exp.hole ()
 
-  (* [record] generates the PAST repr of a record with holes *)
-  let record env path labels =
-    let labels = List.map labels ~f:(fun { lbl_name; _ } ->
-      let env_check = Env.find_label_by_name in
-      let lid = Util.prefix env ~env_check path lbl_name in
-      Location.mknoloc lid, hole)
-    in
-    Ast_helper.Exp.record labels None
-
   (* [value] generates the PAST repr of a value applied to holes *)
   let value env (name, path, value_description, params) =
     let env_check = Env.find_value_by_name in
@@ -187,7 +178,7 @@ module Gen = struct
           in
           Btype.backtrack snap;
           List.map ~f:(Ast_helper.Exp.construct lid) exps
-        with _ -> []
+        with _ -> (* Unification failure *) []
       in
       List.map constrs ~f:(make_constr env path typ)
       |> Util.panache
@@ -221,10 +212,31 @@ module Gen = struct
       log ~title:"record labels" "[%s]"
         (String.concat ~sep:"; "
           (List.map labels ~f:(fun l -> l.Types.lbl_name)));
-      [record env path labels]
+
+      let labels = List.map labels ~f:(fun ({ lbl_name; _ } as lbl) ->
+        let snap = Btype.snapshot () in
+        let _, arg, res = Ctype.instance_label true lbl in
+        Ctype.unify env res typ ;
+        let lid =
+          Util.prefix env ~env_check:Env.find_label_by_name path lbl_name
+          |> Location.mknoloc
+        in
+        let exprs = exp_or_hole env arg in
+        Btype.backtrack snap;
+        lid, exprs)
+      in
+
+      let lbl_lids, lbl_exprs = List.split labels in
+      Util.combinations lbl_exprs
+      |> List.map
+          ~f:(fun lbl_exprs ->
+            let labels = List.map2 lbl_lids lbl_exprs
+              ~f:(fun lid exp -> (lid, exp))
+            in
+            Ast_helper.Exp.record labels None)
     in
 
-    (* Given a typed hole, there is two relevant forms of constructions:
+    (* Given a typed hole, there is two possible forms of constructions:
       - Use the type's definition to propose the correct type constructors,
       - Look for values in the environnement with compatible return type. *)
     fun env typ ->
