@@ -695,12 +695,15 @@ def vim_next_hole(min = 0, max = float('inf')):
       vim.current.window.cursor = (max, 1)
       print(holes[0]['type'])
 
-def vim_construct():
+def vim_construct(depth):
     vimvar = "b:constr_result"
     vim.command("let %s = []" % vimvar)
     line, col = vim.current.window.cursor
     try:
-      result = command("construct", "-position", fmtpos((line, col)))
+      result = command(
+        "construct",
+        "-max-depth", depth,
+        "-position", fmtpos((line, col)))
       loc = result[0]
       txts = result[1]
 
@@ -719,7 +722,7 @@ def vim_construct():
           vim.command("call add(%s, {'word':'%s'})" % (vimvar, txt))
 
     except MerlinExc as e:
-        try_print_error(e)
+      try_print_error(e)
 
 def easy_matcher_wide(start, stop):
     startl = ""
