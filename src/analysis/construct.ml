@@ -167,24 +167,27 @@ module Gen = struct
           (List.map constrs ~f:(fun c -> c.Types.cstr_name)));
       (* todo for gadt not all constr will be good *)
       (* [make_constr] builds the PAST repr of a type constructor applied to holes *)
-      let make_constr env path typ constr =
-        Ctype.unify env constr.cstr_res typ; (* todo handle errors *)
-        (* Printf.eprintf "C: %s (%s) [%s]\n%!"
-          constr.cstr_name (Util.type_to_string constr.cstr_res)
-          (List.map ~f:Util.type_to_string constr.cstr_args |> String.concat ~sep:"; "); *)
-        let lid = Location.mknoloc (
-            Util.prefix env ~env_check:Env.find_constructor_by_name path constr.cstr_name
-          )
-        in
-        let args = List.map constr.cstr_args ~f:(exp_or_hole env) in
-        let combinations = Util.combinations args in
-        let exps =
-          List.map combinations ~f:(function
-        | [] -> None
-        | [e] ->Some (e)
-        | l -> Some (Ast_helper.Exp.tuple l)
-          ) in
-        List.map ~f:(Ast_helper.Exp.construct lid) exps
+      let make_constr env path typ cstr_descr =
+        let snap = Btype.snapshot () in
+        let ty_args, ty_res = Ctype.instance_constructor cstr_descr in
+        try
+          Ctype.unify env ty_res typ;
+          let lid =
+            Util.prefix env ~env_check:Env.find_constructor_by_name
+              path cstr_descr.cstr_name
+            |> Location.mknoloc
+          in
+          let args = List.map ty_args ~f:(exp_or_hole env) in
+          let args_combinations = Util.combinations args in
+          let exps =List.map args_combinations
+            ~f:(function
+              | [] -> None
+              | [e] ->Some e
+              | l -> Some (Ast_helper.Exp.tuple l))
+          in
+          Btype.backtrack snap;
+          List.map ~f:(Ast_helper.Exp.construct lid) exps
+        with _ -> []
       in
       List.map constrs ~f:(make_constr env path typ)
       |> Util.panache
