@@ -102,6 +102,20 @@ The return value has the shape \
     end
   ;
 
+  command "construct"
+    ~spec: [
+      arg "-position" "<position> Position where construct should happen"
+          (marg_position (fun pos _pos -> pos));
+    ]
+    ~doc:"Blah blah todoz"
+    ~default:(`Offset (-1))
+    begin fun buffer -> function
+      | `Offset (-1) -> failwith "-position <pos> is mandatory"
+      | pos ->
+        run buffer (Query_protocol.Construct pos)
+    end
+  ;
+
   command "complete-prefix"
     ~spec: [
       arg "-position" "<position> Position to complete"

@@ -635,6 +635,19 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     in
     List.concat_map ~f:loc_and_types_of_holes nodes
 
+  | Construct pos ->
+    let typer = Mpipeline.typer_result pipeline in
+    let typedtree = Mtyper.get_typedtree typer in
+    let pos = Mpipeline.get_lexing_pos pipeline pos in
+    let structures = Mbrowse.enclosing pos
+      [Mbrowse.of_typedtree typedtree] in
+    begin match structures with
+    | [] -> failwith "No node at given range"
+    | node :: parents ->
+      let loc = Mbrowse.node_loc (snd node) in
+      (loc, Construct.node ~parents ~pos node)
+    end
+
   | Outline ->
     let typer = Mpipeline.typer_result pipeline in
     let browse = Mbrowse.of_typedtree (Mtyper.get_typedtree typer) in
