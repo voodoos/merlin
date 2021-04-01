@@ -11,6 +11,7 @@
 
 (alias
   (name runtest)
+  (enabled_if (>= %{ocaml_version} 4.03.0))
   (deps merlin-wrapper))
 
 (include dune.inc)
