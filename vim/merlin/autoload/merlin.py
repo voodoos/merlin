@@ -655,6 +655,11 @@ def vim_type_enclosing():
         try_print_error(e)
         return '{}'
 
+def move_cursor_and_type(line, col):
+    vim.current.window.cursor = (line, col)
+    typ = json.loads(vim_type_enclosing())
+    return typ['type']
+
 def vim_previous_hole():
     line, col = vim.current.window.cursor
     holes = command_holes()
