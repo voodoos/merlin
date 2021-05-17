@@ -1420,7 +1420,10 @@ let rec type_pat
        try
          type_pat_aux category ~no_existentials ~mode
            ~env sp expected_ty k
-       with Error _ as exn ->
+       with
+        | (Error (_, _, Pattern_type_clash (_, None)) as exn)
+        | (Error (_, _, Expr_type_clash (_, _, None)) as exn) -> raise exn
+        | Error (_, _, _) as exn ->
          (* We only want to catch error, not internal exceptions such as
             [Need_backtrack], etc. *)
          Msupport.erroneous_type_register expected_ty;
