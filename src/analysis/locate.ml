@@ -899,11 +899,10 @@ let from_node ~config env node =
           begin match Locate_with_uids.in_annots uid cached with 
           | Some loc -> find_source ~config loc ident
           | None -> `Not_found (ident, None) end
-        | None -> `Not_found (ident, None) end
+        | None ->  File.explain_not_found ident file end
       | Compilation_unit comp_unit -> 
         let pos_fname = 
-          String.(concat ~sep:"."
-            [uncapitalize_ascii comp_unit; "mli"] )
+          String.(concat ~sep:"." [uncapitalize_ascii comp_unit; "mli"])
         in
         let loc = Warnings.{
             loc_start = { 
