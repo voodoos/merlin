@@ -28,6 +28,13 @@
 
 open Std
 
+exception Internal_uid
+
+let () =
+  Location.register_error_of_exn (function
+    | Internal_uid  -> Some (Location.error ("This appear to be a value internal to the compiler and cannot be located."))
+    | _ -> None)
+
 let loadpath     = ref []
 
 let last_location = ref Location.none
@@ -879,7 +886,7 @@ let from_node ~config env node =
     let_ref loadpath (Mconfig.cmt_path config) @@ fun () ->
       match uid with
       | Predef id -> `Builtin id
-      | Internal -> `Builtin "<internal>"
+      | Internal -> raise Internal_uid
       | Types.Uid.Item { comp_unit; _ } as uid when comp_unit = unit_name ->
         begin match Locate_with_uids.in_env uid env with
         | Some loc -> find_source ~config loc ident
