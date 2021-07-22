@@ -101,6 +101,8 @@ module Uid = struct
       | Compilation_unit s -> Format.pp_print_string fmt s
       | Item { comp_unit; id } -> Format.fprintf fmt "%s.%d" comp_unit id
 
+    let print fmt = Format.fprintf fmt "==>{ %a }<==" print
+    
     let output oc t =
       let fmt = Format.formatter_of_out_channel oc in
       print fmt t

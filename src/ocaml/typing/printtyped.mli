@@ -23,4 +23,4 @@ val implementation_with_coercion :
     formatter -> (structure * module_coercion) -> unit;;
 
 (* Added by merlin for debugging purposes *)
-val pattern : int -> formatter -> _ general_pattern -> unit
+val pattern : Env.t -> int -> formatter -> _ general_pattern -> unit

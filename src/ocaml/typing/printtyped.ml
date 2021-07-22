@@ -46,6 +46,8 @@ let fmt_longident f x = fprintf f "\"%a\"" fmt_longident_aux x.txt;;
 
 let fmt_ident = Ident.print
 
+let fmt_uid = Types.Uid.print
+
 let fmt_modname f = function
   | None -> fprintf f "_";
   | Some id -> Ident.print f id
@@ -226,50 +228,55 @@ and package_with i ppf (s, t) =
   line i ppf "with type %a\n" fmt_longident s;
   core_type i ppf t
 
-and pattern : type k . _ -> _ -> k general_pattern -> unit = fun i ppf x ->
+and pattern : type k . _ -> _ -> _ -> k general_pattern -> unit 
+= fun env i ppf x ->
   line i ppf "pattern %a\n" fmt_location x.pat_loc;
   attributes i ppf x.pat_attributes;
   let i = i+1 in
   match x.pat_extra with
     | extra :: rem ->
         pattern_extra i ppf extra;
-        pattern i ppf { x with pat_extra = rem }
+        pattern env i ppf { x with pat_extra = rem }
     | [] ->
   match x.pat_desc with
   | Tpat_any -> line i ppf "Tpat_any\n";
-  | Tpat_var (s,_) -> line i ppf "Tpat_var \"%a\"\n" fmt_ident s;
+  | Tpat_var (s,_) -> 
+    let t_vd = Env.find_value (Path.Pident s) env in
+    line i ppf "Tpat_var \"%a\" %a\n" 
+      fmt_ident s
+      fmt_uid t_vd.val_uid;
   | Tpat_alias (p, s,_) ->
       line i ppf "Tpat_alias \"%a\"\n" fmt_ident s;
-      pattern i ppf p;
+      pattern env i ppf p;
   | Tpat_constant (c) -> line i ppf "Tpat_constant %a\n" fmt_constant c;
   | Tpat_tuple (l) ->
       line i ppf "Tpat_tuple\n";
-      list i pattern ppf l;
+      list i (pattern env) ppf l;
   | Tpat_construct (li, _, po) ->
       line i ppf "Tpat_construct %a\n" fmt_longident li;
-      list i pattern ppf po;
+      list i (pattern env) ppf po;
   | Tpat_variant (l, po, _) ->
       line i ppf "Tpat_variant \"%s\"\n" l;
-      option i pattern ppf po;
+      option i (pattern env) ppf po;
   | Tpat_record (l, _c) ->
       line i ppf "Tpat_record\n";
-      list i longident_x_pattern ppf l;
+      list i (longident_x_pattern env) ppf l;
   | Tpat_array (l) ->
       line i ppf "Tpat_array\n";
-      list i pattern ppf l;
+      list i (pattern env) ppf l;
   | Tpat_lazy p ->
       line i ppf "Tpat_lazy\n";
-      pattern i ppf p;
+      (pattern env) i ppf p;
   | Tpat_exception p ->
       line i ppf "Tpat_exception\n";
-      pattern i ppf p;
+      (pattern env) i ppf p;
   | Tpat_value p ->
       line i ppf "Tpat_value\n";
-      pattern i ppf (p :> pattern);
+      (pattern env) i ppf (p :> pattern);
   | Tpat_or (p1, p2, _) ->
       line i ppf "Tpat_or\n";
-      pattern i ppf p1;
-      pattern i ppf p2;
+      (pattern env) i ppf p1;
+      (pattern env) i ppf p2;
 
 and pattern_extra i ppf (extra_pat, _, attrs) =
   match extra_pat with
@@ -307,6 +314,7 @@ and expression_extra i ppf x attrs =
       attributes i ppf attrs;
 
 and expression i ppf x =
+  let env = x.exp_env in
   line i ppf "expression %a\n" fmt_location x.exp_loc;
   attributes i ppf x.exp_attributes;
   let i =
@@ -315,17 +323,20 @@ and expression i ppf x =
       (i+1) x.exp_extra
   in
   match x.exp_desc with
-  | Texp_ident (li,_,_) -> line i ppf "Texp_ident %a\n" fmt_path li;
+  | Texp_ident (li,_,vd) -> 
+    line i ppf "Texp_ident %a %a\n" 
+      fmt_path li
+      fmt_uid vd.val_uid;
   | Texp_instvar (_, li,_) -> line i ppf "Texp_instvar %a\n" fmt_path li;
   | Texp_constant (c) -> line i ppf "Texp_constant %a\n" fmt_constant c;
   | Texp_let (rf, l, e) ->
       line i ppf "Texp_let %a\n" fmt_rec_flag rf;
-      list i value_binding ppf l;
+      list i (value_binding env) ppf l;
       expression i ppf e;
   | Texp_function { arg_label = p; param = _; cases; partial = _; } ->
       line i ppf "Texp_function\n";
       arg_label i ppf p;
-      list i case ppf cases;
+      list i (case env) ppf cases;
   | Texp_apply (e, l) ->
       line i ppf "Texp_apply\n";
       expression i ppf e;
@@ -333,16 +344,18 @@ and expression i ppf x =
   | Texp_match (e, l, _partial) ->
       line i ppf "Texp_match\n";
       expression i ppf e;
-      list i case ppf l;
+      list i (case env) ppf l;
   | Texp_try (e, l) ->
       line i ppf "Texp_try\n";
       expression i ppf e;
-      list i case ppf l;
+      list i (case env) ppf l;
   | Texp_tuple (l) ->
       line i ppf "Texp_tuple\n";
       list i expression ppf l;
-  | Texp_construct (li, _, eo) ->
-      line i ppf "Texp_construct %a\n" fmt_longident li;
+  | Texp_construct (li, cd, eo) ->
+      line i ppf "Texp_construct %a %a\n" 
+        fmt_longident li
+        fmt_uid cd.cstr_uid;
       list i expression ppf eo;
   | Texp_variant (l, eo) ->
       line i ppf "Texp_variant \"%s\"\n" l;
@@ -417,7 +430,7 @@ and expression i ppf x =
       expression i ppf e;
   | Texp_object (s, _) ->
       line i ppf "Texp_object";
-      class_structure i ppf s
+      (class_structure env) i ppf s
   | Texp_pack me ->
       line i ppf "Texp_pack";
       module_expr i ppf me
@@ -425,7 +438,7 @@ and expression i ppf x =
       line i ppf "Texp_letop";
       binding_op (i+1) ppf let_;
       list (i+1) binding_op ppf ands;
-      case i ppf body
+      (case env) i ppf body
   | Texp_unreachable ->
       line i ppf "Texp_unreachable"
   | Texp_extension_constructor (li, _) ->
@@ -439,9 +452,11 @@ and expression i ppf x =
   | Texp_hole ->
       line i ppf "Texp_hole"
 
-and value_description i ppf x =
-  line i ppf "value_description %a %a\n" fmt_ident x.val_id fmt_location
-       x.val_loc;
+and value_description uid i ppf x =
+  line i ppf "value_description %a %a %a\n" 
+    fmt_ident x.val_id 
+    fmt_location x.val_loc
+    fmt_uid uid;
   attributes i ppf x.val_attributes;
   core_type (i+1) ppf x.val_desc;
   list (i+1) string ppf x.val_prim;
@@ -590,6 +605,7 @@ and class_type_declaration i ppf x =
   class_type (i+1) ppf x.ci_expr;
 
 and class_expr i ppf x =
+  let env = x.cl_env in
   line i ppf "class_expr %a\n" fmt_location x.cl_loc;
   attributes i ppf x.cl_attributes;
   let i = i+1 in
@@ -599,11 +615,11 @@ and class_expr i ppf x =
       list i core_type ppf l;
   | Tcl_structure (cs) ->
       line i ppf "Tcl_structure\n";
-      class_structure i ppf cs;
+      (class_structure env) i ppf cs;
   | Tcl_fun (l, p, _, ce, _) ->
       line i ppf "Tcl_fun\n";
       arg_label i ppf l;
-      pattern i ppf p;
+      (pattern env) i ppf p;
       class_expr i ppf ce
   | Tcl_apply (ce, l) ->
       line i ppf "Tcl_apply\n";
@@ -611,7 +627,7 @@ and class_expr i ppf x =
       list i label_x_expression ppf l;
   | Tcl_let (rf, l1, l2, ce) ->
       line i ppf "Tcl_let %a\n" fmt_rec_flag rf;
-      list i value_binding ppf l1;
+      list i (value_binding env) ppf l1;
       list i ident_x_expression_def ppf l2;
       class_expr i ppf ce;
   | Tcl_constraint (ce, Some ct, _, _, _) ->
@@ -625,9 +641,9 @@ and class_expr i ppf x =
         fmt_path (fst o.open_expr);
       class_expr i ppf e
 
-and class_structure i ppf { cstr_self = p; cstr_fields = l } =
+and class_structure env i ppf { cstr_self = p; cstr_fields = l } =
   line i ppf "class_structure\n";
-  pattern (i+1) ppf p;
+  (pattern env) (i+1) ppf p;
   list (i+1) class_field ppf l;
 
 and class_field i ppf x =
@@ -698,15 +714,16 @@ and module_type i ppf x =
       line i ppf "Tmty_typeof\n";
       module_expr i ppf m;
 
-and signature i ppf x = list i signature_item ppf x.sig_items
+and signature i ppf x = list i (signature_item x.sig_final_env) ppf x.sig_items
 
-and signature_item i ppf x =
+and signature_item sig_env i ppf x =
   line i ppf "signature_item %a\n" fmt_location x.sig_loc;
   let i = i+1 in
   match x.sig_desc with
   | Tsig_value vd ->
+      let t_vd = Env.find_value (Path.Pident vd.val_id) sig_env in
       line i ppf "Tsig_value\n";
-      value_description i ppf vd;
+      value_description t_vd.val_uid i ppf vd;
   | Tsig_type (rf, l) ->
       line i ppf "Tsig_type %a\n" fmt_rec_flag rf;
       list i type_declaration ppf l;
@@ -720,9 +737,17 @@ and signature_item i ppf x =
       line i ppf "Tsig_exception\n";
       type_exception i ppf ext
   | Tsig_module md ->
-      line i ppf "Tsig_module \"%a\"\n" fmt_modname md.md_id;
+      begin match md.md_id with
+        | Some id ->
+          let t_md = Env.find_module (Path.Pident id) sig_env in
+          line i ppf "Tsig_module \"%a\" %a\n" 
+            fmt_modname md.md_id
+            fmt_uid t_md.md_uid;
+        | None ->
+          line i ppf "Tsig_module \"%a\"\n" fmt_modname md.md_id
+      end;
       attributes i ppf md.md_attributes;
-      module_type i ppf md.md_type
+      module_type i ppf md.md_type 
   | Tsig_modsubst ms ->
       line i ppf "Tsig_modsubst \"%a\" = %a\n"
         fmt_ident ms.ms_id fmt_path ms.ms_manifest;
@@ -757,8 +782,14 @@ and module_declaration i ppf md =
   attributes i ppf md.md_attributes;
   module_type (i+1) ppf md.md_type;
 
-and module_binding i ppf x =
-  line i ppf "%a\n" fmt_modname x.mb_id;
+and module_binding env i ppf x =
+  begin match x.mb_id with
+  | Some id ->
+    let t_md = Env.find_module (Path.Pident id) env in
+    line i ppf "%a %a\n" 
+      fmt_modname x.mb_id
+      fmt_uid t_md.md_uid;
+  | None -> line i ppf "%a\n" fmt_modname x.mb_id end;
   attributes i ppf x.mb_attributes;
   module_expr (i+1) ppf x.mb_expr
 
@@ -807,9 +838,9 @@ and module_expr i ppf x =
       line i ppf "Tmod_unpack\n";
       expression i ppf e;
 
-and structure i ppf x = list i structure_item ppf x.str_items
+and structure i ppf x = list i (structure_item x.str_final_env) ppf x.str_items
 
-and structure_item i ppf x =
+and structure_item str_env i ppf x =
   line i ppf "structure_item %a\n" fmt_location x.str_loc;
   let i = i+1 in
   match x.str_desc with
@@ -819,10 +850,11 @@ and structure_item i ppf x =
       expression i ppf e;
   | Tstr_value (rf, l) ->
       line i ppf "Tstr_value %a\n" fmt_rec_flag rf;
-      list i value_binding ppf l;
+      list i (value_binding str_env) ppf l;
   | Tstr_primitive vd ->
+      let t_vd = Env.find_value (Path.Pident vd.val_id) x.str_env in
       line i ppf "Tstr_primitive\n";
-      value_description i ppf vd;
+      value_description t_vd.val_uid i ppf vd;
   | Tstr_type (rf, l) ->
       line i ppf "Tstr_type %a\n" fmt_rec_flag rf;
       list i type_declaration ppf l;
@@ -834,10 +866,10 @@ and structure_item i ppf x =
       type_exception i ppf ext;
   | Tstr_module x ->
       line i ppf "Tstr_module\n";
-      module_binding i ppf x
+      module_binding str_env i ppf x
   | Tstr_recmodule bindings ->
       line i ppf "Tstr_recmodule\n";
-      list i module_binding ppf bindings
+      list i (module_binding str_env) ppf bindings
   | Tstr_modtype x ->
       line i ppf "Tstr_modtype \"%a\"\n" fmt_ident x.mtd_id;
       attributes i ppf x.mtd_attributes;
@@ -889,25 +921,25 @@ and label_decl i ppf {ld_id; ld_name = _; ld_mutable; ld_type; ld_loc;
   line (i+1) ppf "%a" fmt_ident ld_id;
   core_type (i+1) ppf ld_type
 
-and longident_x_pattern i ppf (li, _, p) =
+and longident_x_pattern env i ppf (li, _, p) =
   line i ppf "%a\n" fmt_longident li;
-  pattern (i+1) ppf p;
+  (pattern env) (i+1) ppf p;
 
 and case
-    : type k . _ -> _ -> k case -> unit
-  = fun i ppf {c_lhs; c_guard; c_rhs} ->
+    : type k . _ -> _ -> _ -> k case -> unit
+  = fun env i ppf {c_lhs; c_guard; c_rhs} ->
   line i ppf "<case>\n";
-  pattern (i+1) ppf c_lhs;
+  (pattern env) (i+1) ppf c_lhs;
   begin match c_guard with
   | None -> ()
   | Some g -> line (i+1) ppf "<when>\n"; expression (i + 2) ppf g
   end;
   expression (i+1) ppf c_rhs;
 
-and value_binding i ppf x =
+and value_binding env i ppf x =
   line i ppf "<def>\n";
   attributes (i+1) ppf x.vb_attributes;
-  pattern (i+1) ppf x.vb_pat;
+  (pattern env) (i+1) ppf x.vb_pat;
   expression (i+1) ppf x.vb_expr
 
 and string_x_expression i ppf (s, _, e) =
@@ -941,8 +973,9 @@ and label_x_bool_x_core_type_list i ppf x =
       core_type (i+1) ppf ct
 ;;
 
-let interface ppf x = list 0 signature_item ppf x.sig_items;;
+let interface ppf x = list 0 (signature_item x.sig_final_env) ppf x.sig_items;;
 
-let implementation ppf x = list 0 structure_item ppf x.str_items;;
+let implementation ppf x = 
+  list 0 (structure_item x.str_final_env) ppf x.str_items;;
 
 let implementation_with_coercion ppf (x, _) = implementation ppf x

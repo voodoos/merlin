@@ -75,7 +75,7 @@ let cursor_on_longident_end
 let inspect_pattern (type a) ~cursor ~lid (p : a Typedtree.general_pattern) =
   log ~title:"inspect_context" "%a" Logger.fmt
     (fun fmt -> Format.fprintf fmt "current pattern is: %a"
-                  (Printtyped.pattern 0) p);
+                  (Printtyped.pattern Env.empty 0) p);
   match p.pat_desc with
   | Tpat_any when Longident.last lid = "_" -> None
   | Tpat_var (_, str_loc) when (Longident.last lid) = str_loc.txt ->

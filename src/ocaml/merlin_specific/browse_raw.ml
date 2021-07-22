@@ -679,7 +679,7 @@ let string_of_node = function
   | Dummy -> "dummy"
   | Pattern                 p ->
     let fmt, printer = Format.to_string () in
-    Printtyped.pattern 0 fmt p ;
+    Printtyped.pattern Env.empty 0 fmt p ;
     printer ()
   | Expression              _ -> "expression"
   | Case                    _ -> "case"
