@@ -447,6 +447,22 @@ and signatures ~loc env ~mark cxt subst sig1 sig2 =
             | Sig_class _ | Sig_class_type _ ->
                 subst
           in
+          let uid_of_sig_item = function
+            | Sig_value (_, vd, _) -> Some vd.val_uid
+            | Sig_module (_, _, md, _, _) -> Some md.md_uid
+            | Sig_modtype (_, mtd, _) -> Some mtd.mtd_uid
+            | Sig_typext (_, ec, _, _) -> Some ec.ext_uid
+            | Sig_type (_, td, _, _) -> Some td.type_uid
+            | _ -> None 
+          in
+          let uid1 = uid_of_sig_item item1 in
+          let uid2 = uid_of_sig_item item2 in
+          Format.eprintf "Paired: %a %a@.   with %a %a\n%!"
+            Printtyp.signature [item1]
+              (Format.pp_print_option Types.Uid.print) uid1
+            Printtyp.signature [item2]
+              (Format.pp_print_option Types.Uid.print) uid2
+          ;
           pair_components new_subst
             ((item1, item2, pos1) :: paired) unpaired rem
         with Not_found ->
