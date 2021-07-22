@@ -191,7 +191,10 @@ let rec core_type i ppf x =
       line i ppf "Ttyp_tuple\n";
       list i core_type ppf l;
   | Ttyp_constr (li, _, l) ->
-      line i ppf "Ttyp_constr %a\n" fmt_path li;
+      let t_td = Env.find_type li x.ctyp_env in
+      line i ppf "Ttyp_constr %a %a\n" 
+        fmt_path li
+        fmt_uid t_td.type_uid;
       list i core_type ppf l;
   | Ttyp_variant (l, closed, low) ->
       line i ppf "Ttyp_variant closed=%a\n" fmt_closed_flag closed;
@@ -241,10 +244,13 @@ and pattern : type k . _ -> _ -> _ -> k general_pattern -> unit
   match x.pat_desc with
   | Tpat_any -> line i ppf "Tpat_any\n";
   | Tpat_var (s,_) -> 
-    let t_vd = Env.find_value (Path.Pident s) env in
-    line i ppf "Tpat_var \"%a\" %a\n" 
-      fmt_ident s
-      fmt_uid t_vd.val_uid;
+    (try
+      let t_vd = Env.find_value (Path.Pident s) env in
+      line i ppf "Tpat_var \"%a\" %a\n" 
+        fmt_ident s
+        fmt_uid t_vd.val_uid
+    with Not_found -> 
+      line i ppf "Tpat_var \"%a\"\n" fmt_ident s)
   | Tpat_alias (p, s,_) ->
       line i ppf "Tpat_alias \"%a\"\n" fmt_ident s;
       pattern env i ppf p;
@@ -468,9 +474,12 @@ and binding_op i ppf x =
 
 and type_parameter i ppf (x, _variance) = core_type i ppf x
 
-and type_declaration i ppf x =
-  line i ppf "type_declaration %a %a\n" fmt_ident x.typ_id fmt_location
-       x.typ_loc;
+and type_declaration env i ppf x =
+  let t_td = Env.find_type (Path.Pident x.typ_id) env in
+  line i ppf "type_declaration %a %a %a\n" 
+    fmt_ident x.typ_id 
+    fmt_uid t_td.type_uid
+    fmt_location x.typ_loc;
   attributes i ppf x.typ_attributes;
   let i = i+1 in
   line i ppf "ptype_params =\n";
@@ -709,7 +718,7 @@ and module_type i ppf x =
   | Tmty_with (mt, l) ->
       line i ppf "Tmty_with\n";
       module_type i ppf mt;
-      list i longident_x_with_constraint ppf l;
+      list i (longident_x_with_constraint x.mty_env) ppf l;
   | Tmty_typeof m ->
       line i ppf "Tmty_typeof\n";
       module_expr i ppf m;
@@ -726,10 +735,10 @@ and signature_item sig_env i ppf x =
       value_description t_vd.val_uid i ppf vd;
   | Tsig_type (rf, l) ->
       line i ppf "Tsig_type %a\n" fmt_rec_flag rf;
-      list i type_declaration ppf l;
+      list i (type_declaration sig_env) ppf l;
   | Tsig_typesubst l ->
       line i ppf "Tsig_typesubst\n";
-      list i type_declaration ppf l;
+      list i (type_declaration sig_env) ppf l;
   | Tsig_typext e ->
       line i ppf "Tsig_typext\n";
       type_extension i ppf e;
@@ -797,23 +806,28 @@ and modtype_declaration i ppf = function
   | None -> line i ppf "#abstract"
   | Some mt -> module_type (i + 1) ppf mt
 
-and with_constraint i ppf x =
+and with_constraint env i ppf x =
   match x with
   | Twith_type (td) ->
       line i ppf "Twith_type\n";
-      type_declaration (i+1) ppf td;
+      type_declaration env (i+1) ppf td;
   | Twith_typesubst (td) ->
       line i ppf "Twith_typesubst\n";
-      type_declaration (i+1) ppf td;
+      type_declaration env (i+1) ppf td;
   | Twith_module (li,_) -> line i ppf "Twith_module %a\n" fmt_path li;
   | Twith_modsubst (li,_) -> line i ppf "Twith_modsubst %a\n" fmt_path li;
 
 and module_expr i ppf x =
+  let env = x.mod_env in
   line i ppf "module_expr %a\n" fmt_location x.mod_loc;
   attributes i ppf x.mod_attributes;
   let i = i+1 in
   match x.mod_desc with
-  | Tmod_ident (li,_) -> line i ppf "Tmod_ident %a\n" fmt_path li;
+  | Tmod_ident (li,_) -> 
+    let t_md = Env.find_module li env in
+    line i ppf "Tmod_ident %a %a\n" 
+      fmt_path li
+      fmt_uid t_md.md_uid;
   | Tmod_hole -> line i ppf "Tmod_hole\n";
   | Tmod_structure (s) ->
       line i ppf "Tmod_structure\n";
@@ -857,7 +871,7 @@ and structure_item str_env i ppf x =
       value_description t_vd.val_uid i ppf vd;
   | Tstr_type (rf, l) ->
       line i ppf "Tstr_type %a\n" fmt_rec_flag rf;
-      list i type_declaration ppf l;
+      list i (type_declaration str_env) ppf l;
   | Tstr_typext te ->
       line i ppf "Tstr_typext\n";
       type_extension i ppf te
@@ -892,9 +906,9 @@ and structure_item str_env i ppf x =
   | Tstr_attribute a ->
       attribute i ppf "Tstr_attribute" a
 
-and longident_x_with_constraint i ppf (li, _, wc) =
+and longident_x_with_constraint env i ppf (li, _, wc) =
   line i ppf "%a\n" fmt_path li;
-  with_constraint (i+1) ppf wc;
+  with_constraint env (i+1) ppf wc;
 
 and core_type_x_core_type_x_location i ppf (ct1, ct2, l) =
   line i ppf "<constraint> %a\n" fmt_location l;

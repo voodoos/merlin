@@ -408,6 +408,7 @@ and signatures ~loc env ~mark cxt subst sig1 sig2 =
      Return a coercion list indicating, for all run-time components
      of sig2, the position of the matching run-time components of sig1
      and the coercion to be applied to it. *)
+  let first = ref true in
   let rec pair_components subst paired unpaired = function
       [] ->
         begin match unpaired with
@@ -457,6 +458,10 @@ and signatures ~loc env ~mark cxt subst sig1 sig2 =
           in
           let uid1 = uid_of_sig_item item1 in
           let uid2 = uid_of_sig_item item2 in
+          if !first then (
+            Format.eprintf "\n";
+            first := false
+          );
           Format.eprintf "Paired: %a %a@.   with %a %a\n%!"
             Printtyp.signature [item1]
               (Format.pp_print_option Types.Uid.print) uid1
