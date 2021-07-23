@@ -1,9 +1,3 @@
-(** Paired by the compiler:
-  1 -> 0
-  4 -> 2
-  3 -> 1
-*)
-
 module M (* 5 *) : sig
   module N (* 4 *) : sig
     val x (* 3 *) : int
@@ -16,9 +10,16 @@ end = struct
   end
 end
 
-(** Module M compressed:
+(** Module M 
+- Paired by the compiler:
+  0 -> 1
+  2 -> 4
+  1 -> 3
+
+- Compressed:
   { 
-    3 -> 0
+    0 -> 3
+    2 -> 4
   }
 *)
 

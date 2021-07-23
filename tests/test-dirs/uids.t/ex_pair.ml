@@ -73,6 +73,8 @@ P :  C_P = C_Pair o (C_Int U (C_Pair o (C_String U C_Int))
         0 -> 5
         1 -> 6
     }
+
+    (??)
 *)
 
 let _ = P.to_string (* 6 *)
@@ -83,6 +85,7 @@ let _ = P.to_string (* 6 *)
   - UID 6 is already a definition
 
 - Jump to declaration P.to_string: UID = 6
-  - Reverse search in C_P = 1
+  - Reverse search in C_P = 1 Note that current locate implementation will not
+    find this result.
 
 *)
