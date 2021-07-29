@@ -13,13 +13,17 @@ module F(*6*)(X(*4*) : S(*3*)) : sig type t(*5*) end
   = struct include X.M(*2*) end
 
 (**
-
   Paired by the compiler:
     5 -> 0
 
-  fun C_X -> { 
-    5 -> C_X.C_M[0]
-  }
+  [
+    C_F = Abs (["C_X"], 
+      Subst (
+        { 5 -> Stuck (["C_X"; "C_M"], 0) }, 
+        {}s
+      )
+    )
+  ]
 
 *)
 
@@ -38,21 +42,31 @@ module FN (*11*) = F (N)
        2 -> 9
     
     N.M: 0 -> 8
+  
+  [
+    C_N = Subst (
+      {
+        0 -> Final 7;
+        2 -> Final 9
+      },
+      {
+        "C_M" -> Subst ({ 0 -> Final 8}, {}) (= C_M)
+      }
+    )
+  ]
 
-  C_N: {
-    0 -> 7
-    2 -> 9
-    C_M : { 0 -> 8 }
-  }
-
-  C_FN = {
-    5 -> C_N.C_M[0]
-  }
-
+  [ 
+    C_FN = apply C_F C_N
+      (* We arrive at Stuck (["C_X"; "C_M"], 0) *)
+      = Subst (
+          { 5 -> unstuck ["C_M"] 0 C_N
+            (* We lookup_mod "C_M" in C_N and find C_M *)
+            = unstuck [] 0 C_M
+            = lookup C_M 0 = lookup (Subst ({ 0 -> Final 8}, {})) 0
+            = Final 8 })
+      = Subst ({ 5 -> Final 8 }, {})
+  ]
+  
 *)
 
 type a = FN.t (*5*)
-
-(*
-  5 -> C_N.C_M[0] = 8
-*)
