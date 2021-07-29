@@ -17,7 +17,12 @@ end
 
   - Paired by the compiler: {}
 
-  - Compressed: C_Pair = {} (identity) 
+  - Compressed: C_Pair = {}
+
+    F_Pair (C_X) (C_Y)
+      = C_Y o C_ X o C_Pair
+   
+      (? = C_Y o C_X     (because C_Pair = identity) )
 *)
 
 module Int (*13*) : Stringable  = struct
@@ -51,7 +56,7 @@ end
 module P (*18*) = 
   Pair (*9*) 
     (Int (*13*)) 
-    (Pair (*9*) (String (*17*)) (Int(*13*)))
+    (Pair (*9*) (String (*17*)) (Int(*13*)) : Stringable)
 (*
 
 String : Stringable
@@ -64,17 +69,26 @@ Pair : Stringable
     { 0 -> 5
       1 -> 6 } = C_Pair
 
-P :  C_P = C_Pair o (C_Int U (C_Pair o (C_String U C_Int))
-    = C_Int U C_String U C_Int car C_Pair = identity
-    = { 0 -> 10
-        1 -> 11 
-        0 -> 14
-        1 -> 15
-        0 -> 5
-        1 -> 6
-    }
+P :  C_P = F_Pair (C_Int) (F_Pair (C_Pair (C_String) (C_Int)))
 
-    (??)
+
+
+
+
+
+
+
+      = C_Int o (C_Pair o C_String o C_int)
+      = C_Int o C_Pair o C_int
+      = { 0 -> 10; 1 -> 11 }
+      o { 0 -> 5; 1 -> 6 }
+      o { 0 -> 10; 1 -> 11 }
+      = {
+        0 -> 10;
+        1 -> 11;
+        0 -> 5;
+        1 -> 6
+      }
 *)
 
 let _ = P.to_string (* 6 *)

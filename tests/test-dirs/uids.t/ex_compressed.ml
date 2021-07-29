@@ -11,16 +11,16 @@ end = struct
 end
 
 (** Module M 
-- Paired by the compiler:
-  0 -> 1
-  2 -> 4
-  1 -> 3
-
-- Compressed:
-  { 
-    0 -> 3
+  - Paired by the compiler:
+    0 -> 1
     2 -> 4
-  }
+    1 -> 3
+
+  - Compressed:
+    { 
+      0 -> 3
+      2 -> 4
+    }
 *)
 
 let _ = M.N.x (* 3 *)
