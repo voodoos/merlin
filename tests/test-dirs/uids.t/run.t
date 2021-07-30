@@ -202,7 +202,7 @@
               Tmod_ident \"Const/89\" ==>{ Ex_abstract_type.8 }<==
               Tmod_ident \"Int/84\" ==>{ Ex_abstract_type.3 }<==
             Tmod_ident \"Char/86\" ==>{ Ex_abstract_type.5 }<==
-        type_declaration a/94 ==>{ Ex_abstract_type.10 }<== (ex_abstract_type.ml[30,468+0]..ex_abstract_type.ml[30,468+13])
+        type_declaration a/94 ==>{ Ex_abstract_type.10 }<== (ex_abstract_type.ml[48,881+0]..ex_abstract_type.ml[48,881+13])
                 Ttyp_constr \"I2/93.t\" ==>{ Ex_abstract_type.0 }<==
 
   $ $MERLIN single dump -what typedtree \
