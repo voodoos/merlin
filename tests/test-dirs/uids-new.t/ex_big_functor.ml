@@ -51,7 +51,7 @@ end = struct
     type t (*12*) = X.t (*0*)
   end
 end
-(*
+(**
 
   S_F = λ tX tY. App(S_Sig, S_Body)
   where:
@@ -59,7 +59,9 @@ end
       ...(App(S_S, Var t) = Structure ["t" -> Proj(Var t, "t")]);
       "A" -> App(S_S, Proj(Var t, "A"));
       "B" -> S_M
-      "C" -> Proj(Var t, "C")
+      "C" ->
+        App ((\s. Structure ["t" -> Proj (Var s. "t")]), Proj (Var t, "C"))
+        = Structure ["t" -> Proj (Proj (Var t, "C"), "t")]
       ]
     ]
     = λ t. Structure [
@@ -86,7 +88,9 @@ end
       "A" -> Structure ["t" -> Proj(Proj(S_Body, "A"), "t")]
              = Proj(Var tY, "t")
       "B" -> S_M
-      "C" -> Structure [
+      "C" ->
+        Structure ["t" -> Proj (Proj(S_Body, "C"), "T"))]
+        = Structure [
         "t" -> Proj(var tX, "t")
       ]
     ]
