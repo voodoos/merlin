@@ -16,7 +16,10 @@
 type t =
     Pident of Ident.t
   | Pdot of t * string
-  | Papply of t * t
+  | Papply of t * t 
+    (* ... * une map d'uids ? Pour les applications de foncteurs anonymes....
+En fait deuxl uid (impl/intf) devraient suffire puisque l'on sait quel element on veut
+lookup *)
 
 let rec same p1 p2 =
   p1 == p2

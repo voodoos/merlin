@@ -440,10 +440,14 @@ and value_binding =
   }
 
 and module_coercion =
-    Tcoerce_none
+(* On stockera les mappings d'uids dans les modules_coercion
+ ET les structure items *)
+    Tcoerce_none (*identité*)
   | Tcoerce_structure of (int * module_coercion) list *
-                         (Ident.t * int * module_coercion) list
-  | Tcoerce_functor of module_coercion * module_coercion
+                         (Ident.t * int * module_coercion) list (* map_uids *)
+                         (* map simple *)
+  | Tcoerce_functor of module_coercion(*arg*) * module_coercion(*body*)
+
   | Tcoerce_primitive of primitive_coercion
   | Tcoerce_alias of Env.t * Path.t * module_coercion
 
