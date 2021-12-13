@@ -8231,7 +8231,7 @@ module Tables = struct
         let _6 : (Parsetree.expression) = Obj.magic _6 in
         let _5 : unit = Obj.magic _5 in
         let _1_inlined4 : (Parsetree.attributes) = Obj.magic _1_inlined4 in
-        let _2_inlined1 : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let _2_inlined1 : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = Obj.magic _2_inlined1 in
         let _1_inlined3 : (string) = Obj.magic _1_inlined3 in
         let _1_inlined2 : (Parsetree.attributes) = Obj.magic _1_inlined2 in
@@ -13714,7 +13714,7 @@ module Tables = struct
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _endpos = _startpos in
-        let _v : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let _v : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = 
 # 3302 "src/ocaml/preprocess/parser_raw.mly"
                                   ( ([],Pcstr_tuple [],None) )
@@ -13747,7 +13747,7 @@ module Tables = struct
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos__1_ in
         let _endpos = _endpos__2_ in
-        let _v : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let _v : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = 
 # 3303 "src/ocaml/preprocess/parser_raw.mly"
                                   ( ([],_2,None) )
@@ -13794,7 +13794,7 @@ module Tables = struct
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos__1_ in
         let _endpos = _endpos__4_ in
-        let _v : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let _v : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = 
 # 3305 "src/ocaml/preprocess/parser_raw.mly"
                                   ( ([],_2,Some _4) )
@@ -13855,7 +13855,7 @@ module Tables = struct
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos__1_ in
         let _endpos = _endpos__6_ in
-        let _v : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let _v : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = let _2 =
           let _1 =
             let xs = 
@@ -13907,7 +13907,7 @@ module Tables = struct
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos__1_ in
         let _endpos = _endpos__2_ in
-        let _v : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let _v : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = 
 # 3310 "src/ocaml/preprocess/parser_raw.mly"
                                   ( ([],Pcstr_tuple [],Some _2) )
@@ -13954,7 +13954,7 @@ module Tables = struct
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos__1_ in
         let _endpos = _endpos__4_ in
-        let _v : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let _v : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = let _2 =
           let _1 =
             let xs = 
@@ -14014,26 +14014,16 @@ module Tables = struct
           };
         } = _menhir_stack in
         let _1_inlined2 : (Parsetree.attributes) = Obj.magic _1_inlined2 in
-        let vars_args_res : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let vars_args_res : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = Obj.magic vars_args_res in
         let _1_inlined1 : (string) = Obj.magic _1_inlined1 in
         let _1 : unit = Obj.magic _1 in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos__1_ in
         let _endpos = _endpos__1_inlined2_ in
-<<<<<<< HEAD
-        let _v : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = let attrs =
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let _v : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = let attrs =
-=======
-        let _v : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = let attrs =
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let _v : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = let attrs =
           let _1 = _1_inlined2 in
           
 # 4027 "src/ocaml/preprocess/parser_raw.mly"
@@ -14095,25 +14085,15 @@ module Tables = struct
           };
         } = _menhir_stack in
         let _1_inlined1 : (Parsetree.attributes) = Obj.magic _1_inlined1 in
-        let vars_args_res : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let vars_args_res : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = Obj.magic vars_args_res in
         let _1 : (string) = Obj.magic _1 in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos__1_ in
         let _endpos = _endpos__1_inlined1_ in
-<<<<<<< HEAD
-        let _v : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = let attrs =
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let _v : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = let attrs =
-=======
-        let _v : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = let attrs =
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let _v : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = let attrs =
           let _1 = _1_inlined1 in
           
 # 4027 "src/ocaml/preprocess/parser_raw.mly"
@@ -29534,19 +29514,9 @@ module Tables = struct
           MenhirLib.EngineTypes.endp = _endpos_d_;
           MenhirLib.EngineTypes.next = _menhir_stack;
         } = _menhir_stack in
-<<<<<<< HEAD
-        let d : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = Obj.magic d in
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let d : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
-=======
-        let d : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let d : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = Obj.magic d in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos_d_ in
         let _endpos = _endpos_d_ in
@@ -29579,19 +29549,9 @@ module Tables = struct
           MenhirLib.EngineTypes.endp = _endpos_d_;
           MenhirLib.EngineTypes.next = _menhir_stack;
         } = _menhir_stack in
-<<<<<<< HEAD
-        let d : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = Obj.magic d in
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let d : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
-=======
-        let d : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let d : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = Obj.magic d in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos_d_ in
         let _endpos = _endpos_d_ in
@@ -29630,19 +29590,9 @@ module Tables = struct
             MenhirLib.EngineTypes.next = _menhir_stack;
           };
         } = _menhir_stack in
-<<<<<<< HEAD
-        let d : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = Obj.magic d in
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let d : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
-=======
-        let d : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let d : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = Obj.magic d in
         let xs : (Parsetree.constructor_declaration list) = Obj.magic xs in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos_xs_ in
@@ -29676,19 +29626,9 @@ module Tables = struct
           MenhirLib.EngineTypes.endp = _endpos_d_;
           MenhirLib.EngineTypes.next = _menhir_stack;
         } = _menhir_stack in
-<<<<<<< HEAD
-        let d : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = Obj.magic d in
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let d : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
-=======
-        let d : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let d : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = Obj.magic d in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos_d_ in
         let _endpos = _endpos_d_ in
@@ -29758,19 +29698,9 @@ module Tables = struct
           MenhirLib.EngineTypes.endp = _endpos_d_;
           MenhirLib.EngineTypes.next = _menhir_stack;
         } = _menhir_stack in
-<<<<<<< HEAD
-        let d : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = Obj.magic d in
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let d : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
-=======
-        let d : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let d : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = Obj.magic d in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos_d_ in
         let _endpos = _endpos_d_ in
@@ -29846,19 +29776,9 @@ module Tables = struct
             MenhirLib.EngineTypes.next = _menhir_stack;
           };
         } = _menhir_stack in
-<<<<<<< HEAD
-        let d : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = Obj.magic d in
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let d : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
-=======
-        let d : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let d : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = Obj.magic d in
         let xs : (Parsetree.extension_constructor list) = Obj.magic xs in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos_xs_ in
@@ -29936,19 +29856,9 @@ module Tables = struct
           MenhirLib.EngineTypes.endp = _endpos_d_;
           MenhirLib.EngineTypes.next = _menhir_stack;
         } = _menhir_stack in
-<<<<<<< HEAD
-        let d : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = Obj.magic d in
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let d : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
-=======
-        let d : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let d : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = Obj.magic d in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos_d_ in
         let _endpos = _endpos_d_ in
@@ -29981,19 +29891,9 @@ module Tables = struct
           MenhirLib.EngineTypes.endp = _endpos_d_;
           MenhirLib.EngineTypes.next = _menhir_stack;
         } = _menhir_stack in
-<<<<<<< HEAD
-        let d : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = Obj.magic d in
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let d : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
-=======
-        let d : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let d : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = Obj.magic d in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos_d_ in
         let _endpos = _endpos_d_ in
@@ -30032,19 +29932,9 @@ module Tables = struct
             MenhirLib.EngineTypes.next = _menhir_stack;
           };
         } = _menhir_stack in
-<<<<<<< HEAD
-        let d : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) = Obj.magic d in
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let d : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
-=======
-        let d : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) = Obj.magic d in
->>>>>>> 58fa08fe (Upgrade parsing related modules)
+        let d : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) = Obj.magic d in
         let xs : (Parsetree.extension_constructor list) = Obj.magic xs in
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _startpos_xs_ in
@@ -30075,16 +29965,8 @@ module Tables = struct
         let _endpos__0_ = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _startpos = _menhir_stack.MenhirLib.EngineTypes.endp in
         let _endpos = _startpos in
-<<<<<<< HEAD
         let _v : ((Parsetree.core_type * Parsetree.core_type * Location.t) list) = 
-# 1056 "src/ocaml/preprocess/parser_raw.mly"
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-        let _v : ((Parsetree.core_type * Parsetree.core_type * Warnings.loc) list) = 
-# 1056 "src/ocaml/preprocess/parser_raw.mly"
-=======
-        let _v : ((Parsetree.core_type * Parsetree.core_type * Warnings.loc) list) = 
 # 1066 "src/ocaml/preprocess/parser_raw.mly"
->>>>>>> 58fa08fe (Upgrade parsing related modules)
     ( [] )
 # 29972 "src/ocaml/preprocess/parser_raw.ml"
          in
@@ -32197,7 +32079,7 @@ module Tables = struct
         } = _menhir_stack in
         let _1_inlined4 : (Parsetree.attributes) = Obj.magic _1_inlined4 in
         let _1_inlined3 : (Parsetree.attributes) = Obj.magic _1_inlined3 in
-        let vars_args_res : (Ast_helper.str list * Parsetree.constructor_arguments *
+        let vars_args_res : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) = Obj.magic vars_args_res in
         let _1_inlined2 : (string) = Obj.magic _1_inlined2 in
         let _1_inlined1 : (Parsetree.attributes) = Obj.magic _1_inlined1 in
@@ -45557,32 +45439,14 @@ module MenhirInterpreter = struct
   Parsetree.type_declaration) nonterminal
       | N_generic_type_declaration_no_nonrec_flag_type_subst_kind_ : ((Asttypes.rec_flag * string Location.loc option) *
   Parsetree.type_declaration) nonterminal
-<<<<<<< HEAD
-      | N_generic_constructor_declaration_epsilon_ : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) nonterminal
-      | N_generic_constructor_declaration_BAR_ : (Ocaml_parsing.Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Location.t *
-  Ocaml_parsing.Docstrings.info) nonterminal
-      | N_generalized_constructor_arguments : (Parsetree.constructor_arguments * Parsetree.core_type option) nonterminal
-||||||| parent of 58fa08fe (Upgrade parsing related modules)
-      | N_generic_constructor_declaration_epsilon_ : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) nonterminal
-      | N_generic_constructor_declaration_BAR_ : (Ast_helper.str * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) nonterminal
-      | N_generalized_constructor_arguments : (Parsetree.constructor_arguments * Parsetree.core_type option) nonterminal
-=======
-      | N_generic_constructor_declaration_epsilon_ : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) nonterminal
-      | N_generic_constructor_declaration_BAR_ : (Ast_helper.str * Ast_helper.str list * Parsetree.constructor_arguments *
-  Parsetree.core_type option * Parsetree.attributes * Warnings.loc *
-  Docstrings.info) nonterminal
-      | N_generalized_constructor_arguments : (Ast_helper.str list * Parsetree.constructor_arguments *
+      | N_generic_constructor_declaration_epsilon_ : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) nonterminal
+      | N_generic_constructor_declaration_BAR_ : (Ocaml_parsing.Ast_helper.str * Ocaml_parsing.Ast_helper.str list *
+  Parsetree.constructor_arguments * Parsetree.core_type option *
+  Parsetree.attributes * Location.t * Ocaml_parsing.Docstrings.info) nonterminal
+      | N_generalized_constructor_arguments : (Ocaml_parsing.Ast_helper.str list * Parsetree.constructor_arguments *
   Parsetree.core_type option) nonterminal
->>>>>>> 58fa08fe (Upgrade parsing related modules)
       | N_functor_args : ((Lexing.position * Parsetree.functor_parameter) list) nonterminal
       | N_functor_arg : (Lexing.position * Parsetree.functor_parameter) nonterminal
       | N_function_type : (Parsetree.core_type) nonterminal
