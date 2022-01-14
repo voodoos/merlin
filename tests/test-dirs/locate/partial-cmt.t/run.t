@@ -48,9 +48,10 @@ That is: if the file is a.mli then the test is broken:
       "file": "$TESTCASE_ROOT/a.ml",
       "pos": {
         "line": 1,
-        "col": 0
+        "col": 9
       }
     },
     "notifications": []
   }
 
+TODO With shape it is extected that this test will fail.
