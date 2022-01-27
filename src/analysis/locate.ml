@@ -371,7 +371,8 @@ module Shape_reduce =
         log ~title:"read_unit_shape" "failed to find %s" fn;
         None
 
-    let find_shape env id = Env.shape_of_path ~namespace:Shape.Sig_component_kind.Module env (Pident id)
+    let find_shape env id = Env.shape_of_path 
+      ~namespace:Shape.Sig_component_kind.Module env (Pident id)
   end)
 
 let locate ~env ~ml_or_mli decl_uid loc path ns =
@@ -389,61 +390,56 @@ let locate ~env ~ml_or_mli decl_uid loc path ns =
   in
   match uid with
   | Some (Shape.Uid.Item { comp_unit; id } as uid) ->
-    let fileopt, locopt =
+    let locopt =
       if Env.get_unit_name () = comp_unit then begin
-          log ~title:"locate" "We look for %a in the current compilation unit."
-           Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
-          let tbl = Env.get_uid_to_loc_tbl () in
-          let loc =
-            match Shape.Uid.Tbl.find_opt tbl uid with
-            | Some loc ->
-              log ~title:"locate" "Found location: %a"
-                Logger.fmt (fun fmt -> Location.print_loc fmt loc);
-              loc
-            | None ->
-              log ~title:"locate"
-                "Uid not found in the local environment.@.\
-                 Fallbacking to the node's location: %a"
-                Logger.fmt (fun fmt -> Location.print_loc fmt loc);
-              loc
-          in
-          Some comp_unit, Some loc
+        log ~title:"locate" "We look for %a in the current compilation unit."
+          Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
+        let tbl = Env.get_uid_to_loc_tbl () in
+        match Shape.Uid.Tbl.find_opt tbl uid with
+        | Some loc ->
+          log ~title:"locate" "Found location: %a"
+            Logger.fmt (fun fmt -> Location.print_loc fmt loc);
+          Some loc
+        | None -> 
+          log ~title:"locate"
+            "Uid not found.@.\
+            Fallbacking to the node's location: %a"
+          Logger.fmt (fun fmt -> Location.print_loc fmt loc);
+          Some loc
       end else begin
         log ~title:"locate" "Loading the shapes for unit %S" comp_unit;
         match load_shapes comp_unit ml_or_mli with
         | Ok (Some pos_fname, cmt) ->
           log ~title:"locate" "Shapes succesfully loaded, looking for %a"
             Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
-          let loc = match Shape.Uid.Tbl.find_opt cmt.cmt_uid_to_loc uid with
+          begin match Shape.Uid.Tbl.find_opt cmt.cmt_uid_to_loc uid with
             | Some loc ->
               log ~title:"locate" "Found location: %a"
                 Logger.fmt (fun fmt -> Location.print_loc fmt loc);
               Some loc
             | None ->
               log ~title:"locate" "Uid not found in the loaded shape.";
-              None
-            in
-          Some comp_unit,
-          loc
+            None 
+          end
         | _ ->
           log ~title:"locate" "Failed to load the shapes";
-          None, None
+          None
       end
     in
-    let res = Option.map ~f:(fun loc -> fileopt, loc) locopt in
-    (match res with
-    | Some (_f, l) -> `Found l
-    | _ -> `Not_found ("todo1", None) (* TODO fallback ?*) )
+    begin match locopt with
+    | Some loc -> `Found loc
+    | None -> `Not_found (Path.name path, None)
+    end
   | Some (Compilation_unit comp_unit) ->
     begin
       match load_shapes comp_unit ml_or_mli with
       | Ok (Some pos_fname, cmt) ->
         let pos = Std.Lexing.make_pos ~pos_fname (1, 0) in
-        let loc = { Location. loc_start=pos ; loc_end=pos ; loc_ghost=true } in
+        let loc = { Location.loc_start=pos; loc_end=pos; loc_ghost=true } in
         `Found loc
       | _ ->
         log ~title:"locate" "Failed to load the shapes";
-        `Not_found ("todo2", None) (* TODO fallback ?*)
+        `Not_found (Path.name path, None)
     end
   | _ ->
     log ~title:"locate"
