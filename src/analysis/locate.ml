@@ -314,6 +314,8 @@ let rec load_shapes comp_unit ml_or_mli =
   | filename ->
     let cmt = (Cmt_cache.read filename).cmt_infos in
     let pos_fname = cmt.cmt_sourcefile in
+    Option.iter cmt.cmt_source_digest
+      ~f:(fun digest -> File_switching.move_to ~digest filename);
     Ok (pos_fname, cmt)
   | exception Not_found ->
     if ml_or_mli = `MLI then
@@ -430,7 +432,7 @@ let locate ~env ~ml_or_mli decl_uid loc path ns =
     in
     let res = Option.map ~f:(fun loc -> fileopt, loc) locopt in
     (match res with
-    | Some (f, l) -> `Found( l, f)
+    | Some (_f, l) -> `Found l
     | _ -> `Not_found ("todo1", None) (* TODO fallback ?*) )
   | Some (Compilation_unit comp_unit) ->
     begin
@@ -438,7 +440,7 @@ let locate ~env ~ml_or_mli decl_uid loc path ns =
       | Ok (Some pos_fname, cmt) ->
         let pos = Std.Lexing.make_pos ~pos_fname (1, 0) in
         let loc = { Location. loc_start=pos ; loc_end=pos ; loc_ghost=true } in
-        `Found(loc, Some comp_unit)
+        `Found loc
       | _ ->
         log ~title:"locate" "Failed to load the shapes";
         `Not_found ("todo2", None) (* TODO fallback ?*)
@@ -446,7 +448,7 @@ let locate ~env ~ml_or_mli decl_uid loc path ns =
   | _ ->
     log ~title:"locate"
       "No UID found in the shape, fallback to lookup location.";
-    `Found (loc, None)
+    `Found loc
 
 let path_and_loc_of_cstr desc _ =
   let open Types in
@@ -603,7 +605,7 @@ let find_source ~config loc path =
 let recover _ =
   match Fallback.get () with
   | None -> assert false
-  | Some loc -> `Found (loc, None)
+  | Some loc -> `Found loc
 
 module Namespace = struct
   type under_type = [ `Constr | `Labels ]
@@ -764,7 +766,7 @@ let from_path ~config ~env ~local_defs ~pos ~namespace ml_or_mli path =
       match locate ~env ~ml_or_mli uid loc path namespace with
       | `Not_found _
       | `File_not_found _ as err -> err
-      | `Found (loc, _) -> find_source ~config loc (Path.name path)
+      | `Found loc -> find_source ~config loc (Path.name path)
 
 let from_string ~config ~env ~local_defs ~pos ?namespaces switch path =
   File_switching.reset ();
@@ -809,7 +811,7 @@ let from_string ~config ~env ~local_defs ~pos ?namespaces switch path =
     match from_longident ~config ~pos ~env nss switch ident with
     | `File_not_found _ | `Not_found _ | `Not_in_env _ as err -> err
     | `Builtin -> `Builtin path
-    | `Found (loc, _) -> find_source ~config loc path
+    | `Found loc -> find_source ~config loc path
 
 let get_doc ~config ~env ~local_defs ~comments ~pos =
   File_switching.reset ();
@@ -825,20 +827,19 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
       let lid = Longident.parse path in
       begin match Context.inspect_browse_tree ~cursor:pos lid [browse] with
       | None ->
-        `Found ({ Location. loc_start=pos; loc_end=pos ; loc_ghost=true }, None)
+        `Found { Location. loc_start=pos; loc_end=pos ; loc_ghost=true }
       | Some ctxt ->
         let nss = Namespace.from_context ctxt in
         log ~title:"get_doc" "looking for the doc of '%s'" path ;
         from_longident ~config ~pos ~env nss `MLI lid
       end
   with
-  | `Found (_, Some doc) ->
-    `Found doc
-  | `Found (loc, None) ->
+  | `Found loc ->
     let comments =
       match File_switching.where_am_i () with
       | None -> comments
       | Some cmt_path ->
+        log ~title:"get_doc" "File switeching: actually in %s" cmt_path;
         let {Cmt_cache. cmt_infos; _ } = Cmt_cache.read cmt_path in
         cmt_infos.Cmt_format.cmt_comments
     in
