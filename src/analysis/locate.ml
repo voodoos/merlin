@@ -375,7 +375,7 @@ module Shape_reduce =
       ~namespace:Shape.Sig_component_kind.Module env (Pident id)
   end)
 
-let uid_of_path ~env ~ml_or_mli decl_uid path ns =
+let uid_of_path ~env ~ml_or_mli ~decl_uid path ns =
   match ml_or_mli with
   | `MLI -> Some decl_uid
   | `ML ->
@@ -447,7 +447,7 @@ let from_uid ~ml_or_mli uid loc path =
       `Found loc
 
 let locate ~env ~ml_or_mli decl_uid loc path ns =
-  let uid = uid_of_path ~env ~ml_or_mli decl_uid path ns in
+  let uid = uid_of_path ~env ~ml_or_mli ~decl_uid path ns in
   from_uid ~ml_or_mli uid loc path
 
 let path_and_loc_of_cstr desc _ =
@@ -743,16 +743,22 @@ let from_completion_entry ~env ~config ~pos (namespace, path, loc) =
   locate ~env ~ml_or_mli:`MLI Types.Uid.internal_not_actually_unique loc
     path namespace
 
-let from_longident
+let uid_from_longident
   ~config ~env ~pos nss ml_or_mli ident =
   let str_ident = String.concat ~sep:"." (Longident.flatten ident) in
   match Env_lookup.in_namespaces nss ident env with
   | None -> `Not_in_env str_ident
-  | Some (path, namespace, uid, loc) ->
+  | Some (path, namespace, decl_uid, loc) ->
     if Utils.is_builtin_path path then
       `Builtin
     else
-      locate ~env ~ml_or_mli uid loc path namespace
+      let uid = uid_of_path ~env ~ml_or_mli ~decl_uid path namespace in
+      `Uid (uid, loc, path)
+
+let from_longident ~config ~env ~pos nss ml_or_mli ident =
+  match uid_from_longident ~config ~env ~pos nss ml_or_mli ident with
+  | `Uid (uid, loc, path) -> from_uid ~ml_or_mli uid loc path
+  | (`Builtin | `Not_in_env _) as v -> v
 
 let from_path ~config ~env ~local_defs ~pos ~namespace ml_or_mli path =
   File_switching.reset ();
