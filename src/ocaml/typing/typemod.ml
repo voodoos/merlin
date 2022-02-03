@@ -2323,6 +2323,7 @@ and type_module_aux ~alias sttn funct_body anchor env smod =
               in
               let id = Ident.create_scoped ~scope name in
               let shape = Shape.var md_uid id in
+              Env.register_uid md_uid param.loc;
               let newenv = Env.add_module_declaration
                 ~shape ~arg:true ~check:true id Mp_present arg_md env
               in
