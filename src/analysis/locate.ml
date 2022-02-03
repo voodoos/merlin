@@ -375,21 +375,21 @@ module Shape_reduce =
       ~namespace:Shape.Sig_component_kind.Module env (Pident id)
   end)
 
-let locate ~env ~ml_or_mli decl_uid loc path ns =
-  let uid =
-    match ml_or_mli with
-    | `MLI -> Some decl_uid
-    | `ML ->
-      let shape = Env.shape_of_path ~namespace:ns env path in
-      log ~title:"shape_of_path" "initial:@ %a"
-        Logger.fmt (fun fmt -> Shape.print fmt shape);
-      let r = Shape_reduce.reduce env shape in
-      log ~title:"shape_of_path" "reduced:@ %a"
-        Logger.fmt (fun fmt -> Shape.print fmt r);
-      r.uid
-  in
+let uid_of_path ~env ~ml_or_mli decl_uid path ns =
+  match ml_or_mli with
+  | `MLI -> Some decl_uid
+  | `ML ->
+    let shape = Env.shape_of_path ~namespace:ns env path in
+    log ~title:"shape_of_path" "initial:@ %a"
+      Logger.fmt (fun fmt -> Shape.print fmt shape);
+    let r = Shape_reduce.reduce env shape in
+    log ~title:"shape_of_path" "reduced:@ %a"
+      Logger.fmt (fun fmt -> Shape.print fmt r);
+    r.uid
+
+let from_uid ~ml_or_mli uid loc path =
   match uid with
-  | Some (Shape.Uid.Item { comp_unit; id } as uid) ->
+  | Some (Shape.Uid.Item { comp_unit; id } as uid)->
     let locopt =
       if Env.get_unit_name () = comp_unit then begin
         log ~title:"locate" "We look for %a in the current compilation unit."
@@ -441,10 +441,14 @@ let locate ~env ~ml_or_mli decl_uid loc path ns =
         log ~title:"locate" "Failed to load the shapes";
         `Not_found (Path.name path, None)
     end
-  | _ ->
-    log ~title:"locate"
-      "No UID found in the shape, fallback to lookup location.";
-    `Found loc
+  | Some (Predef _ | Internal) -> assert false
+  | None -> 
+      log ~title:"locate" "No UID found, fallbacking to lookup location.";
+      `Found loc
+
+let locate ~env ~ml_or_mli decl_uid loc path ns =
+  let uid = uid_of_path ~env ~ml_or_mli decl_uid path ns in
+  from_uid ~ml_or_mli uid loc path
 
 let path_and_loc_of_cstr desc _ =
   let open Types in
