@@ -735,7 +735,11 @@ end = struct
       ) ;
       log ~title:"lookup" "   ... not in the environment" ;
       None
-    with Found x ->
+    with Found ((path, namespace, decl_uid, loc) as x) ->
+      log ~title:"env_lookup" "found: '%a' in namespace %s with uid %a" 
+        Logger.fmt (fun fmt -> Path.print fmt path)
+        (Shape.Sig_component_kind.to_string namespace)
+        Logger.fmt (fun fmt -> Shape.Uid.print fmt decl_uid);
       Some x
 end
 
