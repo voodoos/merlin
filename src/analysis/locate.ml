@@ -373,7 +373,7 @@ module Shape_reduce =
         log ~title:"read_unit_shape" "failed to find %s" fn;
         None
 
-    let find_shape env id = Env.shape_of_path 
+    let find_shape env id = Env.shape_of_path
       ~namespace:Shape.Sig_component_kind.Module env (Pident id)
   end)
 
@@ -737,7 +737,7 @@ end = struct
       log ~title:"lookup" "   ... not in the environment" ;
       None
     with Found ((path, namespace, decl_uid, loc) as x) ->
-      log ~title:"env_lookup" "found: '%a' in namespace %s with uid %a" 
+      log ~title:"env_lookup" "found: '%a' in namespace %s with uid %a"
         Logger.fmt (fun fmt -> Path.print fmt path)
         (Shape.Sig_component_kind.to_string namespace)
         Logger.fmt (fun fmt -> Shape.Uid.print fmt decl_uid);
@@ -842,17 +842,17 @@ let doc_from_uid ~comp_unit uid =
       value_binding = (fun sub ({ vb_pat; vb_attributes; _ } as vb) ->
         match vb_pat.pat_desc with
         | Tpat_var (id, _) ->
-            begin try 
+            begin try
               let vd = Env.find_value (Pident id) env in
               test vd.val_uid vb_attributes
-            with Not_found -> () end  
+            with Not_found -> () end
         | _ -> ();
         Tast_iterator.default_iterator.value_binding sub vb)
     }
   in
   let parse_attributes attrs =
     let open Parsetree in
-    try Some (List.find_map attrs ~f:(fun attr -> 
+    try Some (List.find_map attrs ~f:(fun attr ->
       if attr.attr_name.txt = "ocaml.doc" then
         Ast_helper.extract_str_payload attr.attr_payload
       else None))
@@ -873,7 +873,7 @@ let doc_from_uid ~comp_unit uid =
     | Error _ -> None
   in
   try match typedtree with
-    | Some (`Interface s) -> 
+    | Some (`Interface s) ->
         let iterator = iterator s.sig_final_env in
         iterator.signature iterator s;
         log ~title:"doc_from_uid" "uid not found in the tree";
@@ -924,7 +924,7 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
   | `Found_doc doc -> `Found doc
   | `Found loc ->
     (* When the doc we look for is in the current buffer or if search by uid
-      has failed we use an alternative heuristic since Merlin's pure parser 
+      has failed we use an alternative heuristic since Merlin's pure parser
       does not poulates doc attributes in the typedtree. *)
     let comments =
       match File_switching.where_am_i () with
