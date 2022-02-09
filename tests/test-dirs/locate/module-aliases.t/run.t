@@ -101,10 +101,15 @@ Jump from to another module `module A = Anothe|rmod`:
   }
 
 Jump from to another module signature `module A = Anothe|rmod`:
-FIXME: we should traverse the alias when there is no correcponding source
   $ $MERLIN single locate -look-for mli -position 1:21 \
   > -filename ./main.ml < ./main.ml | jq '.value'
-  "'Anothermod' seems to originate from 'Dune__exe' whose ML file could not be found"
+  {
+    "file": "$TESTCASE_ROOT/anothermod.mli",
+    "pos": {
+      "line": 1,
+      "col": 0
+    }
+  }
 
 Jump to an element of an aliased module `A.|f`:
   $ $MERLIN single locate -look-for ml -position 5:7 \
@@ -116,6 +121,29 @@ Jump to an element of an aliased module `A.|f`:
       "col": 4
     }
   }
+
+Jump from to another module value decl `Anothermod.|a`:
+  $ $MERLIN single locate -look-for mli -position 3:21 \
+  > -filename ./main.ml < ./main.ml | jq '.value'
+  {
+    "file": "$TESTCASE_ROOT/anothermod.mli",
+    "pos": {
+      "line": 2,
+      "col": 0
+    }
+  }
+
+Jump from to another module value def `Anothermod.|a`:
+  $ $MERLIN single locate -look-for ml -position 3:21 \
+  > -filename ./main.ml < ./main.ml | jq '.value'
+  {
+    "file": "$TESTCASE_ROOT/anothermod.ml",
+    "pos": {
+      "line": 2,
+      "col": 0
+    }
+  }
+
 
 Jump to the declaration of an element of an alisaed module `A.|f`:
   $ $MERLIN single locate -look-for mli -position 5:7 \
@@ -140,7 +168,7 @@ Jump to an aliased module `A|.f`:
   }
 
 Jump to the declaration of an aliased module `A|.f`:
-With the new shape implementation it is expected that we jump to the 
+With the new shape implementation it is expected that we jump to the
 declaration of the alias and not to the aliased module itself.
   $ $MERLIN single locate -look-for mli -position 5:2 \
   > -filename ./main.ml < ./main.ml | jq '.value'
