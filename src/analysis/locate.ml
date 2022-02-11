@@ -809,7 +809,7 @@ let from_completion_entry ~env ~config (namespace, path, loc) =
   | `Found (_, loc) -> `Found loc
   | `Not_found _ as otherwise -> otherwise
 
-let uid_from_longident ~config ~env nss ml_or_mli ident =
+let uid_from_longident ~env nss ml_or_mli ident =
   let str_ident = String.concat ~sep:"." (Longident.flatten ident) in
   match Env_lookup.in_namespaces nss ident env with
   | None -> `Not_in_env str_ident
@@ -821,7 +821,7 @@ let uid_from_longident ~config ~env nss ml_or_mli ident =
       `Uid (uid, loc, path)
 
 let from_longident ~config ~env nss ml_or_mli ident =
-  match uid_from_longident ~config ~env nss ml_or_mli ident with
+  match uid_from_longident ~env nss ml_or_mli ident with
   | `Uid (uid, loc, path) -> from_uid ~ml_or_mli uid loc path
   | (`Builtin | `Not_in_env _) as v -> v
 
@@ -1082,3 +1082,108 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
   | `Not_found _
   | `No_documentation
   | `Not_in_env _ as otherwise -> otherwise
+
+module Uideps_format = struct
+  (* TODO WE SHOULD USE A MAGIC NUMBER *)
+  module Loc : Set.OrderedType with type t = Location.t = struct
+    type t = Location.t
+  
+    let compare_pos (p1 : Lexing.position) (p2 : Lexing.position) =
+      match String.compare p1.pos_fname p2.pos_fname with
+      | 0 -> Int.compare p1.pos_cnum p2.pos_cnum
+      | n -> n
+  
+    let compare (t1 : t) (t2 : t) =
+      (* TODO CHECK...*)
+      match compare_pos t1.loc_start t2.loc_start with
+      | 0 -> compare_pos t1.loc_end t2.loc_end
+      | n -> n
+  end
+  
+  module LocSet = Set.Make (Loc)
+  
+  type payload = (Shape.Uid.t, LocSet.t) Hashtbl.t
+  type file_format = V1 of payload
+  
+  let pp_payload (fmt : Format.formatter) pl =
+    Format.fprintf fmt "{@[";
+    Hashtbl.iter
+      (fun uid locs -> Format.fprintf fmt "uid: %a; locs: @[%a@]@,"
+        Shape.Uid.print uid
+        (Format.pp_print_list
+          ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@;")
+          Location.print_loc) (LocSet.elements locs))
+      pl;
+      Format.fprintf fmt "@]}@,"
+  
+  let pp (fmt : Format.formatter) ff =
+    match ff with
+    | V1 tbl ->
+      Format.fprintf fmt "V1@,%a" pp_payload tbl
+  
+  let ext = "uideps"
+  
+  let write ~file tbl =
+      let oc = open_out_bin file in
+      Marshal.to_channel oc (V1 tbl) [];
+      close_out oc
+  
+  let read ~file =
+    let ic = open_in_bin file in
+    try
+      let payload = match Marshal.from_channel ic with
+        | V1 payload -> payload (* TODO is that "safe" ? *)
+      in
+      close_in ic;
+      payload
+    with e -> raise e (* todo *)
+end
+
+module LocSet = Uideps_format.LocSet
+
+let get_uideps uid =
+  let tbl = Uideps_format.read ~file:"workspace.uideps" in
+  Hashtbl.find_opt tbl uid
+
+let occurrences ~env ~local_defs ~pos ~path = 
+  Format.eprintf "occurrences\n%!";
+  let browse = Mbrowse.of_typedtree local_defs in
+  let lid = Longident.parse path in
+  let ident, is_label = Longident.keep_suffix lid in
+  let ctx = match Context.inspect_browse_tree ~cursor:pos lid [browse], is_label with
+  | None, _ ->
+    log ~title:"from_string" "already at origin, doing nothing" ;
+    `Error `At_origin
+  | Some (Label _ as ctxt), true
+  | Some ctxt, false ->
+    log ~title:"from_string"
+      "inferred context: %s" (Context.to_string ctxt);
+    `Ok (Namespace.from_context ctxt)
+  | _, true ->
+    log ~title:"from_string"
+      "dropping inferred context, it is not precise enough";
+    `Ok [ `Labels ]
+  in
+  match ctx with
+  | `Error e ->  Format.eprintf "nocontext\n%!"; Error "noctx"
+  | `Ok nss -> 
+    let uid = uid_from_longident ~env nss `ML lid in
+    match uid with
+    | `Uid (Some uid, loc, path) -> 
+      
+      Format.eprintf "Found uid: %a (%a)\n%!"
+        Shape.Uid.print uid
+        Path.print path; 
+      
+      (* Todo: use magic number instead and don't use the lib *)
+      let uideps = get_uideps (Obj.magic uid) in
+      
+      Format.eprintf "Found locs:\n%!";
+      let locs = (match uideps with
+      | Some set -> LocSet.iter (fun loc ->
+        Format.eprintf "%a\n%!" Location.print_loc 
+        (Obj.magic loc)) set;
+        LocSet.elements set
+      | None -> Format.eprintf "None\n%!"; [])
+      in Ok locs
+    | _ -> Error "nouid"
