@@ -8,7 +8,6 @@
   -open Merlin_kernel)
  (libraries
   config
-  ocaml-uideps.lib
   merlin_specific
   merlin_extend
   merlin_kernel
