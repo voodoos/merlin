@@ -1033,3 +1033,187 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
   | `Not_found _
   | `No_documentation
   | `Not_in_env _ as otherwise -> otherwise
+
+module Uideps_format = struct
+  (* TODO WE SHOULD USE A MAGIC NUMBER *)
+  module Loc : Set.OrderedType with type t = Location.t = struct
+    type t = Location.t
+
+    let compare_pos (p1 : Lexing.position) (p2 : Lexing.position) =
+      match String.compare p1.pos_fname p2.pos_fname with
+      | 0 -> Int.compare p1.pos_cnum p2.pos_cnum
+      | n -> n
+
+    let compare (t1 : t) (t2 : t) =
+      (* TODO CHECK...*)
+      match compare_pos t1.loc_start t2.loc_start with
+      | 0 -> compare_pos t1.loc_end t2.loc_end
+      | n -> n
+  end
+
+  module LocSet = Set.Make (Loc)
+
+  type payload = (Shape.Uid.t, LocSet.t) Hashtbl.t
+  type file_format = V1 of payload
+
+  let pp_payload (fmt : Format.formatter) pl =
+    Format.fprintf fmt "{@[";
+    Hashtbl.iter
+      (fun uid locs -> Format.fprintf fmt "uid: %a; locs: @[%a@]@,"
+        Shape.Uid.print uid
+        (Format.pp_print_list
+          ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@;")
+          Location.print_loc) (LocSet.elements locs))
+      pl;
+      Format.fprintf fmt "@]}@,"
+
+  let pp (fmt : Format.formatter) ff =
+    match ff with
+    | V1 tbl ->
+      Format.fprintf fmt "V1@,%a" pp_payload tbl
+
+  let ext = "uideps"
+
+  let write ~file tbl =
+      let oc = open_out_bin file in
+      Marshal.to_channel oc (V1 tbl) [];
+      close_out oc
+
+  let read ~file =
+    let ic = open_in_bin file in
+    try
+      let payload = match Marshal.from_channel ic with
+        | V1 payload -> payload (* TODO is that "safe" ? *)
+      in
+      close_in ic;
+      payload
+    with e -> raise e (* todo *)
+end
+
+module LocSet = Uideps_format.LocSet
+
+let add tbl uid locs =
+  try
+    let locations = Hashtbl.find tbl uid in
+    Hashtbl.replace tbl uid (LocSet.union locs locations)
+  with Not_found -> Hashtbl.add tbl uid locs
+
+let merge_tbl ~into tbl = Hashtbl.iter (add into) tbl
+
+let get_local_uideps ~local_defs uid =
+  let module Kind = Shape.Sig_component_kind in
+  let tbl = Hashtbl.create 64 in
+  let iterator =
+    let add_to_tbl ~env ~loc shape =
+        match (Shape_reduce.reduce env shape).uid with
+        | Some uid -> add tbl uid (LocSet.singleton loc)
+        | None -> ()
+    in
+    { Tast_iterator.default_iterator with
+
+      expr =
+        (fun sub ({ exp_desc; exp_loc; exp_env = env; _} as e) ->
+          begin match exp_desc with
+          | Texp_ident (path, _, { val_uid=_; _ }) ->
+            begin try
+              (* let env = Envaux.env_of_only_summary exp_env in *)
+              let shape = Env.shape_of_path ~namespace:Kind.Value env path in
+              add_to_tbl ~env ~loc:exp_loc shape
+            with Not_found ->
+              log ~title:"occurrences_iterator" "No shape for expr %a at %a"
+                Logger.fmt (fun fmt -> Path.print fmt path)
+                Logger.fmt (fun fmt -> Location.print_loc fmt exp_loc)
+            end
+          | _ -> () end;
+          Tast_iterator.default_iterator.expr sub e);
+
+      module_expr =
+        (fun sub ({ mod_desc; mod_loc; mod_env = env; _} as me) ->
+          begin match mod_desc with
+          | Tmod_ident (path, _lid) ->
+            begin try
+              (* let env = Envaux.env_of_only_summary mod_env in *)
+              let shape = Env.shape_of_path ~namespace:Kind.Module env path in
+              add_to_tbl ~env ~loc:mod_loc shape
+            with Not_found ->
+              log ~title:"occurrences_iterator"
+                "No shape for module %a at %a\n%!"
+                Logger.fmt (fun fmt -> Path.print fmt path)
+                Logger.fmt (fun fmt -> Location.print_loc fmt mod_loc)
+            end
+          | _ -> () end;
+          Tast_iterator.default_iterator.module_expr sub me);
+
+      typ =
+        (fun sub ({ ctyp_desc; ctyp_loc; ctyp_env = env; _} as me) ->
+          begin match ctyp_desc with
+          | Ttyp_constr (path, _lid, _ctyps) ->
+            begin try
+              (* let env = Envaux.env_of_only_summary ctyp_env in *)
+              let shape = Env.shape_of_path ~namespace:Kind.Type env path in
+              add_to_tbl ~env ~loc:ctyp_loc shape
+            with Not_found ->
+              log ~title:"occurrences_iterator" "No shape for type %a at %a"
+                Logger.fmt (fun fmt -> Path.print fmt path)
+                Logger.fmt (fun fmt -> Location.print_loc fmt ctyp_loc)
+            end
+          | _ -> () end;
+          Tast_iterator.default_iterator.typ sub me);
+
+    }
+  in
+  begin match local_defs with
+  | `Interface signature -> iterator.signature iterator signature
+  | `Implementation structure -> iterator.structure iterator structure
+  end;
+  tbl
+
+let get_uideps () = Uideps_format.read ~file:"workspace.uideps"
+
+let occurrences ~env ~local_defs ~pos ~path =
+  log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
+    path
+    (Lexing.print_position () pos);
+  let browse = Mbrowse.of_typedtree local_defs in
+  let lid = Longident.parse path in
+  let ident, is_label = Longident.keep_suffix lid in
+  let ctx = match Context.inspect_browse_tree ~cursor:pos lid [browse], is_label with
+  | None, _ ->
+    log ~title:"occurrences" "already at origin, doing nothing" ;
+    `Error `At_origin
+  | Some (Label _ as ctxt), true
+  | Some ctxt, false ->
+    log ~title:"occurrences"
+      "inferred context: %s" (Context.to_string ctxt);
+    `Ok (Namespace.from_context ctxt)
+  | _, true ->
+    log ~title:"occurrences"
+      "dropping inferred context, it is not precise enough";
+    `Ok [ `Labels ]
+  in
+  (* let nss = Namespace.from_context  *)
+  match ctx with
+  | `Error e ->  Format.eprintf "nocontext\n%!"; Error "noctx"
+  | `Ok nss ->
+    let uid = uid_from_longident ~env nss `ML lid in
+    match uid with
+    | `Uid (Some uid, loc, path) ->
+
+      Format.eprintf "Found uid: %a (%a)\n%!"
+        Shape.Uid.print uid
+        Path.print path;
+
+      (* Todo: use magic number instead and don't use the lib *)
+      let external_uideps = get_uideps () in
+      let local_uideps = get_local_uideps ~local_defs uid in
+      merge_tbl local_uideps ~into:external_uideps;
+
+      Format.eprintf "Found locs:\n%!";
+      let locs = (match Hashtbl.find_opt external_uideps (Obj.magic uid) with
+        | Some locs -> LocSet.iter (fun loc ->
+        Format.eprintf "%a\n%!" Location.print_loc
+        (Obj.magic loc)) locs;
+        LocSet.elements locs
+        | None -> Format.eprintf "None\n%!"; [])
+      in Ok locs
+    | _ -> Error "nouid"

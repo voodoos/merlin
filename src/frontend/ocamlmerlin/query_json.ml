@@ -226,13 +226,18 @@ let string_of_completion_kind = function
   | `Class       -> "Class"
   | `Keyword     -> "Keyword"
 
-let with_location ?(skip_none=false) loc assoc =
+let with_location ?(with_file=false) ?(skip_none=false) loc assoc =
+  let with_file l =
+    if not with_file then l
+    else ("file", `String loc.Location.loc_start.pos_fname) :: l
+  in
   if skip_none && loc = Location.none then
     `Assoc assoc
   else
-    `Assoc (("start", Lexing.json_of_position loc.Location.loc_start) ::
-            ("end",   Lexing.json_of_position loc.Location.loc_end) ::
-            assoc)
+    `Assoc ( with_file @@
+      ("start", Lexing.json_of_position loc.Location.loc_start) ::
+      ("end",   Lexing.json_of_position loc.Location.loc_end) ::
+      assoc )
 
 let json_of_type_loc (loc,desc,tail) =
   with_location loc [
@@ -415,6 +420,6 @@ let json_of_response (type a) (query : a t) (response : a) : json =
   | Path_list _, strs -> `List (List.map ~f:Json.string strs)
   | Occurrences _, locations ->
     `List (List.map locations
-             ~f:(fun loc -> with_location loc []))
+             ~f:(fun loc -> with_location ~with_file:true loc []))
   | Version, version ->
     `String version

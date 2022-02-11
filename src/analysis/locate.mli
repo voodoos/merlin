@@ -75,3 +75,10 @@ val get_doc
       | `Not_found of string * string option
       | `Not_in_env of string
       | `No_documentation ]
+
+val occurrences
+  : env:Env.t 
+  -> local_defs:Mtyper.typedtree 
+  -> pos:Lexing.position 
+  -> path:string 
+  -> (Location.t list, string) Result.t
