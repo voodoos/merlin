@@ -1145,43 +1145,46 @@ let get_uideps uid =
   let tbl = Uideps_format.read ~file:"workspace.uideps" in
   Hashtbl.find_opt tbl uid
 
-let occurrences ~env ~local_defs ~pos ~path = 
-  Format.eprintf "occurrences\n%!";
+let occurrences ~env ~local_defs ~pos ~path =
+  log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
+    path
+    (Lexing.print_position () pos);
   let browse = Mbrowse.of_typedtree local_defs in
   let lid = Longident.parse path in
   let ident, is_label = Longident.keep_suffix lid in
   let ctx = match Context.inspect_browse_tree ~cursor:pos lid [browse], is_label with
   | None, _ ->
-    log ~title:"from_string" "already at origin, doing nothing" ;
+    log ~title:"occurrences" "already at origin, doing nothing" ;
     `Error `At_origin
   | Some (Label _ as ctxt), true
   | Some ctxt, false ->
-    log ~title:"from_string"
+    log ~title:"occurrences"
       "inferred context: %s" (Context.to_string ctxt);
     `Ok (Namespace.from_context ctxt)
   | _, true ->
-    log ~title:"from_string"
+    log ~title:"occurrences"
       "dropping inferred context, it is not precise enough";
     `Ok [ `Labels ]
   in
+  (* let nss = Namespace.from_context  *)
   match ctx with
   | `Error e ->  Format.eprintf "nocontext\n%!"; Error "noctx"
-  | `Ok nss -> 
+  | `Ok nss ->
     let uid = uid_from_longident ~env nss `ML lid in
     match uid with
-    | `Uid (Some uid, loc, path) -> 
-      
+    | `Uid (Some uid, loc, path) ->
+
       Format.eprintf "Found uid: %a (%a)\n%!"
         Shape.Uid.print uid
-        Path.print path; 
-      
+        Path.print path;
+
       (* Todo: use magic number instead and don't use the lib *)
       let uideps = get_uideps (Obj.magic uid) in
       
       Format.eprintf "Found locs:\n%!";
       let locs = (match uideps with
       | Some set -> LocSet.iter (fun loc ->
-        Format.eprintf "%a\n%!" Location.print_loc 
+        Format.eprintf "%a\n%!" Location.print_loc
         (Obj.magic loc)) set;
         LocSet.elements set
       | None -> Format.eprintf "None\n%!"; [])
