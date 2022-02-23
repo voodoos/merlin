@@ -1141,9 +1141,83 @@ end
 
 module LocSet = Uideps_format.LocSet
 
-let get_uideps uid =
-  let tbl = Uideps_format.read ~file:"workspace.uideps" in
-  Hashtbl.find_opt tbl uid
+let add tbl uid locs =
+  try
+    let locations = Hashtbl.find tbl uid in
+    Hashtbl.replace tbl uid (LocSet.union locs locations)
+  with Not_found -> Hashtbl.add tbl uid locs
+
+let merge_tbl ~into tbl = Hashtbl.iter (add into) tbl
+
+let get_local_uideps ~local_defs uid =
+  let module Kind = Shape.Sig_component_kind in
+  let tbl = Hashtbl.create 64 in
+  let iterator =
+    let add_to_tbl ~env ~loc shape =
+        match (Shape_reduce.reduce env shape).uid with
+        | Some uid -> add tbl uid (LocSet.singleton loc)
+        | None -> ()
+    in
+    { Tast_iterator.default_iterator with
+
+      expr =
+        (fun sub ({ exp_desc; exp_loc; exp_env = env; _} as e) ->
+          begin match exp_desc with
+          | Texp_ident (path, _, { val_uid=_; _ }) ->
+            begin try
+              (* let env = Envaux.env_of_only_summary exp_env in *)
+              let shape = Env.shape_of_path ~namespace:Kind.Value env path in
+              add_to_tbl ~env ~loc:exp_loc shape
+            with Not_found ->
+              log ~title:"occurrences_iterator" "No shape for expr %a at %a"
+                Logger.fmt (fun fmt -> Path.print fmt path)
+                Logger.fmt (fun fmt -> Location.print_loc fmt exp_loc)
+            end
+          | _ -> () end;
+          Tast_iterator.default_iterator.expr sub e);
+
+      module_expr =
+        (fun sub ({ mod_desc; mod_loc; mod_env = env; _} as me) ->
+          begin match mod_desc with
+          | Tmod_ident (path, _lid) ->
+            begin try
+              (* let env = Envaux.env_of_only_summary mod_env in *)
+              let shape = Env.shape_of_path ~namespace:Kind.Module env path in
+              add_to_tbl ~env ~loc:mod_loc shape
+            with Not_found ->
+              log ~title:"occurrences_iterator"
+                "No shape for module %a at %a\n%!"
+                Logger.fmt (fun fmt -> Path.print fmt path)
+                Logger.fmt (fun fmt -> Location.print_loc fmt mod_loc)
+            end
+          | _ -> () end;
+          Tast_iterator.default_iterator.module_expr sub me);
+
+      typ =
+        (fun sub ({ ctyp_desc; ctyp_loc; ctyp_env = env; _} as me) ->
+          begin match ctyp_desc with
+          | Ttyp_constr (path, _lid, _ctyps) ->
+            begin try
+              (* let env = Envaux.env_of_only_summary ctyp_env in *)
+              let shape = Env.shape_of_path ~namespace:Kind.Type env path in
+              add_to_tbl ~env ~loc:ctyp_loc shape
+            with Not_found ->
+              log ~title:"occurrences_iterator" "No shape for type %a at %a"
+                Logger.fmt (fun fmt -> Path.print fmt path)
+                Logger.fmt (fun fmt -> Location.print_loc fmt ctyp_loc)
+            end
+          | _ -> () end;
+          Tast_iterator.default_iterator.typ sub me);
+
+    }
+  in
+  begin match local_defs with
+  | `Interface signature -> iterator.signature iterator signature
+  | `Implementation structure -> iterator.structure iterator structure
+  end;
+  tbl
+
+let get_uideps () = Uideps_format.read ~file:"workspace.uideps"
 
 let occurrences ~env ~local_defs ~pos ~path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
@@ -1179,14 +1253,16 @@ let occurrences ~env ~local_defs ~pos ~path =
         Path.print path;
 
       (* Todo: use magic number instead and don't use the lib *)
-      let uideps = get_uideps (Obj.magic uid) in
-      
+      let external_uideps = get_uideps () in
+      let local_uideps = get_local_uideps ~local_defs uid in
+      merge_tbl local_uideps ~into:external_uideps;
+
       Format.eprintf "Found locs:\n%!";
-      let locs = (match uideps with
-      | Some set -> LocSet.iter (fun loc ->
+      let locs = (match Hashtbl.find_opt external_uideps (Obj.magic uid) with
+        | Some locs -> LocSet.iter (fun loc ->
         Format.eprintf "%a\n%!" Location.print_loc
-        (Obj.magic loc)) set;
-        LocSet.elements set
-      | None -> Format.eprintf "None\n%!"; [])
+        (Obj.magic loc)) locs;
+        LocSet.elements locs
+        | None -> Format.eprintf "None\n%!"; [])
       in Ok locs
     | _ -> Error "nouid"
