@@ -43,15 +43,13 @@ let extract_ident (exp_desc : Typedtree.expression_desc) =
 let pp_type env ppf ty =
   let module Printtyp = Type_utils.Printtyp in
   Printtyp.wrap_printing_env env ~verbosity:0 (fun () ->
-    Printtyp.mark_loops ty;
-    Printtyp.type_sch ppf ty)
+    Printtyp.shared_type_scheme ppf ty)
 
 (* surround function types in parentheses *)
 let pp_parameter_type env ppf ty =
-  match ty with
-  | { Types.desc = Tarrow _; _ } as ty ->
-    Format.fprintf ppf "(%a)" (pp_type env) ty
-  | ty -> pp_type env ppf ty
+  match Types.get_desc ty with
+  | Tarrow _ -> Format.fprintf ppf "(%a)" (pp_type env) ty
+  | _ -> pp_type env ppf ty
 
 (* print parameter labels and types *)
 let pp_parameter env label ppf ty =
@@ -63,7 +61,7 @@ let pp_parameter env label ppf ty =
   | Asttypes.Optional l ->
     (* unwrap option for optional labels the same way as
        [Raw_compat.labels_of_application] *)
-    let unwrap_option ty = match (Ctype.repr ty).Types.desc with
+    let unwrap_option ty = match Types.get_desc ty with
       | Types.Tconstr (path, [ty], _)
         when Path.same path Predef.path_option -> ty
       | _ -> ty
@@ -84,12 +82,12 @@ let separate_function_signature ~args (e : Typedtree.expression) =
   let buffer = Buffer.create 16 in
   let ppf = Format.formatter_of_buffer buffer in
   let rec separate ?(i=0) ?(parameters=[]) args ty =
-    match (args, ty) with
-    | (l, arg)::args, { Types.desc = Tarrow (label, ty1, ty2, _) } ->
+    match (args, Types.get_desc ty) with
+    | (l, arg)::args, Tarrow (label, ty1, ty2, _) ->
       let parameter = print_parameter_offset ppf buffer e.exp_env label ty1 ?arg in
       separate args ty2 ~i:(succ i) ~parameters:(parameter::parameters)
 
-    | [], { Types.desc = Tarrow (label, ty1, ty2, _) } ->
+    | [], Tarrow (label, ty1, ty2, _) ->
       let parameter = print_parameter_offset ppf buffer e.exp_env label ty1 in
       separate args ty2 ~i:(succ i) ~parameters:(parameter::parameters)
 
@@ -136,10 +134,15 @@ let active_parameter_by_prefix ~prefix params =
   in
   find_by_prefix params
 
+let is_arrow t = match Types.get_desc t with
+  | Tarrow _ -> true
+  | _ -> false
+
 let application_signature ~prefix = function
   (* provide signature information for applied functions *)
   | (_, Expression arg) :: (_, Expression { exp_desc =
-      Texp_apply ({ exp_type = { desc = Tarrow _; _ }; _ } as e, args); _}) :: _ ->
+      Texp_apply ({ exp_type; _ } as e, args); _}) :: _
+      when is_arrow exp_type ->
     let result = separate_function_signature e ~args in
     let active_param = active_parameter_by_arg ~arg result.parameters in
     let active_param = match active_param with
@@ -150,7 +153,8 @@ let application_signature ~prefix = function
 
   (* provide signature information directly after an unapplied function-type
      value *)
-  | (_, Expression ({ exp_type = { desc = Tarrow _; _ }; _ } as e)) :: _ ->
+  | (_, Expression ({ exp_type; _ } as e)) :: _
+      when is_arrow exp_type ->
     let result = separate_function_signature e ~args:[] in
     let active_param = active_parameter_by_prefix ~prefix result.parameters in
     Some { result with active_param }
