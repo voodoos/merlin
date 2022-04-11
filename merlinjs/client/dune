@@ -1,7 +1,8 @@
-(executable
+;(executable
+(library
  (name merlin_client)
- (promote (until-clean))
- (modes js)
+ ; (promote (until-clean))
+ ; (modes js)
  ; (js_of_ocaml
  ;  (flags (:standard --source-map-inline)))
  (libraries

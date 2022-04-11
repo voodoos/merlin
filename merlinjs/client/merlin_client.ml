@@ -37,9 +37,9 @@ let query ~action worker source cursor_offset ((*todo: other queries*)) =
   let+ data : Jv.t = fut in
   Console.(log ["Received:"; data]);
   (* El.(set_prop p_innerHTML (Jstr.of_string data) results_div); *)
-  Ok data
+  data
 
-let query_to_js ~action worker source cursor_offset =
+(* let query_to_js ~action worker source cursor_offset =
   let source = Jv.to_string source in
   Fut.to_promise ~ok:Fun.id @@
     query ~action worker source cursor_offset ()
@@ -51,14 +51,14 @@ let query_completion worker source cursor_offset =
   query_to_js ~action:Completion worker source cursor_offset
 
 let query_type_enclosing worker source cursor_offset =
-  query_to_js ~action:Type_enclosing worker source cursor_offset
+  query_to_js ~action:Type_enclosing worker source cursor_offset *)
 
-let query_errors worker source cursor_offset =
-  query_to_js ~action:Errors worker source cursor_offset
+let query_errors worker (source : string) =
+  query ~action:Errors worker source `Start ()
 
-let () = Jv.set Jv.global "query_worker_completion" @@
+(* let () = Jv.set Jv.global "query_worker_completion" @@
   Jv.repr query_completion
 let () = Jv.set Jv.global "query_worker_type_enclosing" @@
   Jv.repr query_type_enclosing
   let () = Jv.set Jv.global "query_worker_errors" @@
-  Jv.repr query_errors
+  Jv.repr query_errors *)
