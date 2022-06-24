@@ -65,7 +65,7 @@
     structure_item (test.ml[1,0+0]..test.ml[1,0+14])
       Tstr_type Rec
       [
-        type_declaration t/273 (test.ml[1,0+0]..test.ml[1,0+14])
+        type_declaration t/274 (test.ml[1,0+0]..test.ml[1,0+14])
           ptype_params =
             []
           ptype_cstrs =
@@ -74,11 +74,11 @@
             Ttype_variant
               [
                 (test.ml[1,0+9]..test.ml[1,0+10])
-                  A/274
+                  A/275
                   []
                   None
                 (test.ml[1,0+11]..test.ml[1,0+14])
-                  B/275
+                  B/276
                   []
                   None
               ]
@@ -91,7 +91,7 @@
       [
         <def>
           pattern (test.ml[2,15+4]..test.ml[2,15+5])
-            Tpat_var \"f/276\"
+            Tpat_var \"f/277\"
           expression (test.ml[2,15+6]..test.ml[6,69+12]) ghost
             Texp_function
             Nolabel
@@ -101,15 +101,15 @@
                   extra
                     Tpat_extra_constraint
                     core_type (test.ml[2,15+11]..test.ml[2,15+12])
-                      Ttyp_constr \"t/273\"
+                      Ttyp_constr \"t/274\"
                       []
-                  Tpat_alias \"x/278\"
+                  Tpat_alias \"x/279\"
                   pattern (test.ml[2,15+7]..test.ml[2,15+8])
                     Tpat_any
                 expression (test.ml[3,31+2]..test.ml[6,69+12])
                   Texp_match
                   expression (test.ml[3,31+8]..test.ml[3,31+9])
-                    Texp_ident \"x/278\"
+                    Texp_ident \"x/279\"
                   [
                     <case>
                       pattern (test.ml[4,46+4]..test.ml[4,46+5])
@@ -140,7 +140,7 @@
                               expression (_none_[0,0+-1]..[0,0+-1]) ghost
                                 Pexp_constant PConst_int (2,None)
                           ]
-                        Texp_ident \"*type-error*/279\"
+                        Texp_ident \"*type-error*/280\"
                     <case>
                       pattern (test.ml[6,69+4]..test.ml[6,69+5])
                         Tpat_value
@@ -165,7 +165,7 @@
                               expression (_none_[0,0+-1]..[0,0+-1]) ghost
                                 Pexp_constant PConst_int (3,None)
                           ]
-                        Texp_ident \"*type-error*/280\"
+                        Texp_ident \"*type-error*/281\"
                   ]
             ]
       ]
@@ -225,7 +225,7 @@
     structure_item (test2.ml[1,0+0]..test2.ml[1,0+14])
       Tstr_type Rec
       [
-        type_declaration t/273 (test2.ml[1,0+0]..test2.ml[1,0+14])
+        type_declaration t/274 (test2.ml[1,0+0]..test2.ml[1,0+14])
           ptype_params =
             []
           ptype_cstrs =
@@ -234,11 +234,11 @@
             Ttype_variant
               [
                 (test2.ml[1,0+9]..test2.ml[1,0+10])
-                  A/274
+                  A/275
                   []
                   None
                 (test2.ml[1,0+11]..test2.ml[1,0+14])
-                  B/275
+                  B/276
                   []
                   None
               ]
@@ -251,7 +251,7 @@
       [
         <def>
           pattern (test2.ml[2,15+4]..test2.ml[2,15+5])
-            Tpat_var \"f/276\"
+            Tpat_var \"f/277\"
           expression (test2.ml[2,15+6]..test2.ml[2,15+24]) ghost
             Texp_function
             Nolabel
@@ -263,7 +263,7 @@
                   extra
                     Tpat_extra_constraint
                     core_type (test2.ml[2,15+11]..test2.ml[2,15+12])
-                      Ttyp_constr \"t/273\"
+                      Ttyp_constr \"t/274\"
                       []
                   Tpat_any
                 expression (test2.ml[2,15+22]..test2.ml[2,15+24])
@@ -281,7 +281,7 @@
                     core_type (test2.ml[2,15+16]..test2.ml[2,15+19])
                       Ttyp_constr \"int/1!\"
                       []
-                  Texp_ident \"*type-error*/278\"
+                  Texp_ident \"*type-error*/279\"
             ]
       ]
   ]
