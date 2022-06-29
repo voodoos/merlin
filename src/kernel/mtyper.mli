@@ -20,6 +20,8 @@ val get_env : ?pos:Msource.position -> result -> Env.t
 
 val get_typedtree : result -> typedtree
 
+val initial_env : result -> Env.t
+
 val get_errors : result -> exn list
 
 (** Heuristic to find suitable environment to complete / type at given position.
