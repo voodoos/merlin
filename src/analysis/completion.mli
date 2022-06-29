@@ -70,3 +70,6 @@ val expand_prefix
 val application_context : prefix:Asttypes.label -> Mbrowse.t ->
   Types.type_expr option *
   [> `Application of Compl.application_context | `Unknown ]
+
+(* Add parenthesis to qualified operators *)
+val parenthesize_name : string -> string
