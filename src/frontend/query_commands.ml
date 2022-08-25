@@ -797,12 +797,12 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
       path
     in
 
-    let locs = 
+    let locs =
       match Locate.occurrences ~env ~local_defs ~pos ~path with
       | Ok locs -> locs
       | Error _ -> begin
         let enclosing = Mbrowse.enclosing pos [str] in
-        let curr_node = 
+        let curr_node =
           let is_wildcard_pat = function
             | Browse_raw.Pattern {pat_desc = Typedtree.Tpat_any; _} -> true
             | _ -> false

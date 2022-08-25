@@ -37,6 +37,7 @@ type config = {
   extensions   : string list;
   suffixes     : (string * string) list;
   stdlib       : string option;
+  build_dir    : string option;
   reader       : string list;
   exclude_query_dir : bool;
 }

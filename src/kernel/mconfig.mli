@@ -34,6 +34,7 @@ type merlin = {
   cmt_path    : string list;
   extensions  : string list;
   suffixes    : (string * string) list;
+  build_dir   : string option;
   stdlib      : string option;
   reader      : string list;
   protocol    : [`Json | `Sexp];
@@ -109,6 +110,8 @@ val source_path : t -> string list
 val build_path : t -> string list
 
 val cmt_path : t -> string list
+
+val build_dir : t -> string
 
 val global_modules : ?include_current:bool -> t -> string list
 

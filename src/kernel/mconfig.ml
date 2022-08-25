@@ -76,6 +76,7 @@ type merlin = {
   cmt_path    : string list;
   extensions  : string list;
   suffixes    : (string * string) list;
+  build_dir   : string option;
   stdlib      : string option;
   reader      : string list;
   protocol    : [`Json | `Sexp];
@@ -111,6 +112,7 @@ let dump_merlin x =
           "intf", `String intf;
         ]) x.suffixes
     );
+    "build_dir"    , Json.option Json.string x.build_dir;
     "stdlib"       , Json.option Json.string x.stdlib;
     "reader"       , `List (List.map ~f:Json.string x.reader);
     "protocol"     , (match x.protocol with
@@ -245,6 +247,7 @@ let get_external_config path t =
       exclude_query_dir = dot.exclude_query_dir || merlin.exclude_query_dir;
       extensions = dot.extensions @ merlin.extensions;
       suffixes = dot.suffixes @ merlin.suffixes;
+      build_dir =  if dot.build_dir = None then merlin.build_dir else dot.build_dir;
       stdlib = (if dot.stdlib = None then merlin.stdlib else dot.stdlib);
       reader =
         if dot.reader = []
@@ -608,6 +611,7 @@ let initial = {
     cmt_path    = [];
     extensions  = [];
     suffixes    = [(".ml", ".mli"); (".re", ".rei")];
+    build_dir   = None;
     stdlib      = None;
     reader      = [];
     protocol    = `Json;
@@ -765,6 +769,11 @@ let cmt_path config = (
   let stdlib = if config.ocaml.no_std_include then [] else [stdlib] in
   config.query.directory :: List.rev_append exp_dirs stdlib
 )
+
+let build_dir config =
+  match config.merlin.build_dir with
+  | Some dir -> dir
+  | None -> "."
 
 let global_modules ?(include_current=false) config = (
   let modules = Misc.modules_in_path ~ext:".cmi" (build_path config) in

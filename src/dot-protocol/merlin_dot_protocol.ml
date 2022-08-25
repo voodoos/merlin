@@ -36,6 +36,7 @@ module Directive = struct
   type no_processing_required =
     [ `EXT of string list
     | `FLG of string list
+    | `BUILD_DIR of string
     | `STDLIB of string
     | `SUFFIX of string
     | `READER of string list
@@ -84,6 +85,7 @@ module Sexp = struct
         | "CMI" -> `CMI value
         | "CMT" -> `CMT value
         | "STDLIB" -> `STDLIB value
+        | "BUILD_DIR" -> `BUILD_DIR value
         | "SUFFIX" -> `SUFFIX value
         | "ERROR" -> `ERROR_MSG value
         | "FLG" ->
@@ -115,6 +117,7 @@ module Sexp = struct
         | `EXT ss -> ("EXT", [ List (atoms_of_strings ss) ])
         | `FLG ss -> ("FLG", [ List (atoms_of_strings ss) ])
         | `STDLIB s -> ("STDLIB", single s)
+        | `BUILD_DIR s -> ("BUILD_DIR", single s)
         | `SUFFIX s -> ("SUFFIX", single s)
         | `READER ss -> ("READER", [ List (atoms_of_strings ss) ])
         | `EXCLUDE_QUERY_DIR -> ("EXCLUDE_QUERY_DIR", [])

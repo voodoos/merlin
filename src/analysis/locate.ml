@@ -1067,19 +1067,20 @@ module Uideps_format = struct
       pl;
       Format.fprintf fmt "@]}@,"
 
-  let pp (fmt : Format.formatter) ff =
+  let _pp (fmt : Format.formatter) ff =
     match ff with
     | V1 tbl ->
       Format.fprintf fmt "V1@,%a" pp_payload tbl
 
   let ext = "uideps"
 
-  let write ~file tbl =
+  let _write ~file tbl =
       let oc = open_out_bin file in
       Marshal.to_channel oc (V1 tbl) [];
       close_out oc
 
   let read ~file =
+    let file = String.concat ~sep:"." [file; ext] in
     let ic = open_in_bin file in
     try
       let payload = match Marshal.from_channel ic with
@@ -1100,7 +1101,7 @@ let add tbl uid locs =
 
 let merge_tbl ~into tbl = Hashtbl.iter (add into) tbl
 
-let get_local_uideps ~local_defs uid =
+let get_local_uideps ~local_defs _uid =
   let module Kind = Shape.Sig_component_kind in
   let tbl = Hashtbl.create 64 in
   let iterator =
@@ -1168,7 +1169,7 @@ let get_local_uideps ~local_defs uid =
   end;
   tbl
 
-let get_uideps () = Uideps_format.read ~file:"workspace.uideps"
+let get_uideps () = Uideps_format.read ~file:"project"
 
 let occurrences ~env ~local_defs ~pos ~path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
@@ -1176,7 +1177,7 @@ let occurrences ~env ~local_defs ~pos ~path =
     (Lexing.print_position () pos);
   let browse = Mbrowse.of_typedtree local_defs in
   let lid = Longident.parse path in
-  let ident, is_label = Longident.keep_suffix lid in
+  let _ident, is_label = Longident.keep_suffix lid in
   let ctx = match Context.inspect_browse_tree ~cursor:pos lid [browse], is_label with
   | None, _ ->
     log ~title:"occurrences" "already at origin, doing nothing" ;
@@ -1193,11 +1194,11 @@ let occurrences ~env ~local_defs ~pos ~path =
   in
   (* let nss = Namespace.from_context  *)
   match ctx with
-  | `Error e ->  Format.eprintf "nocontext\n%!"; Error "noctx"
+  | `Error _e ->  Format.eprintf "nocontext\n%!"; Error "noctx"
   | `Ok nss ->
     let uid = uid_from_longident ~env nss `ML lid in
     match uid with
-    | `Uid (Some uid, loc, path) ->
+    | `Uid (Some uid, _loc, path) ->
 
       Format.eprintf "Found uid: %a (%a)\n%!"
         Shape.Uid.print uid

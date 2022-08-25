@@ -41,6 +41,7 @@ type config = {
   extensions   : string list;
   suffixes     : (string * string) list;
   stdlib       : string option;
+  build_dir    : string option;
   reader       : string list;
   exclude_query_dir : bool;
 }
@@ -54,6 +55,7 @@ let empty_config = {
   suffixes     = [];
   flags        = [];
   stdlib       = None;
+  build_dir    = None;
   reader       = [];
   exclude_query_dir = false;
 }
@@ -229,6 +231,8 @@ let prepend_config ~dir:cwd configurator (directives : directive list) config =
       {config with flags = flags :: config.flags}, errors
     | `STDLIB path ->
       {config with stdlib = Some path}, errors
+    | `BUILD_DIR path ->
+      {config with build_dir = Some path}, errors
     | `READER reader ->
       {config with reader}, errors
     | `EXCLUDE_QUERY_DIR ->
@@ -254,8 +258,9 @@ let postprocess_config config =
     extensions   = clean config.extensions;
     suffixes     = clean config.suffixes;
     flags        = clean config.flags;
-    stdlib      = config.stdlib;
-    reader      = config.reader;
+    build_dir    = config.build_dir;
+    stdlib       = config.stdlib;
+    reader       = config.reader;
     exclude_query_dir = config.exclude_query_dir;
   }
 
