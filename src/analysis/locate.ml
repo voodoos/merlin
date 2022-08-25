@@ -335,6 +335,8 @@ let uid_of_path ~config ~env ~ml_or_mli ~decl_uid path ns =
   match ml_or_mli with
   | `MLI -> Some decl_uid
   | `ML ->
+    log ~title:"shape_of_path" "path: %a"
+      Logger.fmt (fun fmt -> Path.print fmt path);
     let shape = Env.shape_of_path ~namespace:ns env path in
     log ~title:"shape_of_path" "initial: %a"
       Logger.fmt (fun fmt -> Shape.print fmt shape);
@@ -1039,16 +1041,8 @@ module Uideps_format = struct
   module Loc : Set.OrderedType with type t = Location.t = struct
     type t = Location.t
 
-    let compare_pos (p1 : Lexing.position) (p2 : Lexing.position) =
-      match String.compare p1.pos_fname p2.pos_fname with
-      | 0 -> Int.compare p1.pos_cnum p2.pos_cnum
-      | n -> n
-
-    let compare (t1 : t) (t2 : t) =
-      (* TODO CHECK...*)
-      match compare_pos t1.loc_start t2.loc_start with
-      | 0 -> compare_pos t1.loc_end t2.loc_end
-      | n -> n
+    (* TODO: this does not compare pos_fname *)
+    let compare = Location_aux.compare
   end
 
   module LocSet = Set.Make (Loc)
@@ -1110,6 +1104,18 @@ let get_local_uideps ~local_defs _uid =
         | Some uid -> add tbl uid (LocSet.singleton loc)
         | None -> ()
     in
+    let pat
+    : type k . Tast_iterator.iterator -> k Typedtree.general_pattern -> unit
+    = fun sub ({pat_desc; _} as p) ->
+      match pat_desc with
+      | Tpat_var (ident, _) ->
+        (try
+        let uid = Ident.Tbl.find (Env.get_ident_to_uid_tbl ()) ident in
+        let loc =  Shape.Uid.Tbl.find (Env.get_uid_to_loc_tbl ()) uid in
+        add tbl uid @@ LocSet.singleton loc
+        with _ -> ())
+      | _ -> Tast_iterator.default_iterator.pat sub p
+    in
     { Tast_iterator.default_iterator with
 
       expr =
@@ -1145,6 +1151,8 @@ let get_local_uideps ~local_defs _uid =
           | _ -> () end;
           Tast_iterator.default_iterator.module_expr sub me);
 
+      pat;
+
       typ =
         (fun sub ({ ctyp_desc; ctyp_loc; ctyp_env = env; _} as me) ->
           begin match ctyp_desc with
@@ -1169,9 +1177,13 @@ let get_local_uideps ~local_defs _uid =
   end;
   tbl
 
-let get_uideps () = Uideps_format.read ~file:"project"
+let get_uideps ~build_dir =
+  let filename = "project" in
+  let file = Filename.concat build_dir filename in
+  Printf.eprintf "Loading uideps from %S \n%!" file;
+  Uideps_format.read ~file
 
-let occurrences ~env ~local_defs ~pos ~path =
+let occurrences ~config ~env ~local_defs ~pos ~node ~path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
     path
     (Lexing.print_position () pos);
@@ -1179,42 +1191,63 @@ let occurrences ~env ~local_defs ~pos ~path =
   let lid = Longident.parse path in
   let _ident, is_label = Longident.keep_suffix lid in
   let ctx = match Context.inspect_browse_tree ~cursor:pos lid [browse], is_label with
-  | None, _ ->
-    log ~title:"occurrences" "already at origin, doing nothing" ;
-    `Error `At_origin
-  | Some (Label _ as ctxt), true
-  | Some ctxt, false ->
-    log ~title:"occurrences"
-      "inferred context: %s" (Context.to_string ctxt);
-    `Ok (Namespace.from_context ctxt)
-  | _, true ->
-    log ~title:"occurrences"
-      "dropping inferred context, it is not precise enough";
-    `Ok [ `Labels ]
+    | None, _ ->
+      log ~title:"occurrences" "already at origin" ;
+      `Error `At_origin
+    | Some (Label _ as ctxt), true
+    | Some ctxt, false ->
+      log ~title:"occurrences"
+        "inferred context: %s" (Context.to_string ctxt);
+      `Ok (Namespace.from_context ctxt)
+    | _, true ->
+      log ~title:"occurrences"
+        "dropping inferred context, it is not precise enough";
+      `Ok [ `Labels ]
   in
-  (* let nss = Namespace.from_context  *)
-  match ctx with
-  | `Error _e ->  Format.eprintf "nocontext\n%!"; Error "noctx"
-  | `Ok nss ->
-    let uid = uid_from_longident ~env nss `ML lid in
-    match uid with
-    | `Uid (Some uid, _loc, path) ->
-
-      Format.eprintf "Found uid: %a (%a)\n%!"
-        Shape.Uid.print uid
-        Path.print path;
-
-      (* Todo: use magic number instead and don't use the lib *)
-      let external_uideps = get_uideps () in
-      let local_uideps = get_local_uideps ~local_defs uid in
-      merge_tbl local_uideps ~into:external_uideps;
-
-      Format.eprintf "Found locs:\n%!";
-      let locs = (match Hashtbl.find_opt external_uideps (Obj.magic uid) with
-        | Some locs -> LocSet.iter (fun loc ->
-        Format.eprintf "%a\n%!" Location.print_loc
-        (Obj.magic loc)) locs;
+  let uid = match ctx with
+    | `Error `At_origin ->
+      (* We are on  a definition / declaration so we look for the node's uid  *)
+      let uid = Browse_raw.uid_of_node env node in
+      (match uid with
+      | Some uid ->
+        log ~title:"occurrences" "found uid %a\n%!"
+        Logger.fmt (fun fmt -> Shape.Uid.print fmt uid)
+      | None ->
+        log ~title:"occurrences" "no uid found for node %s, stopping\n%!"
+        @@ Browse_raw.string_of_node node);
+      Option.map uid ~f:(fun uid ->
+        let def_loc = Shape.Uid.Tbl.find (Env.get_uid_to_loc_tbl ()) uid in
+        uid, def_loc)
+    | `Ok nss ->
+      (* We are somewhere else: we must locate the definition to get its uid *)
+      let uid = uid_from_longident ~env nss `ML lid in
+      match uid with
+      | `Uid (Some uid, loc, path) ->
+        Format.eprintf "Found uid: %a (%a)\n%!"
+          Shape.Uid.print uid
+          Path.print path;
+        Some (uid, loc)
+      | _ -> None
+  in
+  match uid with
+  | Some (uid, _def_loc) ->
+    (* Todo: use magic number instead and don't use the lib *)
+    let build_dir = Mconfig.build_dir config in
+    let external_uideps = get_uideps ~build_dir in
+    let local_uideps = get_local_uideps ~local_defs uid in
+    merge_tbl local_uideps ~into:external_uideps;
+   (* TODO ignore indexed locs from the current buffer *)
+    let locs = (match Hashtbl.find_opt external_uideps uid with
+      | Some locs ->
         LocSet.elements locs
-        | None -> Format.eprintf "None\n%!"; [])
-      in Ok locs
-    | _ -> Error "nouid"
+        |> List.filter_map ~f:(fun loc ->
+          match find_source ~config loc "" with
+          | `Found (Some file, _) -> Some { loc with loc_start =
+              { loc.loc_start with pos_fname = file}}
+          | `Found (None, _) -> Some { loc with loc_start =
+              { loc.loc_start with pos_fname = ""}}
+          | _ -> None)
+      | None -> Format.eprintf "None\n%!"; [])
+    in
+    Ok locs
+  | None -> Error "nouid"

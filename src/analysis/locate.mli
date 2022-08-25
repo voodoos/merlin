@@ -77,8 +77,10 @@ val get_doc
       | `No_documentation ]
 
 val occurrences
-  : env:Env.t 
-  -> local_defs:Mtyper.typedtree 
-  -> pos:Lexing.position 
-  -> path:string 
+  : config:Mconfig.t
+  -> env:Env.t
+  -> local_defs:Mtyper.typedtree
+  -> pos:Lexing.position
+  -> node:Browse_raw.node
+  -> path:string
   -> (Location.t list, string) Result.t

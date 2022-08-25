@@ -782,11 +782,13 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     Mconfig.(config.merlin.source_path)
 
   | Occurrences (`Ident_at pos) ->
+    let config = Mpipeline.final_config pipeline in
     let typer = Mpipeline.typer_result pipeline in
     let local_defs = Mtyper.get_typedtree typer in
     let str = Mbrowse.of_typedtree local_defs in
     let pos = Mpipeline.get_lexing_pos pipeline pos in
-    let env, _ = Mbrowse.leaf_node (Mtyper.node_at typer pos) in
+    let env, node = Mbrowse.leaf_node (Mbrowse.enclosing pos
+    [Mbrowse.of_typedtree (Mtyper.get_typedtree typer)]) in
 
     let path =
       let path = reconstruct_identifier pipeline pos None in
@@ -798,7 +800,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     in
 
     let locs =
-      match Locate.occurrences ~env ~local_defs ~pos ~path with
+      match Locate.occurrences ~config ~env ~local_defs ~pos ~node ~path with
       | Ok locs -> locs
       | Error _ -> begin
         let enclosing = Mbrowse.enclosing pos [str] in
