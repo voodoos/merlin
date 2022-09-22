@@ -516,6 +516,8 @@ let set_uid_if_none t uid =
   | None -> { t with uid = Some uid }
   | _ -> t
 
+let set_uid t uid = { t with uid = Some uid }
+
 module Map = struct
   type shape = t
   type nonrec t = t Item.Map.t

@@ -131,6 +131,7 @@ val of_path :
   namespace:Sig_component_kind.t -> Path.t -> t
 
 val set_uid_if_none : t -> Uid.t -> t
+val set_uid : t -> Uid.t -> t
 
 (** The [Make_reduce] functor is used to generate a reduction function for
     shapes.
