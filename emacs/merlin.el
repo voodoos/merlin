@@ -1740,24 +1740,20 @@ Empty string defaults to jumping to all these."
       (let ((inhibit-read-only t)
             (buffer-undo-list t)
             (pending-line)
-            (pending-lines-text))
+            (pending-lines-text)
+            (previous-buf))
         (erase-buffer)
         (occur-mode)
-        (insert (propertize (format "%d occurrences in buffer: %s"
-                                    (length lst)
-                                    src-buff)
-                            'font-lock-face list-matching-lines-buffer-name-face
-                            'read-only t
-                            'occur-title (get-buffer src-buff)))
-        (insert "\n")
         (dolist (pos positions)
-          (let* ((marker (cdr (assoc 'marker pos)))
-                 (start (assoc 'start pos))
+          (let* ((start (assoc 'start pos))
                  (end (assoc 'end pos))
+                 (occ-buff (find-file-noselect (cdr (assoc 'file pos))))
+                 (marker (with-current-buffer occ-buff
+                          (copy-marker (merlin--point-of-pos start))))
                  (line (cdr (assoc 'line start)))
-                 (start-buf-pos (with-current-buffer src-buff
+                 (start-buf-pos (with-current-buffer occ-buff
                                   (merlin--point-of-pos start)))
-                 (end-buf-pos (with-current-buffer src-buff
+                 (end-buf-pos (with-current-buffer occ-buff
                                 (merlin--point-of-pos end)))
                  (prefix-length 8)
                  (start-offset (+ prefix-length
@@ -1769,8 +1765,7 @@ Empty string defaults to jumping to all these."
                                             marker
                                             start-buf-pos
                                             end-buf-pos
-                                            src-buff))))
-
+                                            occ-buff))))
             ;; Insert the critical text properties that occur-mode
             ;; makes use of
             (add-text-properties start-offset
@@ -1784,9 +1779,22 @@ Empty string defaults to jumping to all these."
             ;; found in order to accumulate multiple matches within
             ;; one line.
             (when (and pending-lines-text
-                       (not (equal line pending-line)))
+                       (or (not (equal line pending-line))
+                           (not (equal previous-buf occ-buff))))
               (insert pending-lines-text))
+
+            (when (not (equal previous-buf occ-buff))
+              (insert (propertize (format "Occurrences in buffer: %s"
+                                          ;(length lst)
+                                          occ-buff)
+                                  'font-lock-face
+                                    list-matching-lines-buffer-name-face
+                                  'read-only t
+                                  'occur-title occ-buff))
+              (insert "\n"))
+
             (setq pending-line line)
+            (setq previous-buf occ-buff)
             (setq pending-lines-text lines-text)))
 
         ;; Catch final pending text
