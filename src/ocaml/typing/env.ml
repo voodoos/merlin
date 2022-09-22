@@ -4080,3 +4080,10 @@ let short_paths env =
     let basis = Persistent_env.short_paths_basis !persistent_env in
     Short_paths.initial basis
   | Some short_paths -> short_paths
+
+(* merlin specific *)
+let ident_to_uid_tbl : Uid.t Ident.Tbl.t ref = ref @@ Ident.Tbl.create 100
+
+let register_ident ident uid = Ident.Tbl.add !ident_to_uid_tbl ident uid
+
+let get_ident_to_uid_tbl () = !ident_to_uid_tbl

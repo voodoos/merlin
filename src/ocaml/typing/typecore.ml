@@ -2257,10 +2257,15 @@ let add_pattern_variables ?check ?check_as env pv =
   List.fold_right
     (fun {pv_id; pv_type; pv_loc; pv_as_var; pv_attributes} env ->
        let check = if pv_as_var then check_as else check in
+       (* We register the uid of pattern variables for Merlin since they are not
+          stored in the environement at the pattern's level. *)
+       let val_uid = Uid.mk ~current_unit:(Env.get_unit_name ()) in
+       Env.register_uid val_uid pv_loc;
+       Env.register_ident pv_id val_uid;
        Env.add_value ?check pv_id
          {val_type = pv_type; val_kind = Val_reg; Types.val_loc = pv_loc;
           val_attributes = pv_attributes;
-          val_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
+          val_uid;
          } env
     )
     pv env
