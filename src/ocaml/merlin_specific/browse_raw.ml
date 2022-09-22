@@ -963,3 +963,14 @@ let all_holes (env, node) =
     fold_node f env node acc
   in
   aux [] (env, node) |> List.rev
+
+let uid_of_node env = function
+  | Module_binding_name { mb_id = Some ident; _ } ->
+    let md = Env.find_module (Pident ident) env in
+    Some md.md_uid
+  | Pattern { pat_desc = Tpat_var (ident, _); _ } ->
+    Some (Ident.Tbl.find (Env.get_ident_to_uid_tbl ()) ident)
+  | Type_declaration { typ_type } -> Some typ_type.type_uid
+  | Value_description { val_val; _ } -> Some val_val.val_uid
+  | _ ->
+    None

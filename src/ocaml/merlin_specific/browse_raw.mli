@@ -124,3 +124,5 @@ val all_holes :
   (Location.t *
     Env.t *
     [`Exp of Types.type_expr | `Mod of Types.module_type]) list
+
+val uid_of_node : Env.t -> node -> Shape.Uid.t option
