@@ -342,12 +342,6 @@ module Option = struct
     | Some s -> "Some (" ^ f () s ^ ")"
 end
 
-module Result = struct
-  type ('a, 'e) t = ('a, 'e) result =
-  | Ok of 'a
-  | Error of 'e
-end
-
 module String = struct
   include StringLabels
 
