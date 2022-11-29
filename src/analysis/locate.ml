@@ -1099,7 +1099,6 @@ let merge_tbl ~into tbl = Hashtbl.iter (add into) tbl
 
 let get_local_uideps ~config ~local_defs _uid =
   let module Kind = Shape.Sig_component_kind in
-  let tbl = Hashtbl.create 64 in
   let module Shape_reduce =
     Shape.Make_reduce (struct
       type env = Env.t
@@ -1121,6 +1120,14 @@ let get_local_uideps ~config ~local_defs _uid =
         ~namespace:Shape.Sig_component_kind.Module env (Pident id)
     end)
   in
+  let tbl =
+    (* We start with all the uids that have been registered into the typing env
+       *)
+    let tbl = Env.get_uid_to_loc_tbl () in
+    Shape.Uid.Tbl.map tbl LocSet.singleton
+    |> Shape.Uid.Tbl.to_seq
+    |> Hashtbl.of_seq
+   in
   let iterator =
     let add_to_tbl ~env ~loc shape =
         match (Shape_reduce.reduce env shape).uid with
@@ -1194,6 +1201,7 @@ let get_local_uideps ~config ~local_defs _uid =
 
     }
   in
+  log ~title:"get_local_uideps" "Scanning for local uideps";
   begin match local_defs with
   | `Interface signature -> iterator.signature iterator signature
   | `Implementation structure -> iterator.structure iterator structure
