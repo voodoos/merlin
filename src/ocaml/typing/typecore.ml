@@ -4010,6 +4010,9 @@ and type_expect_
       let decl = new_local_type ~loc () in
       let scope = create_scope () in
       let (id, new_env) = Env.enter_type ~scope name decl env in
+      (* We register the uid of local types for Merlin's locate and
+        occurences. *)
+      Env.register_uid decl.type_uid label_loc.Location.loc;
 
       let body = type_exp new_env sbody in
       (* Replace every instance of this type constructor in the resulting
