@@ -2651,17 +2651,19 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
           (fun rs info -> Sig_type(info.typ_id, info.typ_type, rs, Exported))
           decls []
         in
-        let shape_map = List.fold_left
-          (fun shape_map -> function
-            | Sig_type (id, vd, _, _) ->
+        let shape_map = List.fold_left2
+          (fun shape_map sig_item decl ->
+            match sig_item with
+            | Sig_type (id, td, _, _) ->
               if not (Btype.is_row_name (Ident.name id)) then begin
-                Env.register_uid vd.type_uid vd.type_loc;
-                Shape.Map.add_type shape_map id vd.type_uid
+                Env.register_uid td.type_uid decl.typ_name.loc;
+                Shape.Map.add_type shape_map id td.type_uid
               end else shape_map
             | _ -> assert false
           )
           shape_map
           items
+          decls
         in
         Tstr_type (rec_flag, decls),
         items,
