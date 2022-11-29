@@ -1075,14 +1075,16 @@ module Uideps_format = struct
 
   let read ~file =
     let file = String.concat ~sep:"." [file; ext] in
-    let ic = open_in_bin file in
     try
-      let payload = match Marshal.from_channel ic with
-        | V1 payload -> payload (* TODO is that "safe" ? *)
-      in
-      close_in ic;
-      payload
-    with e -> raise e (* todo *)
+      let ic = open_in_bin file in
+      try
+        let payload = match Marshal.from_channel ic with
+          | V1 payload -> payload (* TODO is that "safe" ? *)
+        in
+        close_in ic;
+        Ok payload
+      with e -> raise e (* todo *)
+    with Sys_error msg -> Error msg
 end
 
 module LocSet = Uideps_format.LocSet
@@ -1201,8 +1203,11 @@ let get_local_uideps ~config ~local_defs _uid =
 let get_uideps ~build_dir =
   let filename = "project" in
   let file = Filename.concat build_dir filename in
-  Printf.eprintf "Loading uideps from %S \n%!" file;
-  Uideps_format.read ~file
+  let uideps = Uideps_format.read ~file in
+  (match uideps with
+  | Ok _ -> log ~title:"read_uideps" "Project uideps file loaded: %s" file
+  | Error m -> log ~title:"read_uideps" "Failed to load project uideps: %s" m);
+  uideps
 
 let occurrences ~config ~env ~local_defs ~pos ~node ~path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
@@ -1256,9 +1261,9 @@ let occurrences ~config ~env ~local_defs ~pos ~node ~path =
     let build_dir = Mconfig.build_dir config in
     let external_uideps = get_uideps ~build_dir in
     let local_uideps = get_local_uideps  ~config ~local_defs uid in
-    merge_tbl local_uideps ~into:external_uideps;
-   (* TODO ignore indexed locs from the current buffer *)
-    let locs = (match Hashtbl.find_opt external_uideps uid with
+    Result.iter (merge_tbl ~into:local_uideps) external_uideps;
+    (* TODO ignore indexed locs from the current buffer *)
+    let locs = (match Hashtbl.find_opt local_uideps uid with
       | Some locs ->
         LocSet.elements locs
         |> List.filter_map ~f:(fun loc ->
