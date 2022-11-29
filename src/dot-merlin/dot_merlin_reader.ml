@@ -29,7 +29,6 @@
 open Merlin_utils
 open Misc
 open Std
-open Std.Result
 
 let findlib_ok =
   try
