@@ -1095,9 +1095,30 @@ let add tbl uid locs =
 
 let merge_tbl ~into tbl = Hashtbl.iter (add into) tbl
 
-let get_local_uideps ~local_defs _uid =
+let get_local_uideps ~config ~local_defs _uid =
   let module Kind = Shape.Sig_component_kind in
   let tbl = Hashtbl.create 64 in
+  let module Shape_reduce =
+    Shape.Make_reduce (struct
+      type env = Env.t
+
+      let fuel = 10
+
+      let read_unit_shape ~unit_name =
+          log ~title:"read_unit_shape" "inspecting %s" unit_name;
+          match load_cmt ~config unit_name `ML with
+          | Ok (filename, cmt_infos) ->
+            move_to filename cmt_infos;
+            log ~title:"read_unit_shape" "shapes loaded for %s" unit_name;
+            cmt_infos.cmt_impl_shape
+          | Error () ->
+            log ~title:"read_unit_shape" "failed to find %s" unit_name;
+            None
+
+      let find_shape env id = Env.shape_of_path
+        ~namespace:Shape.Sig_component_kind.Module env (Pident id)
+    end)
+  in
   let iterator =
     let add_to_tbl ~env ~loc shape =
         match (Shape_reduce.reduce env shape).uid with
@@ -1220,7 +1241,7 @@ let occurrences ~config ~env ~local_defs ~pos ~node ~path =
         uid, def_loc)
     | `Ok nss ->
       (* We are somewhere else: we must locate the definition to get its uid *)
-      let uid = uid_from_longident ~env nss `ML lid in
+      let uid = uid_from_longident ~config ~env nss `ML lid in
       match uid with
       | `Uid (Some uid, loc, path) ->
         Format.eprintf "Found uid: %a (%a)\n%!"
@@ -1234,7 +1255,7 @@ let occurrences ~config ~env ~local_defs ~pos ~node ~path =
     (* Todo: use magic number instead and don't use the lib *)
     let build_dir = Mconfig.build_dir config in
     let external_uideps = get_uideps ~build_dir in
-    let local_uideps = get_local_uideps ~local_defs uid in
+    let local_uideps = get_local_uideps  ~config ~local_defs uid in
     merge_tbl local_uideps ~into:external_uideps;
    (* TODO ignore indexed locs from the current buffer *)
     let locs = (match Hashtbl.find_opt external_uideps uid with
