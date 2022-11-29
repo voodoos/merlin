@@ -1245,7 +1245,7 @@ let occurrences ~config ~env ~local_defs ~pos ~node ~path =
       (match uid with
       | Some uid ->
         log ~title:"occurrences" "found uid %a\n%!"
-        Logger.fmt (fun fmt -> Shape.Uid.print fmt uid)
+          Logger.fmt (fun fmt -> Shape.Uid.print fmt uid)
       | None ->
         log ~title:"occurrences" "no uid found for node %s, stopping\n%!"
         @@ Browse_raw.string_of_node node);
@@ -1257,9 +1257,9 @@ let occurrences ~config ~env ~local_defs ~pos ~node ~path =
       let uid = uid_from_longident ~config ~env nss `ML lid in
       match uid with
       | `Uid (Some uid, loc, path) ->
-        Format.eprintf "Found uid: %a (%a)\n%!"
-          Shape.Uid.print uid
-          Path.print path;
+        log  ~title:"occurrences" "Found uid: %a (%a)\n%!"
+          Logger.fmt (fun fmt -> Shape.Uid.print fmt uid)
+          Logger.fmt (fun fmt -> Path.print fmt path);
         Some (uid, loc)
       | _ -> None
   in
