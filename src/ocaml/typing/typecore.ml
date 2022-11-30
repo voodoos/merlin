@@ -1787,7 +1787,9 @@ and type_pat_aux
         if name.txt = "*extension*" then
           Ident.create_local name.txt
         else
-          enter_variable loc name ty sp.ppat_attributes
+          (* Merlin needs the loc of the name, not of the node which might
+          include parenthesis *)
+          enter_variable name.loc name ty sp.ppat_attributes
       in
       rvp k {
         pat_desc = Tpat_var (id, name);
