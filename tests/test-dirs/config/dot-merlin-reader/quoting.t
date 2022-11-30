@@ -50,6 +50,7 @@
         "intf": ".rei"
       }
     ],
+    "build_dir": null,
     "stdlib": null,
     "reader": [],
     "protocol": "json",
