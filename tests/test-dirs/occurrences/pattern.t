@@ -12,6 +12,7 @@ This test demonstrates the handling of location of patterns. For a pattern like
     "class": "return",
     "value": [
       {
+        "file": "$TESTCASE_ROOT/pat.ml",
         "start": {
           "line": 3,
           "col": 10
@@ -22,6 +23,7 @@ This test demonstrates the handling of location of patterns. For a pattern like
         }
       },
       {
+        "file": "$TESTCASE_ROOT/pat.ml",
         "start": {
           "line": 3,
           "col": 18
