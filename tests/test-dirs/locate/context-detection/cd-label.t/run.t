@@ -49,7 +49,7 @@ We could expect 2:12 or at least 2:4
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
       "line": 1,
-      "col": 0
+      "col": 5
     }
   }
 
