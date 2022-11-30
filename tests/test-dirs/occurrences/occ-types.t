@@ -6,7 +6,6 @@
   > EOF
   [
     {
-      "file": "type.ml",
       "start": {
         "line": 1,
         "col": 5
@@ -17,7 +16,6 @@
       }
     },
     {
-      "file": "type.ml",
       "start": {
         "line": 2,
         "col": 9
@@ -35,7 +33,6 @@
   > EOF
   [
     {
-      "file": "type.ml",
       "start": {
         "line": 1,
         "col": 18
@@ -46,7 +43,6 @@
       }
     },
     {
-      "file": "type.ml",
       "start": {
         "line": 1,
         "col": 28
@@ -57,7 +53,6 @@
       }
     },
     {
-      "file": "type.ml",
       "start": {
         "line": 1,
         "col": 48
