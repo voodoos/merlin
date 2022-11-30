@@ -78,6 +78,7 @@ val get_doc
 
 val occurrences
   : config:Mconfig.t
+  -> scope:[`Buffer|`Project]
   -> env:Env.t
   -> local_defs:Mtyper.typedtree
   -> pos:Lexing.position

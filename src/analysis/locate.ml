@@ -1217,7 +1217,7 @@ let get_uideps ~build_dir =
   | Error m -> log ~title:"read_uideps" "Failed to load project uideps: %s" m);
   uideps
 
-let occurrences ~config ~env ~local_defs ~pos ~node ~path =
+let occurrences ~config ~scope ~env ~local_defs ~pos ~node ~path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
     path
     (Lexing.print_position () pos);
@@ -1267,11 +1267,13 @@ let occurrences ~config ~env ~local_defs ~pos ~node ~path =
   | Some (uid, _def_loc) ->
     (* Todo: use magic number instead and don't use the lib *)
     let build_dir = Mconfig.build_dir config in
-    let external_uideps = get_uideps ~build_dir in
-    let local_uideps = get_local_uideps  ~config ~local_defs uid in
-    Result.iter (merge_tbl ~into:local_uideps) external_uideps;
+    let uideps = get_local_uideps  ~config ~local_defs uid in
+    if scope = `Project then begin
+      let external_uideps = get_uideps ~build_dir in
+      Result.iter (merge_tbl ~into:uideps) external_uideps
+    end;
     (* TODO ignore indexed locs from the current buffer *)
-    let locs = (match Hashtbl.find_opt local_uideps uid with
+    let locs = (match Hashtbl.find_opt uideps uid with
       | Some locs ->
         LocSet.elements locs
         |> List.filter_map ~f:(fun loc ->

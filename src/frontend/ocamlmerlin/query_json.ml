@@ -199,9 +199,13 @@ let dump (type a) : a t -> json =
       "query", `String query;
       "position", mk_position pos;
     ]
-  | Occurrences (`Ident_at pos) ->
+  | Occurrences (`Ident_at pos, scope) ->
     mk "occurrences" [
       "kind", `String "identifiers";
+      "in", (match scope with
+      | `Buffer -> `String "buffer"
+      | `Project -> `String "project"
+      );
       "position", mk_position pos;
     ]
   | Refactor_open (action, pos) ->
@@ -418,8 +422,9 @@ let json_of_response (type a) (query : a t) (response : a) : json =
   | Findlib_list, strs -> `List (List.map ~f:Json.string strs)
   | Extension_list _, strs -> `List (List.map ~f:Json.string strs)
   | Path_list _, strs -> `List (List.map ~f:Json.string strs)
-  | Occurrences _, locations ->
+  | Occurrences (_, scope), locations ->
+    let with_file = scope = `Project in
     `List (List.map locations
-             ~f:(fun loc -> with_location ~with_file:true loc []))
+             ~f:(fun loc -> with_location ~with_file loc []))
   | Version, version ->
     `String version
