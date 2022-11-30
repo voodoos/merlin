@@ -34,24 +34,8 @@ $ ocaml-uideps dump project.uideps
 
 > main.ml
 > let x = 3 + Foo.|f 3
-  $ $MERLIN single occurrences -identifier-at 1:16 \
+  $ $MERLIN single occurrences -scope project -identifier-at 1:16 \
   > -filename main.ml <main.ml | jq '.value'
-  Found uid: Foo.0 (Foo!.f)
-  BUILD DIR: $TESTCASE_ROOT/_build/default
-  Loading uideps from "$TESTCASE_ROOT/_build/default/project" 
-  Found locs:
-  pos_fname: lib/foo.ml; cmpunit: Main; unitname: Lib/foo;
-   dir: $TESTCASE_ROOT
-  canonical pos_fname: $TESTCASE_ROOT/lib/foo.ml
-  pos_fname: main.ml; cmpunit: Main; unitname: Main;
-   dir: $TESTCASE_ROOT
-  canonical pos_fname: $TESTCASE_ROOT/main.ml
-  pos_fname: lib/foo.ml; cmpunit: Main; unitname: Lib/foo;
-   dir: $TESTCASE_ROOT
-  canonical pos_fname: $TESTCASE_ROOT/lib/foo.ml
-  pos_fname: main.ml; cmpunit: Main; unitname: Main;
-   dir: $TESTCASE_ROOT
-  canonical pos_fname: $TESTCASE_ROOT/main.ml
   [
     {
       "file": "$TESTCASE_ROOT/lib/foo.ml",
@@ -100,7 +84,7 @@ $ ocaml-uideps dump project.uideps
   ]
 
 > let |f x = x
-  $ $MERLIN single occurrences -identifier-at 1:4 \
+  $ $MERLIN single occurrences -scope project -identifier-at 1:4 \
   > -filename lib/foo.ml <lib/foo.ml  | jq '.value'
   [
     {
@@ -139,7 +123,7 @@ $ ocaml-uideps dump project.uideps
   ]
 
 > let f |x = x
-  $ $MERLIN single occurrences -identifier-at 1:6 \
+  $ $MERLIN single occurrences -scope project -identifier-at 1:6 \
   > -filename lib/foo.ml <lib/foo.ml | jq '.value'
   [
     {
@@ -165,7 +149,7 @@ $ ocaml-uideps dump project.uideps
       }
     }
   ]
-  $ $MERLIN single occurrences -identifier-at 4:15 \
+  $ $MERLIN single occurrences -scope project -identifier-at 4:15 \
   > -filename main.ml <main.ml | jq '.value'
   [
     {
@@ -184,7 +168,7 @@ $ ocaml-uideps dump project.uideps
 > let () = print_int r.labe|l_rouge
 FIXME this is not locating occurrences ot the label
 > -log-file - -log-section locate \
-  $ $MERLIN single occurrences -identifier-at 4:25 \
+  $ $MERLIN single occurrences -scope project -identifier-at 4:25 \
   > -filename main.ml <main.ml | jq '.value'
   [
     {
@@ -212,7 +196,7 @@ FIXME this is not locating occurrences ot the label
   ]
 
 > type |r = { label_rouge : int }
-  $ $MERLIN single occurrences -identifier-at 3:5 \
+  $ $MERLIN single occurrences -scope project -identifier-at 3:5 \
   > -filename lib/foo.ml <lib/foo.ml| jq '.value'
   [
     {
@@ -242,8 +226,8 @@ FIXME this is not locating occurrences ot the label
 
 > module |Bar = String
 FIXME : missing main occurrences since the alias is traversed
-  $ $MERLIN single occurrences -identifier-at 4:8 \
-  > -log-file - -log-section locate \
+> -log-file - -log-section locate \
+  $ $MERLIN single occurrences -scope project -identifier-at 4:8 \
   > -filename lib/foo.ml <lib/foo.ml| jq '.value'
   [
     {
@@ -270,8 +254,8 @@ FIXME : missing main occurrences since the alias is traversed
     }
   ]
 
-  $ $MERLIN single occurrences -identifier-at 5:20 \
-  > -log-file - -log-section locate \
+> -log-file - -log-section locate \
+  $ $MERLIN single occurrences -scope project -identifier-at 5:20 \
   > -filename lib/foo.ml <lib/foo.ml| jq '.value'
   [
     {
@@ -310,8 +294,8 @@ FIXME : missing main occurrences since the alias is traversed
   ]
 
 
-  $ $MERLIN single occurrences -identifier-at 5:24 \
-  > -log-file - -log-section locate \
+> -log-file - -log-section locate \
+  $ $MERLIN single occurrences -scope project -identifier-at 5:24 \
   > -filename main.ml <main.ml | jq '.value'
   [
     {
