@@ -327,7 +327,6 @@ let uid_of_path ~config ~env ~ml_or_mli ~decl_uid path ns =
           log ~title:"read_unit_shape" "inspecting %s" unit_name;
           match load_cmt ~config unit_name `ML with
           | Ok (filename, cmt_infos) ->
-            move_to filename cmt_infos;
             log ~title:"read_unit_shape" "shapes loaded for %s" unit_name;
             cmt_infos.cmt_impl_shape
           | Error () ->
@@ -1123,8 +1122,7 @@ let get_local_uideps ~config ~local_defs _uid =
       let read_unit_shape ~unit_name =
           log ~title:"read_unit_shape" "inspecting %s" unit_name;
           match load_cmt ~config unit_name `ML with
-          | Ok (filename, cmt_infos) ->
-            move_to filename cmt_infos;
+          | Ok (_filename, cmt_infos) ->
             log ~title:"read_unit_shape" "shapes loaded for %s" unit_name;
             cmt_infos.cmt_impl_shape
           | Error () ->
@@ -1285,18 +1283,24 @@ let occurrences ~config ~scope ~env ~local_defs ~pos ~node ~path =
     let uideps = get_local_uideps  ~config ~local_defs uid in
     if scope = `Project then begin
       let external_uideps = get_uideps ~build_dir in
-      Result.iter (merge_tbl ~into:uideps) external_uideps
+      match external_uideps with
+      | Ok external_uideps -> merge_tbl ~into:uideps external_uideps.defs
+      | Error s -> failwith s
     end;
     (* TODO ignore indexed locs from the current buffer *)
     let locs = (match Hashtbl.find_opt uideps uid with
       | Some locs ->
         LocSet.elements locs
         |> List.filter_map ~f:(fun loc ->
-          match find_source ~config loc "" with
+          let fname = loc.Location.loc_start.Lexing.pos_fname in
+          match find_source ~config loc fname with
           | `Found (Some file, _) -> Some { loc with loc_start =
               { loc.loc_start with pos_fname = file}}
           | `Found (None, _) -> Some { loc with loc_start =
               { loc.loc_start with pos_fname = ""}}
+          | `File_not_found msg ->
+            log ~title:"occurrences" "%s" msg;
+            None
           | _ -> None)
       | None -> Format.eprintf "None\n%!"; [])
     in
