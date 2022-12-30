@@ -1056,7 +1056,12 @@ module Uideps_format = struct
 
   module LocSet = Set.Make (Loc)
 
-  type payload = (Shape.Uid.t, LocSet.t) Hashtbl.t
+  type payload = {
+    defs : (Shape.Uid.t, LocSet.t) Hashtbl.t;
+    partial : (Location.t * Shape.t * Env.t) list;
+    load_path : string list;
+  }
+
   type file_format = V1 of payload
 
   let pp_payload (fmt : Format.formatter) pl =
@@ -1067,8 +1072,9 @@ module Uideps_format = struct
         (Format.pp_print_list
           ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@;")
           Location.print_loc) (LocSet.elements locs))
-      pl;
-      Format.fprintf fmt "@]}@,"
+      pl.defs;
+      Format.fprintf fmt "@]}@,";
+      Format.fprintf fmt "And %i partial shapes." (List.length pl.partial)
 
   let _pp (fmt : Format.formatter) ff =
     match ff with
