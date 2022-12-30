@@ -76,7 +76,7 @@ end = struct
     | []
     | [ _ ] -> None
     | ext :: _ ->
-      let ext = String.lowercase ext in
+      let ext = String.lowercase_ascii ext in
       Some (
         match ext with
         | "cmti" -> cmti fn
@@ -206,7 +206,12 @@ module Utils = struct
      Note: We do not refine the load path for module path as we used too. *)
   let find_all_in_path_uncap ?src_suffix_pair ~with_fallback path file =
     let name = File.with_ext ?src_suffix_pair file in
-    let uname = String.uncapitalize name in
+    let uname = String.uncapitalize_ascii name in
+    log ~title:"find_all_in_path_uncap"
+      "Attempt to find file %S in path [%a]"
+      uname
+      Logger.fmt (fun fmt -> Format.pp_print_list Format.pp_print_string fmt path);
+
     let fallback, ufallback =
       let alt = File.alternate file in
       let fallback = File.with_ext ?src_suffix_pair alt in
@@ -293,6 +298,7 @@ let move_to filename cmt_infos =
        | false -> Option.get cmt_infos.cmt_source_digest)
     | _ -> Option.get cmt_infos.cmt_source_digest
   in
+  log ~title:"move_to" "Moving to %S" filename;
   File_switching.move_to ~digest filename
 
 
@@ -495,9 +501,8 @@ type find_source_result =
   | Multiple_matches of string list
 
 let find_source ~config loc =
-  log ~title:"find_source" "attempt to find %S"
-  loc.Location.loc_start.Lexing.pos_fname ;
   let fname = loc.Location.loc_start.Lexing.pos_fname in
+  log ~title:"find_source" "attempt to find %S" fname;
   let with_fallback = loc.Location.loc_ghost in
   let file =
     match File.of_filename fname with
@@ -507,10 +512,14 @@ let find_source ~config loc =
       Preferences.src fname
   in
   let filename = File.name file in
+  log ~title:"find_source" "filename %S" filename;
+
   let initial_path =
     match File_switching.where_am_i () with
     | None -> fname
-    | Some s -> s
+    | Some s ->
+      log ~title:"find_source" "i am here: %S" s;
+      s
   in
   let dir = Filename.dirname initial_path in
   let dir =
@@ -521,7 +530,7 @@ let find_source ~config loc =
   match Utils.find_all_matches ~config ~with_fallback file with
   | [] ->
     log ~title:"find_source" "failed to find %S in source path (fallback = %b)"
-       filename with_fallback ;
+       (File.with_ext file) with_fallback ;
     log ~title:"find_source" "looking for %S in %S" (File.name file) dir ;
     begin match Utils.find_file_with_path ~config ~with_fallback file [dir] with
     | Some source -> Found source
