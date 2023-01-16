@@ -326,7 +326,7 @@ let uid_of_path ~config ~env ~ml_or_mli ~decl_uid path ns =
       let read_unit_shape ~unit_name =
           log ~title:"read_unit_shape" "inspecting %s" unit_name;
           match load_cmt ~config unit_name `ML with
-          | Ok (filename, cmt_infos) ->
+          | Ok (_filename, cmt_infos) ->
             log ~title:"read_unit_shape" "shapes loaded for %s" unit_name;
             cmt_infos.cmt_impl_shape
           | Error () ->
@@ -1046,39 +1046,30 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
 
 module Uideps_format = struct
   (* TODO WE SHOULD USE A MAGIC NUMBER *)
-  module Loc : Set.OrderedType with type t = Location.t = struct
-    type t = Location.t
+  module Lid : Set.OrderedType with type t = Longident.t Location.loc = struct
+    type t = Longident.t Location.loc
 
-    (* TODO: this does not compare pos_fname *)
-    let compare = Location_aux.compare
+    let compare_pos (p1 : Lexing.position) (p2 : Lexing.position) =
+      match String.compare p1.pos_fname p2.pos_fname with
+      | 0 -> Int.compare p1.pos_cnum p2.pos_cnum
+      | n -> n
+
+    let compare (t1 : t) (t2 : t) =
+      (* TODO CHECK...*)
+      match compare_pos t1.loc.loc_start t2.loc.loc_start with
+      | 0 -> compare_pos t1.loc.loc_end t2.loc.loc_end
+      | n -> n
   end
 
-  module LocSet = Set.Make (Loc)
+  module LidSet = Set.Make (Lid)
 
   type payload = {
-    defs : (Shape.Uid.t, LocSet.t) Hashtbl.t;
-    partial : (Location.t * Shape.t * Env.t) list;
+    defs : (Shape.Uid.t, LidSet.t) Hashtbl.t;
+    partial : (Longident.t Location.loc * Shape.t * Env.t) list;
     load_path : string list;
   }
 
   type file_format = V1 of payload
-
-  let pp_payload (fmt : Format.formatter) pl =
-    Format.fprintf fmt "{@[";
-    Hashtbl.iter
-      (fun uid locs -> Format.fprintf fmt "uid: %a; locs: @[%a@]@,"
-        Shape.Uid.print uid
-        (Format.pp_print_list
-          ~pp_sep:(fun fmt () -> Format.fprintf fmt ";@;")
-          Location.print_loc) (LocSet.elements locs))
-      pl.defs;
-      Format.fprintf fmt "@]}@,";
-      Format.fprintf fmt "And %i partial shapes." (List.length pl.partial)
-
-  let _pp (fmt : Format.formatter) ff =
-    match ff with
-    | V1 tbl ->
-      Format.fprintf fmt "V1@,%a" pp_payload tbl
 
   let ext = "uideps"
 
@@ -1101,12 +1092,12 @@ module Uideps_format = struct
     with Sys_error msg -> Error msg
 end
 
-module LocSet = Uideps_format.LocSet
+module LidSet = Uideps_format.LidSet
 
 let add tbl uid locs =
   try
     let locations = Hashtbl.find tbl uid in
-    Hashtbl.replace tbl uid (LocSet.union locs locations)
+    Hashtbl.replace tbl uid (LidSet.union locs locations)
   with Not_found -> Hashtbl.add tbl uid locs
 
 let merge_tbl ~into tbl = Hashtbl.iter (add into) tbl
@@ -1133,18 +1124,21 @@ let get_local_uideps ~config ~local_defs _uid =
         ~namespace:Shape.Sig_component_kind.Module env (Pident id)
     end)
   in
+  let unknown_lid loc =
+    {Location.txt = Longident.Lident "*unknown*"; loc }
+  in
   let tbl =
     (* We start with all the uids that have been registered into the typing env
        *)
     let tbl = Env.get_uid_to_loc_tbl () in
-    Shape.Uid.Tbl.map tbl LocSet.singleton
+    Shape.Uid.Tbl.map tbl (fun loc -> LidSet.singleton @@ unknown_lid loc)
     |> Shape.Uid.Tbl.to_seq
     |> Hashtbl.of_seq
    in
   let iterator =
-    let add_to_tbl ~env ~loc shape =
+    let add_to_tbl ~env ~lid shape =
         match (Shape_reduce.reduce env shape).uid with
-        | Some uid -> add tbl uid (LocSet.singleton loc)
+        | Some uid -> add tbl uid (LidSet.singleton lid)
         | None -> ()
     in
     let pat
@@ -1155,7 +1149,7 @@ let get_local_uideps ~config ~local_defs _uid =
         (try
         let uid = Ident.Tbl.find (Env.get_ident_to_uid_tbl ()) ident in
         let loc =  Shape.Uid.Tbl.find (Env.get_uid_to_loc_tbl ()) uid in
-        add tbl uid @@ LocSet.singleton loc
+        add tbl uid @@ LidSet.singleton @@ unknown_lid loc
         with _ -> ())
       | _ -> Tast_iterator.default_iterator.pat sub p
     in
@@ -1164,11 +1158,11 @@ let get_local_uideps ~config ~local_defs _uid =
       expr =
         (fun sub ({ exp_desc; exp_loc; exp_env = env; _} as e) ->
           begin match exp_desc with
-          | Texp_ident (path, _, { val_uid=_; _ }) ->
+          | Texp_ident (path, lid, { val_uid=_; _ }) ->
             begin try
               (* let env = Envaux.env_of_only_summary exp_env in *)
               let shape = Env.shape_of_path ~namespace:Kind.Value env path in
-              add_to_tbl ~env ~loc:exp_loc shape
+              add_to_tbl ~env ~lid shape
             with Not_found ->
               log ~title:"occurrences_iterator" "No shape for expr %a at %a"
                 Logger.fmt (fun fmt -> Path.print fmt path)
@@ -1177,7 +1171,7 @@ let get_local_uideps ~config ~local_defs _uid =
           | _ -> () end;
           Tast_iterator.default_iterator.expr sub e);
 
-      module_expr =
+      (* module_expr =
         (fun sub ({ mod_desc; mod_loc; mod_env = env; _} as me) ->
           begin match mod_desc with
           | Tmod_ident (path, _lid) ->
@@ -1192,18 +1186,18 @@ let get_local_uideps ~config ~local_defs _uid =
                 Logger.fmt (fun fmt -> Location.print_loc fmt mod_loc)
             end
           | _ -> () end;
-          Tast_iterator.default_iterator.module_expr sub me);
+          Tast_iterator.default_iterator.module_expr sub me); *)
 
       pat;
 
       typ =
         (fun sub ({ ctyp_desc; ctyp_loc; ctyp_env = env; _} as me) ->
           begin match ctyp_desc with
-          | Ttyp_constr (path, _lid, _ctyps) ->
+          | Ttyp_constr (path, lid, _ctyps) ->
             begin try
               (* let env = Envaux.env_of_only_summary ctyp_env in *)
               let shape = Env.shape_of_path ~namespace:Kind.Type env path in
-              add_to_tbl ~env ~loc:ctyp_loc shape
+              add_to_tbl ~env ~lid shape
             with Not_found ->
               log ~title:"occurrences_iterator" "No shape for type %a at %a"
                 Logger.fmt (fun fmt -> Path.print fmt path)
@@ -1229,6 +1223,22 @@ let get_uideps ~build_dir =
   | Ok _ -> log ~title:"read_uideps" "Project uideps file loaded: %s" file
   | Error m -> log ~title:"read_uideps" "Failed to load project uideps: %s" m);
   uideps
+
+(* A longident can have the form: A.B.x Right now we are only interested in
+   values, but we will eventually want to index all occurrences of modules in
+   such longidents. However there is an issue with that: we only have the
+   location of the complete longident which might span multiple lines. This is
+   enough to get the last component since it will always be on the last line,
+   but will prevent us to find the location of previous components. *)
+  let last_loc (loc : Location.t) lid =
+  if lid = Longident.Lident "*unknown*" then loc
+  else
+    let last_size = Longident.last lid |> String.length in
+    { loc with
+      loc_start = { loc.loc_end with
+        pos_cnum = loc.loc_end.pos_cnum - last_size;
+      }
+    }
 
 let occurrences ~config ~scope ~env ~local_defs ~pos ~node ~path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
@@ -1290,8 +1300,9 @@ let occurrences ~config ~scope ~env ~local_defs ~pos ~node ~path =
     (* TODO ignore indexed locs from the current buffer *)
     let locs = (match Hashtbl.find_opt uideps uid with
       | Some locs ->
-        LocSet.elements locs
-        |> List.filter_map ~f:(fun loc ->
+        LidSet.elements locs
+        |> List.filter_map ~f:(fun lid ->
+          let loc = last_loc lid.Location.loc lid.txt in
           let fname = loc.Location.loc_start.Lexing.pos_fname in
           match find_source ~config loc fname with
           | `Found (Some file, _) -> Some { loc with loc_start =
