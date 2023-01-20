@@ -18,10 +18,6 @@ depends: [
   "conf-jq" {with-test}
   "ppxlib" {with-test}
 ]
-pin-depends: [
-  ["dune.dev" "git+https://github.com/voodoos/dune#902463c2f7824d3cb3f350ac6006f31eea5acbba"]
-  ["ocaml-uideps.dev" "git+https://github.com/voodoos/ocaml-uideps#4cbc34d2cf189c3db3fc1b54819d2e60874bd4bc"]
-]
 conflicts: [
   "seq" {!= "base"}
   "base-effects"
