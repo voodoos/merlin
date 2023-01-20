@@ -1304,15 +1304,17 @@ let occurrences ~config ~scope ~env ~local_defs ~pos ~node ~path =
         |> List.filter_map ~f:(fun lid ->
           let loc = last_loc lid.Location.loc lid.txt in
           let fname = loc.Location.loc_start.Lexing.pos_fname in
-          match find_source ~config loc fname with
-          | `Found (Some file, _) -> Some { loc with loc_start =
-              { loc.loc_start with pos_fname = file}}
-          | `Found (None, _) -> Some { loc with loc_start =
-              { loc.loc_start with pos_fname = ""}}
-          | `File_not_found msg ->
-            log ~title:"occurrences" "%s" msg;
-            None
-          | _ -> None)
+          if Filename.is_relative fname then begin
+            match find_source ~config loc fname with
+            | `Found (Some file, _) -> Some { loc with loc_start =
+                { loc.loc_start with pos_fname = file}}
+            | `Found (None, _) -> Some { loc with loc_start =
+                { loc.loc_start with pos_fname = ""}}
+            | `File_not_found msg ->
+              log ~title:"occurrences" "%s" msg;
+              None
+            | _ -> None
+          end else Some loc)
       | None -> Format.eprintf "None\n%!"; [])
     in
     Ok locs
