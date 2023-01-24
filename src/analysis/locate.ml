@@ -1291,7 +1291,7 @@ let occurrences ~config ~scope ~env ~local_defs ~pos ~node ~path =
   | Some (uid, _def_loc) ->
     (* Todo: use magic number instead and don't use the lib *)
     let build_dir = Mconfig.build_dir config in
-    let uideps = get_local_uideps  ~config ~local_defs uid in
+    let uideps = get_local_uideps ~config ~local_defs uid in
     if scope = `Project then begin
       let external_uideps = get_uideps ~build_dir in
       match external_uideps with
