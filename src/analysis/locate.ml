@@ -392,6 +392,25 @@ let module_aliasing ~(bin_annots : Cmt_format.binary_annots) uid  =
         Format.pp_print_option Shape.Uid.print fmt shape.uid);
     Option.map ~f:(fun uid -> uid, path) shape.uid
 
+
+let loc_of_fragment =
+  let of_option name =
+    match name.Location.txt with
+    | Some txt -> { name with txt }
+    | None -> assert false
+  in function
+  | Cmt_format.Class_declaration cd -> cd.ci_id_name
+  | Class_description cd -> cd.ci_id_name
+  | Class_type_declaration ctd -> ctd.ci_id_name
+  | Extension_constructor ec -> ec.ext_name
+  | Module_binding mb -> of_option mb.mb_name
+  | Module_declaration md -> of_option md.md_name
+  | Tmodule_declaration (_, name) -> of_option name
+  | Module_type_declaration mtd -> mtd.mtd_name
+  | Type_declaration td -> td.typ_name
+  | Value_description vd -> vd.val_name
+  | Tvalue_description (_, name) -> of_option name
+
 let from_uid ~config ~ml_or_mli uid loc path =
   let loc_of_comp_unit comp_unit =
     match load_cmt ~config comp_unit ml_or_mli with
@@ -427,8 +446,9 @@ let from_uid ~config ~ml_or_mli uid loc path =
           log ~title "Shapes successfully loaded, looking for %a"
             Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
           begin match Shape.Uid.Tbl.find_opt cmt.cmt_uid_to_loc uid with
-            | Some loc when
-              String.ends_with ~suffix:"ml-gen" loc.loc_start.pos_fname ->
+            | Some fragment when
+              let loc = loc_of_fragment fragment in
+              String.ends_with ~suffix:"ml-gen" loc.loc.loc_start.pos_fname ->
               log ~title "Found location in generated file: %a"
                 Logger.fmt (fun fmt -> Location.print_loc fmt loc);
               (* This notably happens when using Dune. In that case we
@@ -441,10 +461,11 @@ let from_uid ~config ~ml_or_mli uid loc path =
                 |> Option.map ~f:(fun loc -> uid, loc)
               | _ -> Some (uid, loc)
               end
-            | Some loc ->
+            | Some fragment ->
+              let loc = loc_of_fragment fragment in
               log ~title "Found location: %a"
-                Logger.fmt (fun fmt -> Location.print_loc fmt loc);
-              Some (uid, loc)
+                Logger.fmt (fun fmt -> Location.print_loc fmt loc.loc);
+              Some (uid, loc.loc)
             | None ->
               log ~title "Uid not found in the cmt table. \
                 Fallbacking to the node's location: %a"

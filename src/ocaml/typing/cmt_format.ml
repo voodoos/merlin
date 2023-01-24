@@ -61,6 +61,19 @@ and binary_part =
   | Partial_signature_item of signature_item
   | Partial_module_type of module_type
 
+type uid_fragment =
+  | Class_declaration of class_declaration
+  | Class_description of class_description
+  | Class_type_declaration of class_type_declaration
+  | Extension_constructor of extension_constructor
+  | Module_binding of module_binding
+  | Module_declaration of module_declaration
+  | Tmodule_declaration of Types.module_declaration * string option Location.loc
+  | Module_type_declaration of module_type_declaration
+  | Type_declaration of type_declaration
+  | Value_description of value_description
+  | Tvalue_description of Types.value_description * string option Location.loc
+
 type cmt_infos = {
   cmt_modname : string;
   cmt_annots : binary_annots;
@@ -76,7 +89,7 @@ type cmt_infos = {
   cmt_imports : (string * Digest.t option) list;
   cmt_interface_digest : Digest.t option;
   cmt_use_summaries : bool;
-  cmt_uid_to_loc : Location.t Shape.Uid.Tbl.t;
+  cmt_uid_to_loc : uid_fragment Shape.Uid.Tbl.t;
   cmt_impl_shape : Shape.t option; (* None for mli *)
 }
 
@@ -89,35 +102,137 @@ let need_to_clear_env =
 
 let keep_only_summary = Env.keep_only_summary
 
-open Tast_mapper
+let uid_to_loc_2 : uid_fragment Types.Uid.Tbl.t ref =
+  Local_store.s_table Types.Uid.Tbl.create 16
+let register_uid uid fragment =
+  Types.Uid.Tbl.add !uid_to_loc_2 uid fragment
 
-let cenv =
-  {Tast_mapper.default with env = fun _sub env -> keep_only_summary env}
+let rec tast_map ~env () =
+  let open Tast_mapper in
+  {default with
 
-let clear_part = function
-  | Partial_structure s -> Partial_structure (cenv.structure cenv s)
+  env =
+    if need_to_clear_env then (fun _sub env -> keep_only_summary env)
+    else default.env;
+
+  signature = (fun _sub ({sig_final_env; _} as x) ->
+    let sub = tast_map ~env:sig_final_env () in
+    let sig_final_env = sub.env sub x.sig_final_env in
+    let sig_items = List.map ~f:(sub.signature_item sub) x.sig_items in
+    {x with sig_items; sig_final_env});
+
+  structure = (fun _sub {str_items; str_type; str_final_env} ->
+    let sub = tast_map ~env:str_final_env () in
+    {
+      str_items = List.map ~f:(sub.structure_item sub) str_items;
+      str_final_env = sub.env sub str_final_env;
+      str_type;
+    });
+
+  value_bindings = (fun sub ((_, vbs) as bindings) ->
+    let bound_idents = let_bound_idents_full vbs in
+    List.iter ~f:(fun (id, {Location.txt; loc}, _typ) ->
+      try
+        let vd =  Env.find_value (Pident id) env in
+        register_uid vd.val_uid
+          (Tvalue_description (vd, { txt = Some txt; loc}))
+      with Not_found -> ())
+      bound_idents;
+    default.value_bindings sub bindings);
+
+  module_binding = (fun sub ({mb_id; mb_name} as mb) ->
+    Option.iter
+      ~f:(fun id ->
+        (try
+          let tmd = Env.find_module (Pident id) env in
+          register_uid tmd.md_uid (Tmodule_declaration (tmd, mb_name));
+        with Not_found -> ()))
+      mb_id;
+    default.module_binding sub mb);
+
+  module_declaration = (fun sub md ->
+    Option.iter
+      ~f:(fun id -> try
+        let tmd = Env.find_module (Pident id) env in
+        register_uid tmd.md_uid (Module_declaration md);
+      with Not_found -> ())
+      md.md_id;
+    default.module_declaration sub md);
+
+  module_type_declaration = (fun sub mtd ->
+    (try
+      let tmt = Env.find_modtype (Pident mtd.mtd_id) env in
+      register_uid tmt.mtd_uid (Module_type_declaration mtd);
+    with Not_found -> ());
+    default.module_type_declaration sub mtd);
+
+  value_description = (fun sub vd ->
+    register_uid vd.val_val.val_uid (Value_description vd);
+    default.value_description sub vd);
+
+  type_declaration = (fun sub td ->
+    register_uid td.typ_type.type_uid (Type_declaration td);
+    default.type_declaration sub td);
+
+  extension_constructor = (fun sub ec ->
+    register_uid ec.ext_type.ext_uid (Extension_constructor ec);
+    default.extension_constructor sub ec);
+
+  class_declaration = (fun sub cd ->
+    (* a class declaration might be duplicated during typing *)
+    if not (Shape.Uid.Tbl.mem !uid_to_loc_2 cd.ci_decl.cty_uid) then
+      register_uid cd.ci_decl.cty_uid (Class_declaration cd);
+    default.class_declaration sub cd);
+
+  class_type_declaration = (fun sub ctd ->
+    register_uid ctd.ci_decl.cty_uid (Class_type_declaration ctd);
+    default.class_type_declaration sub ctd);
+
+  class_description =(fun sub cd ->
+    register_uid cd.ci_decl.cty_uid (Class_description cd);
+    default.class_description sub cd);
+  }
+
+let clear_part =
+  function
+  | Partial_structure s ->
+    let tast_map = tast_map ~env:s.str_final_env () in
+    Partial_structure (tast_map.structure tast_map s)
   | Partial_structure_item s ->
-      Partial_structure_item (cenv.structure_item cenv s)
-  | Partial_expression e -> Partial_expression (cenv.expr cenv e)
-  | Partial_pattern (category, p) -> Partial_pattern (category, cenv.pat cenv p)
-  | Partial_class_expr ce -> Partial_class_expr (cenv.class_expr cenv ce)
-  | Partial_signature s -> Partial_signature (cenv.signature cenv s)
+      let tast_map = tast_map ~env:s.str_env () in
+      Partial_structure_item (tast_map.structure_item tast_map s)
+  | Partial_expression e ->
+    let tast_map = tast_map ~env:e.exp_env () in
+    Partial_expression (tast_map.expr tast_map e)
+  | Partial_pattern (category, p) ->
+    let tast_map = tast_map ~env:p.pat_env () in
+    Partial_pattern (category, tast_map.pat tast_map p)
+  | Partial_class_expr ce ->
+    let tast_map = tast_map ~env:ce.cl_env () in
+    Partial_class_expr (tast_map.class_expr tast_map ce)
+  | Partial_signature s ->
+    let tast_map = tast_map ~env:s.sig_final_env () in
+    Partial_signature (tast_map.signature tast_map s)
   | Partial_signature_item s ->
-      Partial_signature_item (cenv.signature_item cenv s)
-  | Partial_module_type s -> Partial_module_type (cenv.module_type cenv s)
+    let tast_map = tast_map ~env:s.sig_env () in
+      Partial_signature_item (tast_map.signature_item tast_map s)
+  | Partial_module_type s ->
+    let tast_map = tast_map ~env:s.mty_env () in
+    Partial_module_type (tast_map.module_type tast_map s)
 
 let clear_env binary_annots =
-  if need_to_clear_env then
-    match binary_annots with
-    | Implementation s -> Implementation (cenv.structure cenv s)
-    | Interface s -> Interface (cenv.signature cenv s)
-    | Packed _ -> binary_annots
-    | Partial_implementation array ->
-        Partial_implementation (Array.map clear_part array)
-    | Partial_interface array ->
-        Partial_interface (Array.map clear_part array)
-
-  else binary_annots
+  match binary_annots with
+  | Implementation s ->
+    let tast_map = tast_map ~env:s.str_final_env () in
+    Implementation (tast_map.structure tast_map s)
+  | Interface s ->
+    let tast_map = tast_map ~env:s.sig_final_env () in
+    Interface (tast_map.signature tast_map s)
+  | Packed _ -> binary_annots
+  | Partial_implementation array ->
+      Partial_implementation (Array.map clear_part array)
+  | Partial_interface array ->
+      Partial_interface (Array.map clear_part array)
 
 exception Error of error
 
@@ -193,9 +308,10 @@ let save_cmt filename modname binary_annots sourcefile initial_env cmi shape =
            | Some cmi -> Some (output_cmi temp_file_name oc cmi)
          in
          let source_digest = Option.map ~f:Digest.file sourcefile in
+         let cmt_annots = clear_env binary_annots in
          let cmt = {
            cmt_modname = modname;
-           cmt_annots = clear_env binary_annots;
+           cmt_annots;
            cmt_value_dependencies = !value_deps;
            cmt_comments = [];
            cmt_args = Sys.argv;
@@ -208,7 +324,7 @@ let save_cmt filename modname binary_annots sourcefile initial_env cmi shape =
            cmt_imports = List.sort ~cmp:compare (Env.imports ());
            cmt_interface_digest = this_crc;
            cmt_use_summaries = need_to_clear_env;
-           cmt_uid_to_loc = Env.get_uid_to_loc_tbl ();
+           cmt_uid_to_loc = !uid_to_loc_2;
            cmt_impl_shape = shape;
          } in
          output_cmt oc cmt)
