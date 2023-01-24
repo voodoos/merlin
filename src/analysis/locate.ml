@@ -1097,7 +1097,8 @@ module LidSet = Uideps_format.LidSet
 let add tbl uid locs =
   try
     let locations = Hashtbl.find tbl uid in
-    Hashtbl.replace tbl uid (LidSet.union locs locations)
+    let diff = LidSet.diff locs locations in
+    Hashtbl.replace tbl uid (LidSet.union diff locations)
   with Not_found -> Hashtbl.add tbl uid locs
 
 let merge_tbl ~into tbl = Hashtbl.iter (add into) tbl
