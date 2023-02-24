@@ -36,6 +36,9 @@ module Server = struct
       Mocaml.flush_caches ~older_than:300.0 ();
       let merlinid' = File_id.get Sys.executable_name in
       if total > merlin_timeout ||
+         (* We check if the server itself changed and stop if that is the case.
+            This is useful when hacking on Merlin to always use the most recent
+            build of the server *)
          not (File_id.check merlinid merlinid') then
         None
       else
