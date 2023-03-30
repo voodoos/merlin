@@ -46,7 +46,7 @@ let merlin_system_command =
     windows_merlin_system_command
   else
     fun cmd ~cwd ->
-      Sys.command (Printf.sprintf "cd %s && %s" (Filename.quote cwd) cmd)
+      !Std.System_command.unix ~cmd:cmd ~cwd
 
 let ppx_commandline cmd fn_in fn_out =
   Printf.sprintf "%s %s %s%s"

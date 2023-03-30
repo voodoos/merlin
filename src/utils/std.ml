@@ -57,6 +57,12 @@ module Json = struct
         A common one is `Yojson.Basic.pretty_to_string`."
 end
 
+module System_command = struct
+  let unix = ref @@
+    fun ~cmd ~cwd ->
+       Sys.command (Printf.sprintf "cd %s && %s" (Filename.quote cwd) cmd)
+end
+
 module Hashtbl = struct
   include Hashtbl
 

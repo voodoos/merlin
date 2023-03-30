@@ -15,3 +15,10 @@ module Json : sig
         is [Yojson.Basic.pretty_to_string].  *)
     val set_pretty_to_string : (Std.json -> string) -> unit
 end
+
+(** Merlin spawns child processes for preprocessors (pp and ppx), which can be
+    customized via [System_command] *)
+module System_command : sig
+  (** [set_unix] sets an implementation for Unix systems. *)
+  val set_unix : (cmd:string -> cwd:string -> int) -> unit
+end

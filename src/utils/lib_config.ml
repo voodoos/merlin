@@ -8,3 +8,8 @@ module Json = struct
   let set_pretty_to_string f =
     Std.Json.pretty_to_string := f
 end
+
+module System_command = struct
+  let set_unix f =
+    Std.System_command.unix := f
+end
