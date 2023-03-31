@@ -517,9 +517,10 @@ module String = struct
 
   let concat_array sep ss =
     let b = Buffer.create 16 in
-    (Array.iter
-       (fun x ->
-          Buffer.add_string b sep;
+    (Array.iteri
+       (fun i x ->
+          if i = 0 then ()
+          else Buffer.add_string b sep;
           Buffer.add_string b x) ss);
     Buffer.contents b
 end
