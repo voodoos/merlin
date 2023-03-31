@@ -57,7 +57,6 @@ module Json = struct
         A common one is `Yojson.Basic.pretty_to_string`."
 end
 
-
 module Hashtbl = struct
   include Hashtbl
 
