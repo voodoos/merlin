@@ -55,7 +55,7 @@ let apply_rewriter magic ppx (fn_in, failures) =
   let title = "apply_rewriter" in
   let fn_out = Filename.temp_file "camlppx" "" in
   let args = [|
-    (Filename.quote fn_in);
+    Filename.quote fn_in;
     Printf.sprintf "%s%s"
       (Filename.quote fn_out)
       (if Sys.win32 then "" else " 1>&2")
@@ -159,7 +159,7 @@ let apply_pp ~workdir ~filename ~source ~pp =
   end;
   let fn_out = fn_in ^ ".out" in
   let args = [|
-    (Filename.quote fn_in);
+    Filename.quote fn_in;
     Printf.sprintf "1>%s" (Filename.quote fn_out)
   |] in
   let comm = commandline pp args in
