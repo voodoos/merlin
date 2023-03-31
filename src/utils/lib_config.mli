@@ -20,5 +20,5 @@ end
     customized via [System_command] *)
 module System_command : sig
   (** [set_unix] sets an implementation for Unix systems. *)
-  val set_unix : (cmd:string -> cwd:string -> int) -> unit
+  val set_unix : (prog:string -> args:string array -> cwd:string -> int) -> unit
 end

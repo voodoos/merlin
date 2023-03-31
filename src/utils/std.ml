@@ -57,11 +57,6 @@ module Json = struct
         A common one is `Yojson.Basic.pretty_to_string`."
 end
 
-module System_command = struct
-  let unix = ref @@
-    fun ~cmd ~cwd ->
-       Sys.command (Printf.sprintf "cd %s && %s" (Filename.quote cwd) cmd)
-end
 
 module Hashtbl = struct
   include Hashtbl
@@ -520,6 +515,14 @@ module String = struct
         in
         aux 0 j0;
         Buffer.contents buffer
+
+  let concat_array sep ss =
+    let b = Buffer.create 16 in
+    (Array.iter
+       (fun x ->
+          Buffer.add_string b sep;
+          Buffer.add_string b x) ss);
+    Buffer.contents b
 end
 
 let sprintf = Printf.sprintf
@@ -755,6 +758,13 @@ module Shell = struct
     done;
     flush ();
     List.rev !comps
+end
+
+module System_command = struct
+  let unix = ref @@
+    fun ~prog ~args ~cwd ->
+      let cmd = Printf.sprintf "%s %s" prog (String.concat_array " " args) in
+      Sys.command (Printf.sprintf "cd %s && %s" (Filename.quote cwd) cmd)
 end
 
   (* [modules_in_path ~ext path] lists ocaml modules corresponding to
