@@ -42,7 +42,7 @@ let report_error = function
 external windows_merlin_system_command : string -> cwd:string -> int = "ml_merlin_system_command"
 
 let commandline prog args =
-  Printf.sprintf "%s %s" prog (String.concat_array " " args)
+  Printf.sprintf "%s %s" prog (String.concat ~sep:" " args)
 
 let merlin_system_command ~prog ~args ~cwd =
   let cmd = commandline prog args in
@@ -54,12 +54,12 @@ let merlin_system_command ~prog ~args ~cwd =
 let apply_rewriter magic ppx (fn_in, failures) =
   let title = "apply_rewriter" in
   let fn_out = Filename.temp_file "camlppx" "" in
-  let args = [|
+  let args = [
     Filename.quote fn_in;
     Printf.sprintf "%s%s"
       (Filename.quote fn_out)
       (if Sys.win32 then "" else " 1>&2")
-  |] in
+  ] in
   let comm = commandline ppx.workval args in
   log ~title "running %s from directory %S" comm ppx.workdir;
   Logger.log_flush ();
@@ -158,10 +158,10 @@ let apply_pp ~workdir ~filename ~source ~pp =
     close_out oc
   end;
   let fn_out = fn_in ^ ".out" in
-  let args = [|
+  let args = [
     Filename.quote fn_in;
     Printf.sprintf "1>%s" (Filename.quote fn_out)
-  |] in
+  ] in
   let comm = commandline pp args in
   let ok = merlin_system_command ~prog:pp ~args:args ~cwd:workdir = 0 in
   Misc.remove_file fn_in;
