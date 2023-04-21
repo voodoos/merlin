@@ -54,12 +54,13 @@ let merlin_system_command ~prog ~args ~cwd =
 let apply_rewriter magic ppx (fn_in, failures) =
   let title = "apply_rewriter" in
   let fn_out = Filename.temp_file "camlppx" "" in
-  let args = [
-    Filename.quote fn_in;
-    Printf.sprintf "%s%s"
-      (Filename.quote fn_out)
-      (if Sys.win32 then "" else " 1>&2")
-  ] in
+  let args =
+    let redirect =
+      if Sys.win32 then [] else ["1>&2"] in
+    Filename.quote fn_in
+    :: Filename.quote fn_out
+    :: redirect
+  in
   let comm = commandline ppx.workval args in
   log ~title "running %s from directory %S" comm ppx.workdir;
   Logger.log_flush ();
