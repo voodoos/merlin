@@ -1523,13 +1523,14 @@ and transl_signature ?(keep_warnings = false) env sg =
               | _ -> Mp_present
             in
             match pmd.pmd_name.txt with
-            | None -> None, pres, env, None, tmty
+            | None -> None, pres, env, None, tmty, Uid.internal_not_actually_unique
             | Some name ->
+              let md_uid = Uid.mk ~current_unit:(Env.get_unit_name ()) in
               let md = {
                 md_type=tmty.mty_type;
                 md_attributes=pmd.pmd_attributes;
                 md_loc=pmd.pmd_loc;
-                md_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
+                md_uid;
               }
               in
               let id, newenv =
@@ -1539,13 +1540,13 @@ and transl_signature ?(keep_warnings = false) env sg =
               Signature_names.check_module names pmd.pmd_name.loc id;
               Env.register_uid md.md_uid md.md_loc;
               let sig_item = Sig_module(id, pres, md, Trec_not, Exported) in
-              Some id, pres, newenv, Some sig_item, tmty
+              Some id, pres, newenv, Some sig_item, tmty, md_uid
           with
-          | (id, pres, newenv, sig_item, tmty) ->
+          | (id, pres, newenv, sig_item, tmty, md_uid) ->
             let (trem, rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_module {md_id=id; md_name=pmd.pmd_name;
-                                md_presence=pres; md_type=tmty;
-                                md_loc=pmd.pmd_loc;
+                                md_uid; md_presence=pres;
+                                md_type=tmty; md_loc=pmd.pmd_loc;
                                 md_attributes=pmd.pmd_attributes})
               env loc :: trem,
             (match sig_item with None -> rem | Some i -> i :: rem),
@@ -1635,7 +1636,7 @@ and transl_signature ?(keep_warnings = false) env sg =
           begin match transl_modtype_decl env pmtd with
           | newenv, mtd, decl ->
             Signature_names.check_modtype names pmtd.pmtd_loc mtd.mtd_id;
-            Env.register_uid decl.mtd_uid mtd.mtd_loc;
+            (* Env.register_uid decl.mtd_uid mtd.mtd_loc; *)
             let (trem, rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_modtype mtd) env loc :: trem,
             Sig_modtype (mtd.mtd_id, decl, Exported) :: rem,
@@ -1825,6 +1826,7 @@ and transl_modtype_decl_aux env
     {
      mtd_id=id;
      mtd_name=pmtd_name;
+     mtd_uid=decl.mtd_uid;
      mtd_type=tmty;
      mtd_attributes=pmtd_attributes;
      mtd_loc=pmtd_loc;
@@ -1907,11 +1909,11 @@ and transl_recmodule_modtypes env sdecls =
     List.map2 (fun pmd (id_shape, id_loc, md, mty) ->
       let tmd =
         {md_id=Option.map fst id_shape; md_name=id_loc; md_type=mty;
-         md_presence=Mp_present;
+         md_uid=md.Types.md_uid; md_presence=Mp_present;
          md_loc=pmd.pmd_loc;
          md_attributes=pmd.pmd_attributes}
       in
-      tmd, md.md_uid, Option.map snd id_shape
+      tmd, md.Types.md_uid, Option.map snd id_shape
     ) sdecls dcl2
   in
   (dcl2, env2)
@@ -2120,6 +2122,7 @@ let check_recmodule_inclusion env bindings =
           {
             mb_id = id;
             mb_name = name;
+            mb_decl_uid = uid;
             mb_presence = Mp_present;
             mb_expr = modl';
             mb_attributes = attrs;
@@ -2677,7 +2680,7 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
            will be marked as being used during the signature inclusion test. *)
         let items, shape_map =
           List.fold_left
-            (fun (acc, shape_map) (id, { Asttypes.loc; _ }, _typ)->
+            (fun (acc, shape_map) (id, { Asttypes.loc; _ }, _typ, _uid)->
               Signature_names.check_value names loc id;
               let vd =  Env.find_value (Pident id) newenv in
               Env.register_uid vd.val_uid vd.val_loc;
@@ -2809,8 +2812,9 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
           | Some id -> Shape.Map.add_module shape_map id md_shape
           | None -> shape_map
         in
-        Tstr_module {mb_id=id; mb_name=name; mb_expr=modl;
-                     mb_presence=pres; mb_attributes=attrs;  mb_loc=pmb_loc; },
+        Tstr_module {mb_id=id; mb_name=name; mb_decl_uid = md.md_uid;
+                     mb_expr=modl; mb_presence=pres; mb_attributes=attrs;
+                     mb_loc=pmb_loc; },
         sg,
         shape_map,
         newenv
