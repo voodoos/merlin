@@ -33,7 +33,7 @@
       "file": "$TESTCASE_ROOT/b.ml",
       "pos": {
         "line": 1,
-        "col": 0
+        "col": 5
       }
     },
     "notifications": []

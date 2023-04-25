@@ -44,7 +44,7 @@
     "file": "$TESTCASE_ROOT/main.ml",
     "pos": {
       "line": 6,
-      "col": 2
+      "col": 9
     }
   }
 
@@ -54,6 +54,6 @@
     "file": "$TESTCASE_ROOT/main.ml",
     "pos": {
       "line": 2,
-      "col": 2
+      "col": 9
     }
   }
