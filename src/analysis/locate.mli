@@ -33,6 +33,12 @@ module Namespace : sig
   type t = [ `Type | `Mod | `Modtype | `Vals | `Constr | `Labels ]
 end
 
+val find_source
+  : config:Mconfig.t
+  -> Location.t
+  -> string
+  -> [> `File_not_found of string | `Found of string option * Lexing.position ]
+
 val from_path
   : config:Mconfig.t
   -> env:Env.t
