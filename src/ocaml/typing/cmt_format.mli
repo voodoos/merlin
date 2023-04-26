@@ -140,3 +140,12 @@ val record_value_dependency:
   val read_signature : 'a -> string -> Types.signature * 'b list * 'c list
 
 *)
+
+
+val iter_decl
+  : uid_to_decl_tbl:item_declaration Types.Uid.Tbl.t
+  -> Tast_iterator.iterator
+
+val index_decl
+  : shape_index:(index_item * Longident.t Location.loc) list ref
+  -> Tast_iterator.iterator

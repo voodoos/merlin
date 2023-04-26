@@ -106,9 +106,6 @@ let iter_on_annots (it : Tast_iterator.iterator) = function
 let uid_to_decl : item_declaration Types.Uid.Tbl.t ref =
   Local_store.s_table Types.Uid.Tbl.create 16
 
-let register_uid uid fragment =
-  Types.Uid.Tbl.add !uid_to_decl uid fragment
-
 module Local_reduce = Shape.Make_reduce(struct
     type env = Env.t
     let fuel = 10
@@ -120,7 +117,10 @@ module Local_reduce = Shape.Make_reduce(struct
       Env.shape_of_path ~namespace env (Pident id)
   end)
 
-let iter_decl =
+let iter_decl ~uid_to_decl_tbl =
+  let register_uid uid fragment =
+    Types.Uid.Tbl.add uid_to_decl_tbl uid fragment
+  in
   Tast_iterator.{ default_iterator with
 
   value_bindings = (fun sub ((_, vbs) as bindings) ->
@@ -208,20 +208,20 @@ let clear_env binary_annots =
 let shape_index : (index_item * Longident.t Location.loc) list ref =
   Local_store.s_ref []
 
-let add_loc_to_index ~namespace env path lid =
-  let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
-  if not_ghost lid then
-    try
-      let shape = Env.shape_of_path ~namespace env path in
-      let shape = Local_reduce.weak_reduce env shape in
-      if not (Shape.is_closed shape) then
-        shape_index := (Unresolved shape, lid) :: !shape_index
-      else Option.iter
-        ~f:(fun uid -> shape_index := (Resolved uid, lid) :: !shape_index)
-        shape.Shape.uid
-    with Not_found -> ()
-
-let index_decl =
+let index_decl ~shape_index =
+  let add_loc_to_index ~namespace env path lid =
+    let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
+    if not_ghost lid then
+      try
+        let shape = Env.shape_of_path ~namespace env path in
+        let shape = Local_reduce.weak_reduce env shape in
+        if not (Shape.is_closed shape) then
+          shape_index := (Unresolved shape, lid) :: !shape_index
+        else Option.iter
+          ~f:(fun uid -> shape_index := (Resolved uid, lid) :: !shape_index)
+          shape.Shape.uid
+      with Not_found -> ()
+  in
   let add_constructor_description env lid = function
     | { Types.cstr_tag = Cstr_extension (path, _); _ } ->
         add_loc_to_index ~namespace:Extension_constructor env path lid
@@ -355,8 +355,10 @@ let index_decl =
       default_iterator.structure_item sub str_item)
 }
 
-let gather_declarations binary_annots = iter_on_annots iter_decl binary_annots
-let index_declarations binary_annots = iter_on_annots index_decl binary_annots
+let gather_declarations binary_annots =
+  iter_on_annots (iter_decl ~uid_to_decl_tbl:!uid_to_decl) binary_annots
+let index_declarations binary_annots =
+  iter_on_annots (index_decl ~shape_index) binary_annots
 
 exception Error of error
 
