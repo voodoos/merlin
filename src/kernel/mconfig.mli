@@ -27,6 +27,7 @@ val dump_ocaml : ocaml -> json
 (** {1 Merlin high-level settings} *)
 
 type merlin = {
+  index_file  : string option;
   build_path  : string list;
   source_path : string list;
   cmi_path    : string list;
@@ -55,7 +56,7 @@ val dump_merlin : merlin -> json
 
 (** {1 Some flags affecting queries} *)
 
-module Verbosity : sig 
+module Verbosity : sig
   type t = Smart | Lvl of int
 
   (** the default value for verbosity, i.e., [Lvl 0] *)
@@ -109,6 +110,8 @@ val source_path : t -> string list
 val build_path : t -> string list
 
 val cmt_path : t -> string list
+
+val index_file : t -> string option
 
 val global_modules : ?include_current:bool -> t -> string list
 

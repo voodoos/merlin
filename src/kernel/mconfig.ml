@@ -68,6 +68,7 @@ let marg_commandline f =
 (** {1 Merlin high-level settings} *)
 
 type merlin = {
+  index_file  : string option;
   build_path  : string list;
   source_path : string list;
   cmi_path    : string list;
@@ -593,6 +594,7 @@ let initial = {
     warnings             = Warnings.backup ();
   };
   merlin = {
+    index_file  = Some "project.index";
     build_path  = [];
     source_path = [];
     cmi_path    = [];
@@ -772,3 +774,5 @@ let global_modules ?(include_current=false) config = (
 let filename t = t.query.filename
 
 let unitname t = Misc.unitname t.query.filename
+
+let index_file t = t.merlin.index_file
