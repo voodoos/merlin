@@ -9,7 +9,7 @@ module Json = struct
     Std.Json.pretty_to_string := f
 end
 
-module System_command = struct
-  let set_unix f =
-    Std.System_command.unix := f
+module System = struct
+  let set_run_in_directory f =
+    Std.System.run_in_directory := f
 end

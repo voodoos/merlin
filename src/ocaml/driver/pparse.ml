@@ -38,34 +38,29 @@ let report_error = function
     log ~title:"report_error"
       "External preprocessor does not produce a valid file. Command line: %s" cmd
 
-
-external windows_merlin_system_command : string -> cwd:string -> int = "ml_merlin_system_command"
-
 let commandline prog args =
-  Printf.sprintf "%s %s" prog (String.concat ~sep:" " args)
-
-let merlin_system_command ~prog ~args ~cwd =
-  let cmd = commandline prog args in
-  if Sys.win32 then
-    windows_merlin_system_command cmd ~cwd
-  else
-    !Std.System_command.unix ~prog ~args ~cwd
+  Filename.quote_command prog args
 
 let apply_rewriter magic ppx (fn_in, failures) =
   let title = "apply_rewriter" in
   let fn_out = Filename.temp_file "camlppx" "" in
-  let args =
-    let redirect =
-      if Sys.win32 then [] else ["1>&2"] in
-    Filename.quote fn_in
-    :: Filename.quote fn_out
-    :: redirect
-  in
+  let args = [fn_in; fn_out] in
   let comm = commandline ppx.workval args in
   log ~title "running %s from directory %S" comm ppx.workdir;
   Logger.log_flush ();
+  let ok =
+    match
+      !System.run_in_directory
+        ~prog:ppx.workval
+        ~prog_is_quoted:true
+        ~args
+        ~cwd:ppx.workdir
+        ()
+    with
+    | `Finished 0 -> true
+    | `Finished _ | `Cancelled -> false
+  in
   let failure =
-    let ok = merlin_system_command ~prog:ppx.workval ~args:args ~cwd:ppx.workdir = 0 in
     if not ok then Some (CannotRun comm)
     else if not (Sys.file_exists fn_out) then
       Some (WrongMagic comm)
@@ -159,12 +154,21 @@ let apply_pp ~workdir ~filename ~source ~pp =
     close_out oc
   end;
   let fn_out = fn_in ^ ".out" in
-  let args = [
-    Filename.quote fn_in;
-    Printf.sprintf "1>%s" (Filename.quote fn_out)
-  ] in
+  let args = [fn_in] in
   let comm = commandline pp args in
-  let ok = merlin_system_command ~prog:pp ~args:args ~cwd:workdir = 0 in
+  let ok =
+    match
+      !System.run_in_directory
+        ~prog:pp
+        ~prog_is_quoted:true
+        ~args
+        ~stdout:fn_out
+        ~cwd:workdir
+        ()
+    with
+    | `Finished 0 -> true
+    | `Finished _ | `Cancelled -> false
+  in
   Misc.remove_file fn_in;
   if not ok then begin
     Misc.remove_file fn_out;
