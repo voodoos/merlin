@@ -4,6 +4,9 @@ unreleased
 
   + merlin binary
     - Allow monadic IO in dot protocol (#1581)
+    - Add a `scope` option to the `occurrences` command in preparation for
+      the upcoming `project-wide-occurrences` feature (#1596)
+    - Configurable system command for spawning ppxes (#1585)
   + test suite
     - Add missing dependency to a test using ppxlib (#1583)
 
