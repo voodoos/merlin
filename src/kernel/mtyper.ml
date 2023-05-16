@@ -2,6 +2,7 @@ open Std
 open Local_store
 
 let {Logger. log} = Logger.for_section "Mtyper"
+let {Logger. log = log_dbg} = Logger.for_section "DBG"
 
 type ('p,'t) item = {
   parsetree_item: 'p;
@@ -137,7 +138,11 @@ let type_interface config caught parsetree =
     (env0, snap0, `Interface (List.rev_append prefix suffix))
 
 let run config parsetree =
+  log_dbg ~title:"levels" "%a" Logger.fmt (fun fmt ->
+    Format.fprintf fmt "Current level: %i\n"
+      (Ctype.get_current_level ()));
   if not (Env.check_state_consistency ()) then (
+    log_dbg ~title:"stats" "Cleaning";
     (* Resetting the local store will clear the load_path cache.
        Save it now, reset the store and then restore the path. *)
     let load_path = Load_path.get_paths () in
@@ -154,6 +159,12 @@ let run config parsetree =
     | `Interface parsetree -> type_interface config caught parsetree
   in
   Typecore.reset_delayed_checks ();
+  Gc.full_major ();
+  log_dbg ~title:"stats" "DBG Stats: %s\n" (Env.persistent_stats ());
+
+  log_dbg ~title:"levels" "%a" Logger.fmt (fun fmt ->
+    Format.fprintf fmt "Current level: %i\n"
+      (Ctype.get_current_level ()));
   { config; initial_env; initial_snapshot; typedtree }
 
 let get_env ?pos:_ t =

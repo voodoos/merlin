@@ -4095,3 +4095,8 @@ let short_paths env =
     let basis = Persistent_env.short_paths_basis !persistent_env in
     Short_paths.initial basis
   | Some short_paths -> short_paths
+
+let persistent_stats () =
+  Format.sprintf "persistent_env size: %i\n"
+  (Obj.reachable_words (Obj.repr persistent_env))
+
