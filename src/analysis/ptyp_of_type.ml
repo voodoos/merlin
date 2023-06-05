@@ -228,9 +228,9 @@ and group_items (items : Types.signature_item list) =
     | Sig_type (id, type_decl, Trec_not, _) :: rest ->
       let type_, rest = read_type [type_declaration id type_decl] rest in
       group (Type (Asttypes.Nonrecursive, type_) :: acc) rest
-    | Sig_class _ as item :: _ :: _ :: _ :: rest ->
+    | Sig_class _ as item :: _ :: _ :: rest ->
       group (Item item :: acc) rest
-    | Sig_class_type _ as item :: _ :: _ :: rest ->
+    | Sig_class_type _ as item :: _ :: rest ->
       group (Item item :: acc) rest
     | item :: rest -> group (Item item :: acc) rest
     | [] -> List.rev acc
