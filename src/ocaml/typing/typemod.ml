@@ -2513,9 +2513,14 @@ and type_one_application ~ctx:(apply_loc,md_f,args)
         Includemod.Apply_error {loc=apply_loc;env;lid_app;mty_f;args}
       in
       begin match app_view with
-      | { arg = None; _ } ->
-          (* todo Merlin: should we recover ?*)
-          raise (apply_error ())
+      | { arg = None; loc = app_loc; attributes = app_attributes; _ } ->
+          Msupport.raise_error (apply_error ());
+          { mod_desc = Tmod_apply_unit(funct);
+            mod_type = mty_res;
+            mod_env = env;
+            mod_attributes = app_attributes;
+            mod_loc = app_loc },
+      funct_shape
       | { loc = app_loc; attributes = app_attributes;
           arg = Some { shape = arg_shape; path = arg_path; arg } } ->
       let coercion =
