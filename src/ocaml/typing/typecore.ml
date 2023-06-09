@@ -3905,13 +3905,10 @@ and type_expect_
           exp_type = typ;
           exp_attributes = sexp.pexp_attributes;
           exp_env = env }
-      with Error (_, _, Undefined_method _) ->
+      with Error (_, _, Undefined_method (_, _, valid_methods)) ->
         let valid_methods =
-          (* todo Merlin : we lost some recovery here *)
-          let obj_meths = ref None in
-          match !obj_meths with
-          | Some meths ->
-            Some (Meths.fold (fun meth _meth_ty li -> meth::li) meths [])
+          match valid_methods with
+          | Some meths -> Some meths
           | None ->
             match get_desc (expand_head env obj.exp_type) with
             | Tobject (fields, _) ->
