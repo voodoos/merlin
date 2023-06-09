@@ -1362,7 +1362,7 @@ end = struct
         let md = find_module t p in
         Module.find_application t md arg
     | Path.Pextra_ty _ ->
-        raise Not_found (* todo merlin *)
+        raise Not_found
 
   let find_type t path =
     match path with
@@ -1371,10 +1371,8 @@ end = struct
     | Path.Pdot(p, name) ->
         let md = find_module t p in
         Module.find_type t md name
-    | Path.Papply _ ->
+    | Path.Papply _ | Path.Pextra_ty _ ->
         raise Not_found
-    | Path.Pextra_ty _ ->
-        raise Not_found (* todo merlin *)
 
   let find_class_type t path =
     match path with
@@ -1383,10 +1381,8 @@ end = struct
     | Path.Pdot(p, name) ->
         let md = find_module t p in
         Module.find_class_type t md name
-    | Path.Papply _ ->
+    | Path.Papply _ | Path.Pextra_ty _ ->
         raise Not_found
-    | Path.Pextra_ty _ ->
-        raise Not_found (* todo merlin *)
 
   let find_module_type t path =
     match path with
@@ -1395,10 +1391,8 @@ end = struct
     | Path.Pdot(p, name) ->
         let md = find_module t p in
         Module.find_module_type t md name
-    | Path.Papply _ ->
+    | Path.Papply _ | Path.Pextra_ty _ ->
         raise Not_found
-    | Path.Pextra_ty _ ->
-        raise Not_found (* todo merlin *)
 
   let canonical_type_path t id =
     match Ident_map.find id t.types with
@@ -1437,13 +1431,11 @@ end = struct
 
   let rec is_module_path_visible t = function
     | Path.Pident id -> is_module_ident_visible t id
-    | Path.Pdot(path, _) ->
+    | Path.Pdot(path, _) | Pextra_ty (path, _) ->
         is_module_path_visible t path
     | Path.Papply(path1, path2) ->
         is_module_path_visible t path1
         && is_module_path_visible t path2
-    | Path.Pextra_ty _ ->
-        false (* todo merlin *)
 
   let is_type_ident_visible t id =
     let name = Ident.name id in
@@ -1462,13 +1454,11 @@ end = struct
 
   let is_type_path_visible t = function
     | Path.Pident id -> is_type_ident_visible t id
-    | Path.Pdot(path, _) -> is_module_path_visible t path
+    | Path.Pdot(path, _) | Pextra_ty (path, _) -> is_module_path_visible t path
     | Path.Papply _ ->
         failwith
           "Short_paths_graph.Graph.is_type_path_visible: \
            invalid type path"
-    | Path.Pextra_ty _ ->
-      failwith "SPG not implemented 1" (* todo merlin *)
 
   let is_class_type_ident_visible t id =
     let name = Ident.name id in
@@ -1488,12 +1478,10 @@ end = struct
   let is_class_type_path_visible t = function
     | Path.Pident id -> is_class_type_ident_visible t id
     | Path.Pdot(path, _) -> is_module_path_visible t path
-    | Path.Papply _ ->
+    | Path.Papply _ | Path.Pextra_ty _ ->
         failwith
           "Short_paths_graph.Graph.is_class_type_path_visible: \
            invalid class type path"
-    | Path.Pextra_ty _ ->
-        failwith "SPG not implemented 2" (* todo merlin *)
 
   let is_module_type_ident_visible t id =
     let name = Ident.name id in
@@ -1513,12 +1501,10 @@ end = struct
   let is_module_type_path_visible t = function
     | Path.Pident id -> is_module_type_ident_visible t id
     | Path.Pdot(path, _) -> is_module_path_visible t path
-    | Path.Papply _ ->
+    | Path.Papply _ | Path.Pextra_ty _ ->
         failwith
           "Short_paths_graph.Graph.is_module_type_path_visible: \
            invalid module type path"
-    | Path.Pextra_ty _ ->
-        failwith "SPG not implemented 3" (* todo merlin *)
 
 end
 

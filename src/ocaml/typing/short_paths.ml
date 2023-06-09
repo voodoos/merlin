@@ -1531,8 +1531,7 @@ module Shortest = struct
               Application
                 { kind; node; origin; best; min; max;
                   func; arg; func_first; searched; finished }
-          | Path.Pextra_ty _ ->
-              failwith "SP not implemented " (* todo merlin *)
+          | Path.Pextra_ty _ -> raise Not_found
       in
       loop kind canonical_path
 

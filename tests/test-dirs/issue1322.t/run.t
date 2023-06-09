@@ -1,4 +1,3 @@
-FIXME: short-path disabled in 5.1
   $ $MERLIN single errors -filename foo.ml < foo.ml
   {
     "class": "return",
@@ -18,7 +17,7 @@ FIXME: short-path disabled in 5.1
         "message": "In this `with' constraint, the new definition of t
   does not match its original definition in the constrained signature:
   Type declarations do not match:
-    type 'a t = 'a option constraint 'a = int
+    type 'a t = 'a t constraint 'a = int
   is not included in
     type 'a t
   Their parameters differ
