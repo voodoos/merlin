@@ -111,9 +111,9 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
     let index_file = Mconfig.index_file config in
     let index = index_buffer ~env ~local_defs () in
     if scope = `Project && Option.is_some index_file then begin
-      let index_file = Option.get index_file in
-      let external_uideps = load_external_index ~index_file in
-      merge_tbl ~into:index external_uideps.defs
+      Option.iter index_file ~f:(fun index_file ->
+        let external_uideps = load_external_index ~index_file in
+        merge_tbl ~into:index external_uideps.defs)
     end;
     (* TODO ignore externally indexed locs from the current buffer *)
     let locs = (match Hashtbl.find_opt index uid with
