@@ -113,6 +113,7 @@ let dump_merlin x =
         ]) x.suffixes
     );
     "stdlib"       , Json.option Json.string x.stdlib;
+    "index_file"   , Json.option Json.string x.index_file;
     "reader"       , `List (List.map ~f:Json.string x.reader);
     "protocol"     , (match x.protocol with
         | `Json -> `String "json"
@@ -248,6 +249,7 @@ let get_external_config path t =
       extensions = dot.extensions @ merlin.extensions;
       suffixes = dot.suffixes @ merlin.suffixes;
       stdlib = (if dot.stdlib = None then merlin.stdlib else dot.stdlib);
+      index_file = (if dot.index_file = None then merlin.index_file else dot.index_file);
       reader =
         if dot.reader = []
         then merlin.reader
@@ -594,7 +596,7 @@ let initial = {
     warnings             = Warnings.backup ();
   };
   merlin = {
-    index_file  = Some "project.index";
+    index_file  = None;
     build_path  = [];
     source_path = [];
     cmi_path    = [];

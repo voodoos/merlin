@@ -110,10 +110,13 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
     (* Todo: use magic number instead and don't use the lib *)
     let index_file = Mconfig.index_file config in
     let index = index_buffer ~env ~local_defs () in
-    if scope = `Project && Option.is_some index_file then begin
-      Option.iter index_file ~f:(fun index_file ->
+    if scope = `Project then begin
+      match index_file with
+      | None -> log ~title:"locs_of" "No external index specified"
+      | Some index_file ->
+        log ~title:"locs_of" "Using external index: %S" index_file;
         let external_uideps = load_external_index ~index_file in
-        merge_tbl ~into:index external_uideps.defs)
+        merge_tbl ~into:index external_uideps.defs
     end;
     (* TODO ignore externally indexed locs from the current buffer *)
     let locs = (match Hashtbl.find_opt index uid with
