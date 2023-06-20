@@ -29,7 +29,7 @@ let index_buffer ~env ~local_defs () =
           | _, Some cmt_infos ->
             log ~title:"read_unit_shape" "shapes loaded for %s" unit_name;
             cmt_infos.cmt_impl_shape
-          | _ ->
+          | exception _ | _ ->
             log ~title:"read_unit_shape" "failed to find %s" unit_name;
             None
 
@@ -109,6 +109,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
   | Some uid ->
     (* Todo: use magic number instead and don't use the lib *)
     let index_file = Mconfig.index_file config in
+    log ~title:"locs_of" "Indexing current buffer";
     let index = index_buffer ~env ~local_defs () in
     if scope = `Project then begin
       match index_file with
