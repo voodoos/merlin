@@ -33,3 +33,34 @@ FIXME: locate fails due to the presence of a first-class module and fallsback to
     }
   ]
 
+  $ cat >main.ml <<EOF
+  > module A = struct let x = 42 end
+  > module B = A
+  > module C = B
+  > EOF
+
+FIXME: locate traverses module aliases which leads to incorrect occurrences
+  $ $MERLIN single occurrences -scope buffer -identifier-at 3:11 \
+  > - filename main.ml <main.ml | jq '.value'
+  [
+    {
+      "start": {
+        "line": 2,
+        "col": 11
+      },
+      "end": {
+        "line": 2,
+        "col": 12
+      }
+    },
+    {
+      "start": {
+        "line": 3,
+        "col": 11
+      },
+      "end": {
+        "line": 3,
+        "col": 12
+      }
+    }
+  ]
