@@ -39,20 +39,10 @@ FIXME: locate fails due to the presence of a first-class module and fallsback to
   > module C = B
   > EOF
 
-FIXME: locate traverses module aliases which leads to incorrect occurrences
+Aliases are not traversed when looking for occurrences
   $ $MERLIN single occurrences -scope buffer -identifier-at 3:11 \
   > - filename main.ml <main.ml | jq '.value'
   [
-    {
-      "start": {
-        "line": 2,
-        "col": 11
-      },
-      "end": {
-        "line": 2,
-        "col": 12
-      }
-    },
     {
       "start": {
         "line": 3,
