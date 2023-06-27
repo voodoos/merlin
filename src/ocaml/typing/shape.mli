@@ -74,6 +74,7 @@ and desc =
   | Leaf
   | Proj of t * Item.t
   | Comp_unit of string
+  | Alias of t
 
 val print : Format.formatter -> t -> unit
 

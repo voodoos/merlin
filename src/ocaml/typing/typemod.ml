@@ -2787,7 +2787,12 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
             md_uid;
           }
         in
-        let md_shape = Shape.set_uid_if_none md_shape md_uid in
+        let md_shape =
+          match modl.mod_type with
+          | Mty_alias _path ->
+            Shape.{ uid = Some md_uid; desc = Alias md_shape }
+          | _ -> Shape.set_uid_if_none md_shape md_uid
+        in
         Env.register_uid md_uid pmb_loc;
         (*prerr_endline (Ident.unique_toplevel_name id);*)
         Mtype.lower_nongen outer_scope md.md_type;

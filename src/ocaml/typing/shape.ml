@@ -133,6 +133,7 @@ and desc =
   | Leaf
   | Proj of t * Item.t
   | Comp_unit of string
+  | Alias of t
 
 let print fmt =
   let print_uid_opt =
@@ -184,6 +185,7 @@ let print fmt =
             )
         in
         Format.fprintf fmt "{@[<v>%a@,%a@]}" print_uid_opt uid print_map map
+    | Alias t -> Format.fprintf fmt "Alias@[(@[<v>%a@,%a@])@]" print_uid_opt uid aux t
   in
   Format.fprintf fmt"@[%a@]@;" aux
 
@@ -194,6 +196,7 @@ let rec is_closed (t : t) = match t.desc with
   | App (t, t') -> is_closed t && is_closed t'
   | Struct map -> Item.Map.for_all (fun _ t -> is_closed t) map
   | Proj (t, _) -> is_closed t
+  | Alias t -> is_closed t
 
 let fresh_var ?(name="shape-var") uid =
   let var = Ident.create_local name in
@@ -249,6 +252,7 @@ end) = struct
     | NApp of nf * nf
     | NAbs of local_env * var * t * delayed_nf
     | NStruct of delayed_nf Item.Map.t
+    | NAlias of nf
     | NProj of nf * Item.t
     | NLeaf
     | NComp_unit of string
@@ -412,6 +416,7 @@ end) = struct
       | Struct m ->
           let mnf = Item.Map.map (delay_reduce env) m in
           return (NStruct mnf)
+      | Alias t -> return (NAlias (reduce env t))
 
   let rec read_back env (nf : nf) : t =
     in_memo_table env.read_back_memo_table nf (read_back_ env) nf
@@ -436,6 +441,7 @@ end) = struct
         Abs(x, read_back_force nf)
     | NStruct nstr ->
         Struct (Item.Map.map read_back_force nstr)
+    | NAlias nf -> Alias (read_back nf)
     | NProj (nf, item) ->
         Proj (read_back nf, item)
     | NLeaf -> Leaf
@@ -463,6 +469,7 @@ end) = struct
           Abs(x, weak_read_back_no_force nf)
       | NStruct nstr ->
           Struct (Item.Map.map weak_read_back_no_force nstr)
+      | NAlias nf -> Alias (weak_read_back env nf)
       | NProj (nf, item) ->
           Proj (read_back env nf, item)
       | NLeaf -> Leaf
