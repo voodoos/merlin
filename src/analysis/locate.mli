@@ -43,6 +43,7 @@ val from_path
   : config:Mconfig.t
   -> env:Env.t
   -> namespace:Namespace.all
+  -> traverse_aliases:bool
   -> [ `ML | `MLI ]
   -> Path.t
   -> [> `File_not_found of string
@@ -56,6 +57,7 @@ val from_string
   -> env:Env.t
   -> local_defs:Mtyper.typedtree
   -> pos:Lexing.position
+  -> traverse_aliases:bool
   -> ?namespaces:Namespace.t list
   -> [ `ML | `MLI ]
   -> string

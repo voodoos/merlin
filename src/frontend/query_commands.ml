@@ -391,6 +391,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
         match Locate.from_path
                 ~env
                 ~config:(Mpipeline.final_config pipeline)
+                ~traverse_aliases:true
                 ~namespace:`Type `MLI
                 path with
         | `Builtin -> `Builtin (Path.name path)
@@ -523,6 +524,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     begin match
       Locate.from_string
         ~config:(Mpipeline.final_config pipeline)
+        ~traverse_aliases:true
         ~env ~local_defs ~pos ml_or_mli path
     with
     | `Found (_, file, pos) ->

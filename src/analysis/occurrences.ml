@@ -88,6 +88,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
   let locate_result =
     Locate.from_string
     ~config
+    ~traverse_aliases:false
     ~env ~local_defs ~pos `ML path
   in
   let uid =

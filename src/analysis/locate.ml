@@ -321,7 +321,12 @@ let scrape_alias ~env ~fallback_uid path =
   in
   non_alias_declaration_uid ~fallback_uid path
 
-let uid_of_path ~config ~env ~ml_or_mli ~decl_uid path ns =
+let rec strip_aliases shape =
+  match shape.Shape.desc with
+  | Alias s -> strip_aliases s
+  | _ -> shape
+
+let uid_of_path ~config ~env ~ml_or_mli ~decl_uid ~traverse_aliases path ns =
   let module Shape_reduce =
     Shape.Make_reduce (struct
       type env = Env.t
@@ -350,6 +355,7 @@ let uid_of_path ~config ~env ~ml_or_mli ~decl_uid path ns =
     log ~title:"shape_of_path" "initial: %a"
       Logger.fmt (fun fmt -> Shape.print fmt shape);
     let r = Shape_reduce.weak_reduce env shape in
+    let r = if traverse_aliases then strip_aliases r else r in
     log ~title:"shape_of_path" "reduced: %a"
       Logger.fmt (fun fmt -> Shape.print fmt r);
     r.uid
@@ -450,8 +456,10 @@ let from_uid ~config ~ml_or_mli uid loc path =
   | None -> log ~title "No UID found, fallbacking to lookup location.";
       `Found (None, loc)
 
-let locate ~config ~env ~ml_or_mli decl_uid loc path ns =
-  let uid = uid_of_path ~config ~env ~ml_or_mli ~decl_uid path ns in
+let locate ~config ~env ~ml_or_mli ~traverse_aliases decl_uid loc path ns =
+  let uid =
+    uid_of_path ~config ~env ~ml_or_mli ~decl_uid ~traverse_aliases path ns
+  in
   from_uid ~config ~ml_or_mli uid loc path
 
 let path_and_loc_of_cstr desc _ =
@@ -745,7 +753,7 @@ end = struct
       Some x
 end
 
-let uid_from_longident ~config ~env nss ml_or_mli ident =
+let uid_from_longident ~config ~env ~traverse_aliases nss ml_or_mli ident =
   let str_ident =
     try String.concat ~sep:"." (Longident.flatten ident)
     with _-> "Not a flat longident"
@@ -756,15 +764,20 @@ let uid_from_longident ~config ~env nss ml_or_mli ident =
     if Utils.is_builtin_path path then
       `Builtin
     else
-      let uid = uid_of_path ~config ~env ~ml_or_mli ~decl_uid path namespace in
+      let uid =
+        uid_of_path ~config ~env ~ml_or_mli
+          ~decl_uid ~traverse_aliases path namespace
+      in
       `Uid (uid, loc, path)
 
-let from_longident ~config ~env nss ml_or_mli ident =
-  match uid_from_longident ~config ~env nss ml_or_mli ident with
+let from_longident ~config ~env ~traverse_aliases nss ml_or_mli ident =
+  match
+    uid_from_longident ~config ~env ~traverse_aliases nss ml_or_mli ident
+  with
   | `Uid (uid, loc, path) -> from_uid ~config ~ml_or_mli uid loc path
   | (`Builtin | `Not_in_env _) as v -> v
 
-let from_path ~config ~env ~namespace ml_or_mli path =
+let from_path ~config ~env ~namespace ~traverse_aliases ml_or_mli path =
   File_switching.reset ();
   if Utils.is_builtin_path path then
     `Builtin
@@ -772,7 +785,9 @@ let from_path ~config ~env ~namespace ml_or_mli path =
     match Env_lookup.loc path namespace env with
     | None -> `Not_in_env (Path.name path)
     | Some (loc, uid, namespace) ->
-      match locate ~config ~env ~ml_or_mli uid loc path namespace with
+      match
+        locate ~config ~env ~ml_or_mli ~traverse_aliases uid loc path namespace
+      with
       | `Not_found _
       | `File_not_found _ as err -> err
       | `Found (uid, loc) ->
@@ -808,7 +823,8 @@ let infer_namespace ?namespaces ~pos lid browse is_label =
         "dropping inferred context, it is not precise enough";
       `Ok [ `Labels ]
 
-let from_string ~config ~env ~local_defs ~pos ?namespaces switch path =
+let from_string ~config ~env ~local_defs
+  ~pos ~traverse_aliases ?namespaces switch path =
   File_switching.reset ();
   let browse = Mbrowse.of_typedtree local_defs in
   let lid = Type_utils.parse_longident path in
@@ -820,7 +836,7 @@ let from_string ~config ~env ~local_defs ~pos ?namespaces switch path =
       log ~title:"from_string"
         "looking for the source of '%s' (prioritizing %s files)"
         path (match switch with `ML -> ".ml" | `MLI -> ".mli");
-      match from_longident ~config ~env nss switch ident with
+      match from_longident ~config ~env ~traverse_aliases nss switch ident with
       | `File_not_found _ | `Not_found _ | `Not_in_env _ as err -> err
       | `Builtin -> `Builtin path
       | `Found (uid, loc) ->
@@ -1013,7 +1029,9 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
     | `Completion_entry (namespace, path, _loc) ->
       log ~title:"get_doc" "completion: looking for the doc of '%a'"
         Logger.fmt (fun fmt -> Path.print fmt path) ;
-      let from_path = from_path ~config ~env ~namespace `MLI path in
+      let from_path =
+        from_path ~config ~env ~namespace ~traverse_aliases:true `MLI path
+      in
       begin match from_path with
       | `Found (uid, _, pos) ->
         let loc : Location.t =
@@ -1025,7 +1043,10 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
       end
     | `User_input path ->
       log ~title:"get_doc" "looking for the doc of '%s'" path;
-      begin match from_string ~config ~env ~local_defs ~pos `MLI path with
+      begin match
+        from_string ~config ~env ~local_defs
+          ~pos ~traverse_aliases:true `MLI path
+      with
       | `Found (uid, _, pos) ->
         let loc : Location.t =
           { loc_start = pos; loc_end = pos; loc_ghost = true }
