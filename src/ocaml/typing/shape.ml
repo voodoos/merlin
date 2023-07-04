@@ -362,18 +362,23 @@ end) = struct
           | Some t -> reduce env t
           | None -> return (NComp_unit unit_name)
           end
+      | App({ desc = Alias str }, arg) | App(str, { desc = Alias arg }) ->
+          (* Aliases are ignored when reducing applications *)
+          reduce env { t with desc = App(str, arg) }
       | App(f, arg) ->
           let f = reduce env f in
           begin match f.desc with
           | NAbs(clos_env, var, body, _body_nf) ->
               let arg = delay_reduce env arg in
               let env = bind { env with local_env = clos_env } var (Some arg) in
-              reduce env body
-              |> improve_uid t.uid
+              { (reduce env body) with uid = t.uid }
           | _ ->
               let arg = reduce env arg in
               return (NApp(f, arg))
           end
+      | Proj({ desc = Alias str }, item) ->
+          (* Aliases are ignored when reducing projections *)
+          reduce env { t with desc = Proj(str, item) }
       | Proj(str, item) ->
           let str = reduce env str in
           let nored () = return (NProj(str, item)) in
