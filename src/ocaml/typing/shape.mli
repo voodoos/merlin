@@ -71,10 +71,10 @@ and desc =
   | Abs of var * t
   | App of t * t
   | Struct of t Item.Map.t
+  | Alias of t
   | Leaf
   | Proj of t * Item.t
   | Comp_unit of string
-  | Alias of t
 
 val print : Format.formatter -> t -> unit
 
