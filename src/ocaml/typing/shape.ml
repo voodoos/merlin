@@ -307,9 +307,9 @@ end) = struct
   let bind env var shape =
     { env with local_env = Ident.Map.add var shape env.local_env }
 
-  let rec reduce_ env t =
+  let rec reduce_ ?(strip_aliases = false) env t =
     let memo_key = (env.local_env, t) in
-    in_memo_table env.reduce_memo_table memo_key (reduce__ env) t
+    in_memo_table env.reduce_memo_table memo_key (reduce__ ~strip_aliases env) t
   (* Memoization is absolutely essential for performance on this
      problem, because the normal forms we build can in some real-world
      cases contain an exponential amount of redundancy. Memoization
@@ -348,8 +348,10 @@ end) = struct
      same hash.
 *)
 
-  and reduce__ ({fuel; global_env; local_env; _} as env) (t : t) =
-    let reduce env t = reduce_ env t in
+  and reduce__ ~strip_aliases ({fuel; global_env; local_env; _} as env) (t : t) =
+    let reduce ?(strip_aliases = strip_aliases) env t =
+      reduce_ ~strip_aliases env t
+    in
     let delay_reduce env t = Thunk (env.local_env, t) in
     let force (Thunk (local_env, t)) =
       reduce { env with local_env } t in
@@ -362,11 +364,11 @@ end) = struct
           | Some t -> reduce env t
           | None -> return (NComp_unit unit_name)
           end
-      | App({ desc = Alias str }, arg) | App(str, { desc = Alias arg }) ->
+      | App(str, { desc = Alias arg }) ->
           (* Aliases are ignored when reducing applications *)
           reduce env { t with desc = App(str, arg) }
       | App(f, arg) ->
-          let f = reduce env f in
+          let f = reduce ~strip_aliases:true env f in
           begin match f.desc with
           | NAbs(clos_env, var, body, _body_nf) ->
               let arg = delay_reduce env arg in
@@ -376,11 +378,8 @@ end) = struct
               let arg = reduce env arg in
               return (NApp(f, arg))
           end
-      | Proj({ desc = Alias str }, item) ->
-          (* Aliases are ignored when reducing projections *)
-          reduce env { t with desc = Proj(str, item) }
       | Proj(str, item) ->
-          let str = reduce env str in
+          let str = reduce ~strip_aliases:true env str in
           let nored () = return (NProj(str, item)) in
           begin match str.desc with
           | NStruct (items) ->
@@ -421,7 +420,11 @@ end) = struct
       | Struct m ->
           let mnf = Item.Map.map (delay_reduce env) m in
           return (NStruct mnf)
-      | Alias t -> return (NAlias (reduce env t))
+      | Alias t ->
+        if strip_aliases then
+          reduce ~strip_aliases:true env t
+        else
+          return (NAlias (reduce env t))
 
   let rec read_back env (nf : nf) : t =
     in_memo_table env.read_back_memo_table nf (read_back_ env) nf
