@@ -99,6 +99,9 @@ module Item = struct
     type t = string * Sig_component_kind.t
     let compare = compare
 
+    let name (name, _) = name
+    let kind (_, kind) = kind
+
     let make str ns = str, ns
 
     let value id = Ident.name id, Sig_component_kind.Value
@@ -185,7 +188,8 @@ let print fmt =
             )
         in
         Format.fprintf fmt "{@[<v>%a@,%a@]}" print_uid_opt uid print_map map
-    | Alias t -> Format.fprintf fmt "Alias@[(@[<v>%a@,%a@])@]" print_uid_opt uid aux t
+    | Alias t ->
+        Format.fprintf fmt "Alias@[(@[<v>%a@,%a@])@]" print_uid_opt uid aux t
   in
   Format.fprintf fmt"@[%a@]@;" aux
 
@@ -275,7 +279,8 @@ end) = struct
      by calling the normalization function as usual, but duplicate
      computations are precisely avoided by memoization.
    *)
-  and delayed_nf = Thunk of local_env * t
+  and thunk = { local_env : local_env; shape: t; strip_aliases: bool }
+  and delayed_nf = Thunk of thunk
 
   and local_env = delayed_nf option Ident.Map.t
   (* When reducing in the body of an abstraction [Abs(x, body)], we
@@ -300,7 +305,7 @@ end) = struct
     fuel: int ref;
     global_env: Params.env;
     local_env: local_env;
-    reduce_memo_table: (local_env * t, nf) Hashtbl.t;
+    reduce_memo_table: (thunk, nf) Hashtbl.t;
     read_back_memo_table: (nf, t) Hashtbl.t;
   }
 
@@ -308,8 +313,11 @@ end) = struct
     { env with local_env = Ident.Map.add var shape env.local_env }
 
   let rec reduce_ ?(strip_aliases = false) env t =
-    let memo_key = (env.local_env, t) in
-    in_memo_table env.reduce_memo_table memo_key (reduce__ ~strip_aliases env) t
+    let local_env = env.local_env in
+    let memo_key = { local_env; shape = t; strip_aliases } in
+    in_memo_table
+      env.reduce_memo_table memo_key
+      (reduce__ ~strip_aliases env) t
   (* Memoization is absolutely essential for performance on this
      problem, because the normal forms we build can in some real-world
      cases contain an exponential amount of redundancy. Memoization
@@ -348,13 +356,16 @@ end) = struct
      same hash.
 *)
 
-  and reduce__ ~strip_aliases ({fuel; global_env; local_env; _} as env) (t : t) =
-    let reduce ?(strip_aliases = strip_aliases) env t =
+  and reduce__ ~strip_aliases
+    ({fuel; global_env; local_env; _} as env) (t : t) =
+    let reduce ?(strip_aliases = false) env t =
       reduce_ ~strip_aliases env t
     in
-    let delay_reduce env t = Thunk (env.local_env, t) in
-    let force (Thunk (local_env, t)) =
-      reduce { env with local_env } t in
+    let delay_reduce ?(strip_aliases = false) { local_env; _ } t =
+      Thunk { local_env; shape = t; strip_aliases }
+    in
+    let force (Thunk { local_env; shape = t; strip_aliases }) =
+      reduce ~strip_aliases { env with local_env } t in
     let return desc : nf = { uid = t.uid; desc } in
     if !fuel < 0 then return (NoFuelLeft t.desc)
     else
@@ -364,14 +375,11 @@ end) = struct
           | Some t -> reduce env t
           | None -> return (NComp_unit unit_name)
           end
-      | App(str, { desc = Alias arg }) ->
-          (* Aliases are ignored when reducing applications *)
-          reduce env { t with desc = App(str, arg) }
       | App(f, arg) ->
           let f = reduce ~strip_aliases:true env f in
           begin match f.desc with
           | NAbs(clos_env, var, body, _body_nf) ->
-              let arg = delay_reduce env arg in
+              let arg = delay_reduce ~strip_aliases:true env arg in
               let env = bind { env with local_env = clos_env } var (Some arg) in
               { (reduce env body) with uid = t.uid }
           | _ ->
@@ -421,10 +429,8 @@ end) = struct
           let mnf = Item.Map.map (delay_reduce env) m in
           return (NStruct mnf)
       | Alias t ->
-        if strip_aliases then
-          reduce ~strip_aliases:true env t
-        else
-          return (NAlias (reduce env t))
+          if strip_aliases then reduce ~strip_aliases env t
+          else return (NAlias (reduce env t))
 
   let rec read_back env (nf : nf) : t =
     in_memo_table env.read_back_memo_table nf (read_back_ env) nf
@@ -438,8 +444,8 @@ end) = struct
 
   and read_back_desc env desc =
     let read_back nf = read_back env nf in
-    let read_back_force (Thunk (local_env, t)) =
-      read_back (reduce_ { env with local_env } t) in
+    let read_back_force (Thunk { local_env; shape = t; strip_aliases }) =
+      read_back (reduce_ ~strip_aliases { env with local_env } t) in
     match desc with
     | NVar v ->
         Var v
@@ -456,39 +462,10 @@ end) = struct
     | NComp_unit s -> Comp_unit s
     | NoFuelLeft t -> t
 
-  (* When in Merlin we don't need to perform full shape reduction since we are
-     only interested by uid's stored at the "top-level" of the shape once the
-     projections have been done. *)
-  let weak_read_back env (nf : nf) : t =
-    let cache = Hashtbl.create 42 in
-    let rec weak_read_back env nf =
-      let memo_key = (env.local_env, nf) in
-      in_memo_table cache memo_key (weak_read_back_ env) nf
-    and weak_read_back_ env nf : t =
-      { uid = nf.uid; desc = weak_read_back_desc env nf.desc }
-    and weak_read_back_desc env desc : desc =
-      let weak_read_back_no_force (Thunk (_local_env, t)) = t in
-      match desc with
-      | NVar v ->
-          Var v
-      | NApp (nft, nfu) ->
-          App(weak_read_back env nft, weak_read_back env nfu)
-      | NAbs (_env, x, _t, nf) ->
-          Abs(x, weak_read_back_no_force nf)
-      | NStruct nstr ->
-          Struct (Item.Map.map weak_read_back_no_force nstr)
-      | NAlias nf -> Alias (weak_read_back env nf)
-      | NProj (nf, item) ->
-          Proj (read_back env nf, item)
-      | NLeaf -> Leaf
-      | NComp_unit s -> Comp_unit s
-      | NoFuelLeft t -> t
-    in weak_read_back env nf
-
   (* Sharing the memo tables is safe at the level of a compilation unit since
     idents should be unique *)
-  let reduce_memo_table = ref @@ Hashtbl.create 42
-  let read_back_memo_table = ref @@ Hashtbl.create 42
+  let reduce_memo_table = Local_store.s_table Hashtbl.create 42
+  let read_back_memo_table = Local_store.s_table Hashtbl.create 42
 
   let reduce global_env t =
     let fuel = ref Params.fuel in
@@ -501,6 +478,32 @@ end) = struct
       local_env;
     } in
     reduce_ env t |> read_back env
+
+  let weak_read_back env (nf : nf) : t =
+    let cache = Hashtbl.create 42 in
+    let rec weak_read_back env nf =
+      let memo_key = (env.local_env, nf) in
+      in_memo_table cache memo_key (weak_read_back_ env) nf
+    and weak_read_back_ env nf : t =
+      { uid = nf.uid; desc = weak_read_back_desc env nf.desc }
+    and weak_read_back_desc env desc : desc =
+      let weak_read_back_no_force (Thunk { shape = t; _ }) = t in
+      match desc with
+      | NVar v ->
+          Var v
+      | NApp (nft, nfu) ->
+          App(weak_read_back env nft, weak_read_back env nfu)
+      | NAbs (_env, x, _t, nf) ->
+          Abs(x, weak_read_back_no_force nf)
+      | NStruct nstr ->
+          Struct (Item.Map.map weak_read_back_no_force nstr)
+      | NAlias nf -> Alias (read_back env nf)
+      | NProj (nf, item) ->
+          Proj (read_back env nf, item)
+      | NLeaf -> Leaf
+      | NComp_unit s -> Comp_unit s
+      | NoFuelLeft t -> t
+    in weak_read_back env nf
 
   let weak_reduce global_env t =
     let fuel = ref Params.fuel in
