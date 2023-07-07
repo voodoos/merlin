@@ -13,6 +13,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+let {Logger. log} = Logger.for_section "shapes"
+
 module Uid = struct
   type t =
     | Compilation_unit of string
@@ -372,7 +374,11 @@ end) = struct
       match t.desc with
       | Comp_unit unit_name ->
           begin match Params.read_unit_shape ~unit_name with
-          | Some t -> reduce env t
+          | Some t ->
+            log ~title:"reduce" "reducing (strip=%b) from CU %s:\n %a"
+            strip_aliases
+              unit_name Logger.fmt (fun fmt -> print fmt t);
+            reduce ~strip_aliases env t
           | None -> return (NComp_unit unit_name)
           end
       | App(f, arg) ->
@@ -387,6 +393,9 @@ end) = struct
               return (NApp(f, arg))
           end
       | Proj(str, item) ->
+        log ~title:"reduce" "reducing  (strip=%b) for proj:\n %a"
+        strip_aliases
+         Logger.fmt (fun fmt -> print fmt t);
           let str = reduce ~strip_aliases:true env str in
           let nored () = return (NProj(str, item)) in
           begin match str.desc with
@@ -464,8 +473,8 @@ end) = struct
 
   (* Sharing the memo tables is safe at the level of a compilation unit since
     idents should be unique *)
-  let reduce_memo_table = Local_store.s_table Hashtbl.create 42
-  let read_back_memo_table = Local_store.s_table Hashtbl.create 42
+  let reduce_memo_table = Hashtbl.create 42
+  let read_back_memo_table = Hashtbl.create 42
 
   let reduce global_env t =
     let fuel = ref Params.fuel in
@@ -473,8 +482,8 @@ end) = struct
     let env = {
       fuel;
       global_env;
-      reduce_memo_table = !reduce_memo_table;
-      read_back_memo_table = !read_back_memo_table;
+      reduce_memo_table = reduce_memo_table;
+      read_back_memo_table = read_back_memo_table;
       local_env;
     } in
     reduce_ env t |> read_back env
@@ -511,8 +520,8 @@ end) = struct
     let env = {
       fuel;
       global_env;
-      reduce_memo_table = !reduce_memo_table;
-      read_back_memo_table = !read_back_memo_table;
+      reduce_memo_table = reduce_memo_table;
+      read_back_memo_table = read_back_memo_table;
       local_env;
     } in
     reduce_ env t |> weak_read_back env
