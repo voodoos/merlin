@@ -91,23 +91,24 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
     ~traverse_aliases:false
     ~env ~local_defs ~pos `ML path
   in
-  let uid =
+  let def =
     match locate_result with
     | `At_origin ->
       log ~title:"locs_of" "Cursor is on definition / declaration";
       (* We are on  a definition / declaration so we look for the node's uid  *)
-      uid_of_node env node
-    | `Found (uid, _, _) ->
+      (* todo: location of the definition *)
+      Option.map ~f:(fun uid -> uid, Location.none) (uid_of_node env node)
+    | `Found (uid, _, loc) ->
         log ~title:"locs_of" "Found definition uid using locate: %a"
           Logger.fmt (fun fmt ->
             Format.pp_print_option (Shape.Uid.print) fmt uid);
-        uid
+        Option.map ~f:(fun uid -> uid, loc) uid
     | _ ->
       log ~title:"locs_of" "Locate failed to find a definition.";
       None
   in
-  match uid with
-  | Some uid ->
+  match def with
+  | Some (uid, loc) ->
     (* Todo: use magic number instead and don't use the lib *)
     let index_file = Mconfig.index_file config in
     log ~title:"locs_of" "Indexing current buffer";
@@ -140,5 +141,5 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
           end else Some loc)
       | None -> Format.eprintf "None\n%!"; [])
     in
-    Ok locs
+    Ok (loc::locs)
   | None -> Error "nouid"

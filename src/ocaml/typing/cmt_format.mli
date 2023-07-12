@@ -55,6 +55,7 @@ type item_declaration =
   | Class_description of class_description
   | Class_type_declaration of class_type_declaration
   | Extension_constructor of extension_constructor
+  | Label_declaration of label_declaration
   | Module_binding of module_binding
   | Module_declaration of module_declaration
   | Module_type_declaration of module_type_declaration
@@ -142,8 +143,8 @@ val record_value_dependency:
 *)
 
 
-val iter_decl
-  : uid_to_decl_tbl:item_declaration Types.Uid.Tbl.t
+val iter_decl :
+  f:(Types.Uid.t -> item_declaration -> unit)
   -> Tast_iterator.iterator
 
 val index_decl

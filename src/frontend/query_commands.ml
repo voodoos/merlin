@@ -388,8 +388,10 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
       | None -> `Invalid_context
       | Some (env, path) ->
         Locate.log ~title:"debug" "found type: %s" (Path.name path);
+        let local_defs = Mtyper.get_typedtree typer in
         match Locate.from_path
                 ~env
+                ~local_defs
                 ~config:(Mpipeline.final_config pipeline)
                 ~traverse_aliases:true
                 ~namespace:`Type `MLI
@@ -397,7 +399,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
         | `Builtin -> `Builtin (Path.name path)
         | `Not_in_env _ as s -> s
         | `Not_found _ as s -> s
-        | `Found (_uid, file, pos) -> `Found (file, pos)
+        | `Found (_uid, file, loc) -> `Found (file, loc.Location.loc_start)
         | `File_not_found _ as s -> s
     end
 
@@ -527,10 +529,10 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
         ~traverse_aliases:true
         ~env ~local_defs ~pos ml_or_mli path
     with
-    | `Found (_, file, pos) ->
+    | `Found (_, file, loc) ->
       Locate.log ~title:"result"
         "found: %s" (Option.value ~default:"<local buffer>" file);
-      `Found (file, pos)
+      `Found (file, loc.Location.loc_start)
     | `Missing_labels_namespace ->
       (* Can't happen because we haven't passed a namespace as input. *)
       assert false

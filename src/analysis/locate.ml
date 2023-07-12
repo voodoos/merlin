@@ -360,30 +360,19 @@ let uid_of_path ~config ~env ~ml_or_mli ~decl_uid ~traverse_aliases path ns =
       Logger.fmt (fun fmt -> Shape.print fmt r);
     r.uid
 
-let loc_of_decl ~uid =
-  let of_option name =
-    match name.Location.txt with
-    | Some txt -> Some { name with txt }
-    | None -> None
+let build_uid_to_locs_tbl ~(local_defs : Mtyper.typedtree) () =
+  (* todo: cache or specialize ? *)
+  let uid_to_locs_tbl : string Location.loc Types.Uid.Tbl.t =
+    Types.Uid.Tbl.create 64
   in
-  let of_value_binding vb =
-    let bound_idents = Typedtree.let_bound_idents_full [vb] in
-    ListLabels.find_map ~f:(fun (_, loc, _, uid') -> if uid = uid' then Some loc else None) bound_idents
-  in
-  function
-  | Cmt_format.Class_declaration cd -> Some cd.ci_id_name
-  | Class_description cd -> Some cd.ci_id_name
-  | Class_type_declaration ctd -> Some ctd.ci_id_name
-  | Extension_constructor ec -> Some ec.ext_name
-  | Module_binding mb -> of_option mb.mb_name
-  | Module_declaration md -> of_option md.md_name
-  | Module_type_declaration mtd -> Some mtd.mtd_name
-  | Type_declaration td -> Some td.typ_name
-  | Value_description vd -> Some vd.val_name
-  | Value_binding vb -> of_value_binding vb
+  match local_defs with
+  | `Interface _ -> failwith "not implemented"
+  | `Implementation str ->
+    let iter = Ast_iterators.iter_on_defs ~uid_to_locs_tbl in
+    iter.structure iter str;
+    uid_to_locs_tbl
 
-
-let from_uid ~config ~ml_or_mli uid loc path =
+let from_uid ~config ~ml_or_mli ~local_defs uid loc path =
   let loc_of_comp_unit comp_unit =
     match load_cmt ~config comp_unit ml_or_mli with
     | Ok (pos_fname, _cmt) ->
@@ -399,15 +388,15 @@ let from_uid ~config ~ml_or_mli uid loc path =
       if Env.get_unit_name () = comp_unit then begin
         log ~title "We look for %a in the current compilation unit."
           Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
-        let tbl = Env.get_uid_to_loc_tbl () in
+        let tbl = build_uid_to_locs_tbl ~local_defs () in
         match Shape.Uid.Tbl.find_opt tbl uid with
         | Some loc ->
           log ~title "Found location: %a"
-            Logger.fmt (fun fmt -> Location.print_loc fmt loc);
-          Some (uid, loc)
+            Logger.fmt (fun fmt -> Location.print_loc fmt loc.loc);
+          Some (uid, loc.loc)
         | None ->
           log ~title
-            "Uid not found in the local table.\
+            "Uid not found in the local table. \
             Fallbacking to the node's location: %a"
           Logger.fmt (fun fmt -> Location.print_loc fmt loc);
           Some (uid, loc)
@@ -419,7 +408,7 @@ let from_uid ~config ~ml_or_mli uid loc path =
             Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
           begin match Shape.Uid.Tbl.find_opt cmt.cmt_uid_to_decl uid with
             | Some decl ->
-              (match loc_of_decl ~uid decl  with
+              (match Misc_utils.loc_of_decl ~uid decl  with
               | Some loc -> log ~title "Found location: %a"
                   Logger.fmt (fun fmt -> Location.print_loc fmt loc.loc);
                 Some (uid, loc.loc)
@@ -607,7 +596,7 @@ let find_source ~config loc path =
       | exception _ -> failure
   in
   match result with
-  | Found src -> `Found (Some src, loc.Location.loc_start)
+  | Found src -> `Found (Some src, loc)
   | Not_found f -> File.explain_not_found path f
   | Multiple_matches lst ->
     let matches = String.concat lst ~sep:", " in
@@ -770,14 +759,17 @@ let uid_from_longident ~config ~env ~traverse_aliases nss ml_or_mli ident =
       in
       `Uid (uid, loc, path)
 
-let from_longident ~config ~env ~traverse_aliases nss ml_or_mli ident =
+let from_longident
+  ~config ~local_defs ~env ~traverse_aliases nss ml_or_mli ident =
   match
     uid_from_longident ~config ~env ~traverse_aliases nss ml_or_mli ident
   with
-  | `Uid (uid, loc, path) -> from_uid ~config ~ml_or_mli uid loc path
+  | `Uid (uid, loc, path) ->
+      from_uid ~config ~ml_or_mli ~local_defs uid loc path
   | (`Builtin | `Not_in_env _) as v -> v
 
-let from_path ~config ~env ~namespace ~traverse_aliases ml_or_mli path =
+let from_path
+  ~config ~env ~local_defs ~namespace ~traverse_aliases ml_or_mli path =
   File_switching.reset ();
   if Utils.is_builtin_path path then
     `Builtin
@@ -786,7 +778,8 @@ let from_path ~config ~env ~namespace ~traverse_aliases ml_or_mli path =
     | None -> `Not_in_env (Path.name path)
     | Some (loc, uid, namespace) ->
       match
-        locate ~config ~env ~ml_or_mli ~traverse_aliases uid loc path namespace
+        locate ~config ~env ~ml_or_mli ~local_defs
+               ~traverse_aliases uid loc path namespace
       with
       | `Not_found _
       | `File_not_found _ as err -> err
@@ -836,7 +829,9 @@ let from_string ~config ~env ~local_defs
       log ~title:"from_string"
         "looking for the source of '%s' (prioritizing %s files)"
         path (match switch with `ML -> ".ml" | `MLI -> ".mli");
-      match from_longident ~config ~env ~traverse_aliases nss switch ident with
+      match from_longident
+        ~config ~env ~local_defs ~traverse_aliases nss switch ident
+      with
       | `File_not_found _ | `Not_found _ | `Not_in_env _ as err -> err
       | `Builtin -> `Builtin path
       | `Found (uid, loc) ->
@@ -1030,13 +1025,11 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
       log ~title:"get_doc" "completion: looking for the doc of '%a'"
         Logger.fmt (fun fmt -> Path.print fmt path) ;
       let from_path =
-        from_path ~config ~env ~namespace ~traverse_aliases:true `MLI path
+        from_path
+          ~config ~env ~local_defs ~namespace ~traverse_aliases:true `MLI path
       in
       begin match from_path with
-      | `Found (uid, _, pos) ->
-        let loc : Location.t =
-          { loc_start = pos; loc_end = pos; loc_ghost = true }
-        in
+      | `Found (uid, _, loc) ->
         doc_from_uid ~config ~loc uid
       | (`Builtin |`Not_in_env _|`File_not_found _|`Not_found _)
         as otherwise -> otherwise
@@ -1047,10 +1040,7 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
         from_string ~config ~env ~local_defs
           ~pos ~traverse_aliases:true `MLI path
       with
-      | `Found (uid, _, pos) ->
-        let loc : Location.t =
-          { loc_start = pos; loc_end = pos; loc_ghost = true }
-        in
+      | `Found (uid, _, loc) ->
         doc_from_uid ~config ~loc uid
       | `At_origin ->
         `Found_loc { Location.loc_start = pos; loc_end = pos; loc_ghost = true }

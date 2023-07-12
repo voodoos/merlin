@@ -52,6 +52,7 @@ type item_declaration =
   | Class_description of class_description
   | Class_type_declaration of class_type_declaration
   | Extension_constructor of extension_constructor
+  | Label_declaration of label_declaration
   | Module_binding of module_binding
   | Module_declaration of module_declaration
   | Module_type_declaration of module_type_declaration
@@ -117,57 +118,61 @@ module Local_reduce = Shape.Make_reduce(struct
       Env.shape_of_path ~namespace env (Pident id)
   end)
 
-let iter_decl ~uid_to_decl_tbl =
-  let register_uid uid fragment =
-    Types.Uid.Tbl.add uid_to_decl_tbl uid fragment
-  in
+let iter_decl ~f =
   Tast_iterator.{ default_iterator with
 
   value_bindings = (fun sub ((_, vbs) as bindings) ->
     let bound_idents = let_bound_idents_full_with_bindings vbs in
     List.iter
-      ~f:(fun (vb, (_id, _loc, _typ, uid)) ->
-        register_uid uid (Value_binding vb))
+      ~f:(fun (vb, (_id, _loc, _typ, uid)) -> f uid (Value_binding vb))
       bound_idents;
     default_iterator.value_bindings sub bindings);
 
   module_binding = (fun sub mb ->
-    register_uid mb.mb_decl_uid (Module_binding mb);
+    f mb.mb_decl_uid (Module_binding mb);
     default_iterator.module_binding sub mb);
 
   module_declaration = (fun sub md ->
-    register_uid md.md_uid (Module_declaration md);
+    f md.md_uid (Module_declaration md);
     default_iterator.module_declaration sub md);
 
   module_type_declaration = (fun sub mtd ->
-    register_uid mtd.mtd_uid (Module_type_declaration mtd);
+    f mtd.mtd_uid (Module_type_declaration mtd);
     default_iterator.module_type_declaration sub mtd);
 
   value_description = (fun sub vd ->
-    register_uid vd.val_val.val_uid (Value_description vd);
+    f vd.val_val.val_uid (Value_description vd);
     default_iterator.value_description sub vd);
 
   type_declaration = (fun sub td ->
     (* compiler-generated "row_names" share the uid of their corresponding
        class declaration, so we ignore them to prevent duplication *)
-    if not (Btype.is_row_name (Ident.name td.typ_id)) then
-      register_uid td.typ_type.type_uid (Type_declaration td);
-      default_iterator.type_declaration sub td);
+    if not (Btype.is_row_name (Ident.name td.typ_id)) then begin
+      f td.typ_type.type_uid (Type_declaration td);
+      (* We also register records labels *)
+      match td.typ_type.type_kind, td.typ_kind with
+      | Type_record (labels_types, _repr), Ttype_record labels_decls ->
+          List.iter2 ~f:(fun { Types.ld_uid; _} decl ->
+            f ld_uid (Label_declaration decl))
+            labels_types labels_decls ;
+      | _, _ -> ()
+    end;
+    default_iterator.type_declaration sub td);
 
   extension_constructor = (fun sub ec ->
-    register_uid ec.ext_type.ext_uid (Extension_constructor ec);
+    f ec.ext_type.ext_uid (Extension_constructor ec);
     default_iterator.extension_constructor sub ec);
 
   class_declaration = (fun sub cd ->
-    register_uid cd.ci_decl.cty_uid (Class_declaration cd);
+    f cd.ci_decl.cty_uid (Class_declaration cd);
     default_iterator.class_declaration sub cd);
 
   class_type_declaration = (fun sub ctd ->
-    register_uid ctd.ci_decl.cty_uid (Class_type_declaration ctd);
+    f ctd.ci_decl.cty_uid (Class_type_declaration ctd);
     default_iterator.class_type_declaration sub ctd);
 
   class_description =(fun sub cd ->
-    register_uid cd.ci_decl.cty_uid (Class_description cd);
+    f cd.ci_decl.cty_uid (Class_description cd);
     default_iterator.class_description sub cd);
 }
 
@@ -355,8 +360,11 @@ let index_decl ~shape_index =
       default_iterator.structure_item sub str_item)
 }
 
+let register_uid uid fragment =
+  Types.Uid.Tbl.add !uid_to_decl uid fragment
+
 let gather_declarations binary_annots =
-  iter_on_annots (iter_decl ~uid_to_decl_tbl:!uid_to_decl) binary_annots
+  iter_on_annots (iter_decl ~f:register_uid) binary_annots
 let index_declarations binary_annots =
   iter_on_annots (index_decl ~shape_index) binary_annots
 

@@ -37,17 +37,18 @@ val find_source
   : config:Mconfig.t
   -> Location.t
   -> string
-  -> [> `File_not_found of string | `Found of string option * Lexing.position ]
+  -> [> `File_not_found of string | `Found of string option * Location.t ]
 
 val from_path
   : config:Mconfig.t
   -> env:Env.t
+  -> local_defs:Mtyper.typedtree
   -> namespace:Namespace.all
   -> traverse_aliases:bool
   -> [ `ML | `MLI ]
   -> Path.t
   -> [> `File_not_found of string
-     | `Found of Shape.Uid.t option * string option * Lexing.position
+     | `Found of Shape.Uid.t option * string option * Location.t
      | `Builtin
      | `Not_in_env of string
      | `Not_found of string * string option ]
@@ -62,7 +63,7 @@ val from_string
   -> [ `ML | `MLI ]
   -> string
   -> [> `File_not_found of string
-      | `Found of Shape.Uid.t option * string option * Lexing.position
+      | `Found of Shape.Uid.t option * string option * Location.t
       | `Builtin of string
       | `Missing_labels_namespace
       | `Not_found of string * string option
