@@ -12,7 +12,7 @@ Recent changes to shape could break this behavior
     "file": "$TESTCASE_ROOT/test.ml",
     "pos": {
       "line": 1,
-      "col": 18
+      "col": 23
     }
   }
 
@@ -29,30 +29,31 @@ Aliases and functors:
   > type v = D.M.t
   > EOF
 
+FIXME: we would expect col 56
   $ $MERLIN single locate -look-for ml -position 6:13 \
   > -filename main.ml <main.ml | jq '.value.pos'
   {
     "line": 1,
-    "col": 0
+    "col": 7
   }
 
   $ $MERLIN single locate -look-for ml -position 7:13 \
   > -filename main.ml <main.ml | jq '.value.pos'
   {
     "line": 1,
-    "col": 0
+    "col": 7
   }
 
   $ $MERLIN single locate -look-for ml -position 8:13 \
   > -filename main.ml <main.ml | jq '.value.pos'
   {
     "line": 1,
-    "col": 18
+    "col": 23
   }
 
   $ $MERLIN single locate -look-for ml -position 9:13 \
   > -filename main.ml <main.ml | jq '.value.pos'
   {
     "line": 1,
-    "col": 18
+    "col": 23
   }

@@ -25,7 +25,7 @@ We could expect 1:9
     "file": "$TESTCASE_ROOT/constr.ml",
     "pos": {
       "line": 1,
-      "col": 0
+      "col": 5
     }
   }
 
