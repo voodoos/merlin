@@ -2714,10 +2714,18 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
         in
         let shape_map = List.fold_left
           (fun shape_map -> function
-            | Sig_type (id, vd, _, _) ->
+            | Sig_type (id, td, _, _) ->
               if not (Btype.is_row_name (Ident.name id)) then begin
-                Env.register_uid vd.type_uid vd.type_loc;
-                Shape.Map.add_type shape_map id vd.type_uid
+                Env.register_uid td.type_uid td.type_loc;
+                let shape_map =
+                  match td.type_kind with
+                  | Type_variant (cstrs, _repr) ->
+                      List.fold_left (fun shape_map { cd_id; cd_uid; _ } ->
+                        Shape.Map.add_type shape_map cd_id cd_uid)
+                        shape_map cstrs
+                  | _ -> shape_map
+                in
+                Shape.Map.add_type shape_map id td.type_uid
               end else shape_map
             | _ -> assert false
           )
