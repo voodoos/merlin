@@ -72,6 +72,7 @@ let loc_of_decl ~uid =
   | Cmt_format.Class_declaration cd -> Some cd.ci_id_name
   | Class_description cd -> Some cd.ci_id_name
   | Class_type_declaration ctd -> Some ctd.ci_id_name
+  | Constructor_declaration cd -> Some cd.cd_name
   | Extension_constructor ec -> Some ec.ext_name
   | Label_declaration ld -> Some ld.ld_name
   | Module_binding mb -> of_option mb.mb_name

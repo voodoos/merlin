@@ -51,6 +51,7 @@ type item_declaration =
   | Class_declaration of class_declaration
   | Class_description of class_description
   | Class_type_declaration of class_type_declaration
+  | Constructor_declaration of constructor_declaration
   | Extension_constructor of extension_constructor
   | Label_declaration of label_declaration
   | Module_binding of module_binding
@@ -149,12 +150,16 @@ let iter_decl ~f =
        class declaration, so we ignore them to prevent duplication *)
     if not (Btype.is_row_name (Ident.name td.typ_id)) then begin
       f td.typ_type.type_uid (Type_declaration td);
-      (* We also register records labels *)
+      (* We also register records labels and variant constructors *)
       match td.typ_type.type_kind, td.typ_kind with
       | Type_record (labels_types, _repr), Ttype_record labels_decls ->
           List.iter2 ~f:(fun { Types.ld_uid; _} decl ->
             f ld_uid (Label_declaration decl))
-            labels_types labels_decls ;
+            labels_types labels_decls;
+      | Type_variant (cstrs_types, _repr), Ttype_variant cstrs_decls ->
+          List.iter2 ~f:(fun { Types.cd_uid; _} decl ->
+            f cd_uid (Constructor_declaration decl))
+            cstrs_types cstrs_decls;
       | _, _ -> ()
     end;
     default_iterator.type_declaration sub td);
