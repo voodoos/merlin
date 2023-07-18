@@ -72,47 +72,65 @@ doesn't find it. We need a compiler fix for this, see #1505.
     }
   }
 
+  $ cat >record.mli <<EOF
+  > module A : sig type t = { bar: int} end
+  > EOF
+
   $ cat >record.ml <<EOF
-  > module A = struct type t = { bar: int} end
+  > module A : sig type t = { bar: int} end = 
+  >    struct type t = { bar: int} end
   > let foo = { A.bar = 42 }
   > let () = print_int foo.A.bar
   > EOF
 
-  $ $MERLIN single locate -look-for mli -position 2:15 \
+  $ $OCAMLC -c -bin-annot record.mli record.ml
+
+  $ $MERLIN single locate -look-for mli -position 3:15 \
   > -filename ./record.ml < ./record.ml | jq '.value'
   {
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
       "line": 1,
-      "col": 29
+      "col": 26
+    }
+  }
+
+FIXME: this requires adding labels to shapes
+  $ $MERLIN single locate -look-for ml -position 3:15 \
+  > -filename ./record.ml < ./record.ml | jq '.value'
+  {
+    "file": "$TESTCASE_ROOT/record.ml",
+    "pos": {
+      "line": 1,
+      "col": 7
     }
   }
 
 FIXME: this requires a patch for the compiler to add labels to shapes.
-  $ $MERLIN single locate -look-for mli -position 3:26 \
+  $ $MERLIN single locate -look-for mli -position 4:26 \
   > -filename ./record.ml < ./record.ml | jq '.value'
   {
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
       "line": 1,
-      "col": 29
+      "col": 26
     }
   }
-
 
   $ cat >othermod.ml <<EOF
   > let foo : t = {Record.A.bar = 42}
   > let () = print_int foo.bar
   > EOF
 
-  $ $OCAMLC -c -bin-annot record.ml
 
+FIXME: this is the position in the mli, not the ml file. 
+Requires adding labels to shapes in the compiler.
   $ $MERLIN single locate -look-for ml -position 1:25 \
   > -filename ./othermod.ml < ./othermod.ml | jq '.value'
   {
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
       "line": 1,
-      "col": 29
+      "col": 26
     }
   }
