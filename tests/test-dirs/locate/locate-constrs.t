@@ -35,7 +35,7 @@ With the declaration in another compilation unit:
 
   $ $OCAMLC -c -bin-annot constr.ml
 
-FIXME: we expect 1:21, we requires a patch int he compiler to add constructors
+FIXME: we expect 1:21, we requires a patch in the compiler to add constructors
 to the uid_to_decl table.
   $ $MERLIN single locate -look-for mli -position 1:17 \
   > -filename ./other_module.ml < ./other_module.ml | jq '.value'
@@ -46,8 +46,6 @@ to the uid_to_decl table.
       "col": 18
     }
   }
-
-
 
   $ cat >constr.ml <<EOF
   > module C = struct type t = A of int |  B end
