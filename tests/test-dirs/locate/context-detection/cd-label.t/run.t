@@ -49,7 +49,7 @@ We could expect 2:12 or at least 2:4
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
       "line": 1,
-      "col": 0
+      "col": 11
     }
   }
 
@@ -68,6 +68,51 @@ doesn't find it. We need a compiler fix for this, see #1505.
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
       "line": 1,
-      "col": 0
+      "col": 11
+    }
+  }
+
+  $ cat >record.ml <<EOF
+  > module A = struct type t = { bar: int} end
+  > let foo = { A.bar = 42 }
+  > let () = print_int foo.A.bar
+  > EOF
+
+  $ $MERLIN single locate -look-for mli -position 2:15 \
+  > -filename ./record.ml < ./record.ml | jq '.value'
+  {
+    "file": "$TESTCASE_ROOT/record.ml",
+    "pos": {
+      "line": 1,
+      "col": 29
+    }
+  }
+
+FIXME: this requires a patch for the compiler to add labels to shapes.
+  $ $MERLIN single locate -look-for mli -position 3:26 \
+  > -filename ./record.ml < ./record.ml | jq '.value'
+  {
+    "file": "$TESTCASE_ROOT/record.ml",
+    "pos": {
+      "line": 1,
+      "col": 29
+    }
+  }
+
+
+  $ cat >othermod.ml <<EOF
+  > let foo : t = {Record.A.bar = 42}
+  > let () = print_int foo.bar
+  > EOF
+
+  $ $OCAMLC -c -bin-annot record.ml
+
+  $ $MERLIN single locate -look-for ml -position 1:25 \
+  > -filename ./othermod.ml < ./othermod.ml | jq '.value'
+  {
+    "file": "$TESTCASE_ROOT/record.ml",
+    "pos": {
+      "line": 1,
+      "col": 29
     }
   }
