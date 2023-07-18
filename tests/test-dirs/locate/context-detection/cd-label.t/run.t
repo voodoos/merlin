@@ -95,14 +95,13 @@ doesn't find it. We need a compiler fix for this, see #1505.
     }
   }
 
-FIXME: this requires adding labels to shapes
   $ $MERLIN single locate -look-for ml -position 3:15 \
   > -filename ./record.ml < ./record.ml | jq '.value'
   {
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
-      "line": 1,
-      "col": 7
+      "line": 2,
+      "col": 21
     }
   }
 
