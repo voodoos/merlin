@@ -466,12 +466,11 @@ let path_and_loc_of_cstr desc _ =
     | Tconstr (path, _, _) -> path, desc.cstr_loc
     | _ -> assert false
 
-let path_and_loc_from_label desc env =
+let path_and_loc_from_label desc _env =
   let open Types in
   match get_desc desc.lbl_res with
   | Tconstr (path, _, _) ->
-    let typ_decl = Env.find_type path env in
-    path, typ_decl.Types.type_loc
+    path, desc.lbl_loc
   | _ -> assert false
 
 type find_source_result =
@@ -739,8 +738,13 @@ end = struct
             log ~title:"lookup"
               "got label, fetching path and loc in type namespace";
             let path, loc = path_and_loc_from_label lbl env in
-            (* TODO: Use [`Labels] here instead of [`Type] *)
-            raise (Found (Path path, Type, lbl.lbl_uid, loc))
+            let path = match path with
+              | Path.Pdot (p, _name) -> Path (Pdot (p, lbl.lbl_name))
+              | Pident _ ->
+                  Local_use_uid (Pident (Ident.create_local lbl.lbl_name))
+              | path -> Path path
+            in
+            raise (Found (path, Label, lbl.lbl_uid, loc))
           | `Labels ->
             log ~title:"lookup" "lookup in label namespace" ;
             let lbl = Env.find_label_by_name ident env in

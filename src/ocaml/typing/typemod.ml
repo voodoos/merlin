@@ -1046,7 +1046,7 @@ end = struct
     let open Sig_component_kind in
     match component with
     | Value -> names.values
-    | Type -> names.types
+    | Type | Label -> names.types
     | Module -> names.modules
     | Module_type -> names.modtypes
     | Extension_constructor -> names.typexts
@@ -2723,6 +2723,10 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
                       List.fold_left (fun shape_map { cd_id; cd_uid; _ } ->
                         Shape.Map.add_type shape_map cd_id cd_uid)
                         shape_map cstrs
+                  | Types.Type_record (labels, _repr) ->
+                    List.fold_left (fun shape_map { ld_id; ld_uid; _ } ->
+                      Shape.Map.add_label shape_map ld_id ld_uid)
+                      shape_map labels
                   | _ -> shape_map
                 in
                 Shape.Map.add_type shape_map id td.type_uid
