@@ -19,6 +19,7 @@ let iter_on_defs ~uid_to_locs_tbl =
     Types.Uid.Tbl.add uid_to_locs_tbl uid loc
   in
   { iter_decl with
+
     expr = (fun sub ({ exp_extra; exp_env; _ } as expr) ->
       List.iter exp_extra ~f:(fun (exp_extra, _loc, _attr) ->
         match exp_extra with
@@ -30,4 +31,12 @@ let iter_on_defs ~uid_to_locs_tbl =
           ()
         | _ -> ());
       iter_decl.expr sub expr);
+
+    pat = (fun (type a) sub ({pat_desc; _} as pat : a general_pattern) ->
+      (match pat_desc with
+      | Tpat_var (_, name, uid) | Tpat_alias (_, _, name, uid) ->
+          register_uid uid name
+      | _ -> ());
+      iter_decl.pat sub pat);
+
   }
