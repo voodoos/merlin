@@ -42,11 +42,10 @@ In a separate CU
   $ $OCAMLC -c -bin-annot a.mli a.ml
 
 Merlin finds the declaration
-FIXME: expecting mli and col 13 (this requires compiler changes)
   $ $MERLIN single locate -look-for mli -position 2:15 \
   > -filename ./labels.ml < ./labels.ml | jq '.value'
   {
-    "file": "$TESTCASE_ROOT/a.ml",
+    "file": "$TESTCASE_ROOT/a.mli",
     "pos": {
       "line": 1,
       "col": 11
@@ -54,7 +53,6 @@ FIXME: expecting mli and col 13 (this requires compiler changes)
   }
 
 And the definition
-FIXME: expecting col 13 (this requires compiler changes)
   $ $MERLIN single locate -look-for ml -position 2:15 \
   > -filename ./labels.ml < ./labels.ml | jq '.value'
   {
