@@ -35,15 +35,14 @@ With the declaration in another compilation unit:
 
   $ $OCAMLC -c -bin-annot constr.ml
 
-FIXME: we expect 1:21, we requires a patch in the compiler to add constructors
-to the uid_to_decl table.
+We expect 1:21
   $ $MERLIN single locate -look-for mli -position 1:17 \
   > -filename ./other_module.ml < ./other_module.ml | jq '.value'
   {
     "file": "$TESTCASE_ROOT/constr.ml",
     "pos": {
       "line": 1,
-      "col": 18
+      "col": 21
     }
   }
 
