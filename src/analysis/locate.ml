@@ -447,8 +447,9 @@ let from_uid ~config ~ml_or_mli ~local_defs uid loc path =
       | _ -> log ~title "Failed to load the shapes";
         `Not_found (Path.name path, None)
     end
-  | Some (Predef _ | Internal) -> assert false
-  | None -> log ~title "No UID found, fallbacking to lookup location.";
+  | Some (Predef _) -> `Builtin
+  | Some Internal | None ->
+      log ~title "No UID found, fallbacking to lookup location.";
       `Found (None, loc)
 
 let locate ~config ~env ~ml_or_mli ~traverse_aliases decl_uid loc path ns =
@@ -807,7 +808,7 @@ let from_path
         locate ~config ~env ~ml_or_mli ~local_defs
                ~traverse_aliases uid loc path namespace
       with
-      | `Not_found _
+      | `Not_found _ | `Builtin
       | `File_not_found _ as err -> err
       | `Found (uid, loc) ->
         match find_source ~config loc (Path.name path) with
