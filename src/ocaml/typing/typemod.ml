@@ -2713,28 +2713,25 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
           decls []
         in
         let shape_map = List.fold_left
-          (fun shape_map -> function
-            | Sig_type (id, td, _, _) ->
-              if not (Btype.is_row_name (Ident.name id)) then begin
-                Env.register_uid td.type_uid td.type_loc;
-                let shape_map =
-                  match td.type_kind with
-                  | Type_variant (cstrs, _repr) ->
-                      List.fold_left (fun shape_map { cd_id; cd_uid; _ } ->
-                        Shape.Map.add_type shape_map cd_id cd_uid)
-                        shape_map cstrs
-                  | Types.Type_record (labels, _repr) ->
-                    List.fold_left (fun shape_map { ld_id; ld_uid; _ } ->
-                      Shape.Map.add_label shape_map ld_id ld_uid)
-                      shape_map labels
-                  | _ -> shape_map
-                in
-                Shape.Map.add_type shape_map id td.type_uid
-              end else shape_map
-            | _ -> assert false
+          (fun shape_map info ->
+            if not (Btype.is_row_name (Ident.name info.typ_id)) then begin
+              let shape_map =
+                match info.typ_kind with
+                | Ttype_variant cstrs ->
+                    List.fold_left (fun shape_map { cd_id; cd_uid; _ } ->
+                      Shape.Map.add_type shape_map cd_id cd_uid)
+                      shape_map cstrs
+                | Ttype_record labels ->
+                  List.fold_left (fun shape_map { ld_id; ld_uid; _ } ->
+                    Shape.Map.add_label shape_map ld_id ld_uid)
+                    shape_map labels
+                | _ -> shape_map
+              in
+              Shape.Map.add_type shape_map info.typ_id info.typ_type.type_uid
+            end else shape_map
           )
           shape_map
-          items
+          decls
         in
         Tstr_type (rec_flag, decls),
         items,

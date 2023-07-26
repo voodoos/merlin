@@ -666,6 +666,7 @@ and label_declaration =
     {
      ld_id: Ident.t;
      ld_name: string loc;
+     ld_uid: Uid.t;
      ld_mutable: mutable_flag;
      ld_type: core_type;
      ld_loc: Location.t;
@@ -676,6 +677,7 @@ and constructor_declaration =
     {
      cd_id: Ident.t;
      cd_name: string loc;
+     cd_uid: Uid.t;
      cd_vars: string loc list;
      cd_args: constructor_arguments;
      cd_res: core_type option;

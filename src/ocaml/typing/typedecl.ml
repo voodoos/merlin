@@ -231,7 +231,9 @@ let transl_labels env univars closed lbls =
          let arg = Ast_helper.Typ.force_poly arg in
          let cty = transl_simple_type env ?univars ~closed arg in
          {ld_id = Ident.create_local name.txt;
-          ld_name = name; ld_mutable = mut;
+          ld_name = name;
+          ld_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
+          ld_mutable = mut;
           ld_type = cty; ld_loc = loc; ld_attributes = attrs}
       )
   in
@@ -241,14 +243,12 @@ let transl_labels env univars closed lbls =
       (fun ld ->
          let ty = ld.ld_type.ctyp_type in
          let ty = match get_desc ty with Tpoly(t,[]) -> t | _ -> ty in
-         let ld_uid = Uid.mk ~current_unit:(Env.get_unit_name ()) in
-         Env.register_uid ld_uid ld.ld_loc;
          {Types.ld_id = ld.ld_id;
           ld_mutable = ld.ld_mutable;
           ld_type = ty;
           ld_loc = ld.ld_loc;
           ld_attributes = ld.ld_attributes;
-          ld_uid;
+          ld_uid = ld.ld_uid;
          }
       )
       lbls in
@@ -405,6 +405,7 @@ let transl_declaration env sdecl (id, uid) =
           let tcstr =
             { cd_id = name;
               cd_name = scstr.pcd_name;
+              cd_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
               cd_vars = scstr.pcd_vars;
               cd_args = targs;
               cd_res = tret_type;
@@ -412,14 +413,12 @@ let transl_declaration env sdecl (id, uid) =
               cd_attributes = scstr.pcd_attributes }
           in
           let cstr =
-            let cd_uid = Uid.mk ~current_unit:(Env.get_unit_name ()) in
-            Env.register_uid cd_uid scstr.pcd_loc;
             { Types.cd_id = name;
               cd_args = args;
               cd_res = ret_type;
               cd_loc = scstr.pcd_loc;
               cd_attributes = scstr.pcd_attributes;
-              cd_uid; }
+              cd_uid = tcstr.cd_uid; }
           in
             tcstr, cstr
         in
