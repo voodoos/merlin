@@ -10,6 +10,16 @@
     "value": [
       {
         "start": {
+          "line": 1,
+          "col": 7
+        },
+        "end": {
+          "line": 1,
+          "col": 10
+        }
+      },
+      {
+        "start": {
           "line": 2,
           "col": 19
         },
@@ -34,6 +44,16 @@
   {
     "class": "return",
     "value": [
+      {
+        "start": {
+          "line": 3,
+          "col": 7
+        },
+        "end": {
+          "line": 3,
+          "col": 8
+        }
+      },
       {
         "start": {
           "line": 4,

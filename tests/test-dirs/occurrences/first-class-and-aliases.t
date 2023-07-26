@@ -7,10 +7,20 @@
   > let () = Format.printf "%i:%i\n" A.x A.y
   > EOF
 
-FIXME: locate fails due to the presence of a first-class module and fallsback tot he uid of the module which 
+FIXME: locate fails due to the presence of a first-class module and fallsback to the uid of the module  
   $ $MERLIN single occurrences -scope buffer -identifier-at 6:35 \
   > - filename main.ml <main.ml | jq '.value'
   [
+    {
+      "start": {
+        "line": 4,
+        "col": 7
+      },
+      "end": {
+        "line": 4,
+        "col": 8
+      }
+    },
     {
       "start": {
         "line": 6,
@@ -43,6 +53,16 @@ Aliases are not traversed when looking for occurrences
   $ $MERLIN single occurrences -scope buffer -identifier-at 3:11 \
   > - filename main.ml <main.ml | jq '.value'
   [
+    {
+      "start": {
+        "line": 2,
+        "col": 7
+      },
+      "end": {
+        "line": 2,
+        "col": 8
+      }
+    },
     {
       "start": {
         "line": 3,

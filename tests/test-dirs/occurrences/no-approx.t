@@ -16,7 +16,7 @@ For locate it is okay to stop at the first class module definition:
   > -filename main.ml <main.ml | jq '.value.pos'
   {
     "line": 4,
-    "col": 0
+    "col": 7
   }
 
 FIXME: but occurrences should not rely on that information:
@@ -25,6 +25,16 @@ FIXME: but occurrences should not rely on that information:
   {
     "class": "return",
     "value": [
+      {
+        "start": {
+          "line": 4,
+          "col": 7
+        },
+        "end": {
+          "line": 4,
+          "col": 8
+        }
+      },
       {
         "start": {
           "line": 8,
@@ -51,6 +61,16 @@ This is due to a first-class module and shape fallbacking
   {
     "class": "return",
     "value": [
+      {
+        "start": {
+          "line": 281,
+          "col": 7
+        },
+        "end": {
+          "line": 281,
+          "col": 14
+        }
+      },
       {
         "start": {
           "line": 1,
