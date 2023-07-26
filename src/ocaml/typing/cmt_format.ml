@@ -51,13 +51,13 @@ type item_declaration =
   | Class_declaration of class_declaration
   | Class_description of class_description
   | Class_type_declaration of class_type_declaration
-  | Constructor_declaration of constructor_declaration
   | Extension_constructor of extension_constructor
-  | Label_declaration of label_declaration
   | Module_binding of module_binding
   | Module_declaration of module_declaration
   | Module_type_declaration of module_type_declaration
   | Type_declaration of type_declaration
+  | Constructor_declaration of constructor_declaration
+  | Label_declaration of label_declaration
   | Value_binding of value_binding
   | Value_description of value_description
 
