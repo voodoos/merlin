@@ -285,7 +285,7 @@ end) = struct
      by calling the normalization function as usual, but duplicate
      computations are precisely avoided by memoization.
    *)
-  and thunk = { local_env : local_env; shape: t; strip_aliases: bool }
+  and thunk = { local_env : local_env; shape: t }
   and delayed_nf = Thunk of thunk
 
   and local_env = delayed_nf option Ident.Map.t
@@ -307,6 +307,10 @@ end) = struct
         Hashtbl.replace memo_table memo_key res;
         res
 
+  let rec strip_head_aliases nf = match nf.desc with
+    | NAlias nf -> strip_head_aliases nf
+    | _ -> nf
+
   type env = {
     fuel: int ref;
     global_env: Params.env;
@@ -318,12 +322,12 @@ end) = struct
   let bind env var shape =
     { env with local_env = Ident.Map.add var shape env.local_env }
 
-  let rec reduce_ ?(strip_aliases = false) env t =
+  let rec reduce_ env t =
     let local_env = env.local_env in
-    let memo_key = { local_env; shape = t; strip_aliases } in
+    let memo_key = { local_env; shape = t } in
     in_memo_table
       env.reduce_memo_table memo_key
-      (reduce__ ~strip_aliases env) t
+      (reduce__ env) t
   (* Memoization is absolutely essential for performance on this
      problem, because the normal forms we build can in some real-world
      cases contain an exponential amount of redundancy. Memoization
@@ -362,34 +366,30 @@ end) = struct
      same hash.
 *)
 
-  and reduce__ ~strip_aliases
+  and reduce__
     ({fuel; global_env; local_env; _} as env) (t : t) =
-    let reduce ?(strip_aliases = false) env t =
-      reduce_ ~strip_aliases env t
+    let reduce env t =
+      reduce_ env t
     in
-    let delay_reduce ?(strip_aliases = false) { local_env; _ } t =
-      Thunk { local_env; shape = t; strip_aliases }
+    let delay_reduce { local_env; _ } t =
+      Thunk { local_env; shape = t }
     in
-    let force (Thunk { local_env; shape = t; strip_aliases }) =
-      reduce ~strip_aliases { env with local_env } t in
+    let force (Thunk { local_env; shape = t }) =
+      reduce { env with local_env } t in
     let return desc : nf = { uid = t.uid; desc } in
     if !fuel < 0 then return (NoFuelLeft t.desc)
     else
       match t.desc with
       | Comp_unit unit_name ->
           begin match Params.read_unit_shape ~unit_name with
-          | Some t ->
-            log ~title:"reduce" "reducing (strip=%b) from CU %s:\n %a"
-            strip_aliases
-              unit_name Logger.fmt (fun fmt -> print fmt t);
-            reduce ~strip_aliases env t
+          | Some t -> reduce env t
           | None -> return (NComp_unit unit_name)
           end
       | App(f, arg) ->
-          let f = reduce ~strip_aliases:true env f in
+          let f = reduce env f |> strip_head_aliases in
           begin match f.desc with
           | NAbs(clos_env, var, body, _body_nf) ->
-              let arg = delay_reduce ~strip_aliases:true env arg in
+              let arg = delay_reduce env arg in
               let env = bind { env with local_env = clos_env } var (Some arg) in
               { (reduce env body) with uid = t.uid }
           | _ ->
@@ -397,10 +397,7 @@ end) = struct
               return (NApp(f, arg))
           end
       | Proj(str, item) ->
-        log ~title:"reduce" "reducing  (strip=%b) for proj:\n %a"
-        strip_aliases
-         Logger.fmt (fun fmt -> print fmt t);
-          let str = reduce ~strip_aliases:true env str in
+          let str = reduce env str |> strip_head_aliases in
           let nored () = return (NProj(str, item)) in
           begin match str.desc with
           | NStruct (items) ->
@@ -441,9 +438,7 @@ end) = struct
       | Struct m ->
           let mnf = Item.Map.map (delay_reduce env) m in
           return (NStruct mnf)
-      | Alias t ->
-          if strip_aliases then reduce ~strip_aliases env t
-          else return (NAlias (reduce env t))
+      | Alias t -> return (NAlias (reduce env t))
 
   let rec read_back env (nf : nf) : t =
     in_memo_table env.read_back_memo_table nf (read_back_ env) nf
@@ -457,8 +452,8 @@ end) = struct
 
   and read_back_desc env desc =
     let read_back nf = read_back env nf in
-    let read_back_force (Thunk { local_env; shape = t; strip_aliases }) =
-      read_back (reduce_ ~strip_aliases { env with local_env } t) in
+    let read_back_force (Thunk { local_env; shape = t }) =
+      read_back (reduce_ { env with local_env } t) in
     match desc with
     | NVar v ->
         Var v
