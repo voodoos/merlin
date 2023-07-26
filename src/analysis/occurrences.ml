@@ -81,6 +81,21 @@ let uid_of_node env =
   | Value_description { val_val; _ } -> Some val_val.val_uid
   | _ -> None
 
+let loc_of_local_def ~local_defs uid =
+  (* WIP *)
+  (* todo: cache or specialize ? *)
+  let uid_to_locs_tbl : string Location.loc Types.Uid.Tbl.t =
+    Types.Uid.Tbl.create 64
+  in
+  match local_defs with
+  | `Interface _ -> failwith "not implemented"
+  | `Implementation str ->
+    let iter = Ast_iterators.iter_on_defs ~uid_to_locs_tbl in
+    iter.structure iter str;
+    (* todo: optimize, the iterator could be more flexible *)
+    (* we could check equality and raise with the result as soon that it arrive *)
+    Shape.Uid.Tbl.find uid_to_locs_tbl uid
+
 let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
     path
@@ -97,7 +112,15 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
       log ~title:"locs_of" "Cursor is on definition / declaration";
       (* We are on  a definition / declaration so we look for the node's uid  *)
       (* todo: location of the definition *)
-      Option.map ~f:(fun uid -> uid, Location.none) (uid_of_node env node)
+      Option.map (uid_of_node env node)
+        ~f:(fun uid ->
+          try
+            let loc = loc_of_local_def ~local_defs uid in
+            uid, loc.loc
+          with Not_found ->
+            log ~title:"locs_of" "Location not found for local uid: %a"
+              Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
+            uid, Location.none)
     | `Found (uid, _, loc) ->
         log ~title:"locs_of" "Found definition uid using locate: %a"
           Logger.fmt (fun fmt ->
@@ -109,6 +132,9 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
   in
   match def with
   | Some (uid, loc) ->
+    log ~title:"locs_of" "Definition has uid %a (%a)"
+      Logger.fmt (fun fmt -> Shape.Uid.print fmt uid)
+      Logger.fmt (fun fmt -> Location.print_loc fmt loc);
     (* Todo: use magic number instead and don't use the lib *)
     let index_file = Mconfig.index_file config in
     log ~title:"locs_of" "Indexing current buffer";
