@@ -121,15 +121,13 @@ FIXME: this requires a patch for the compiler to add labels to shapes.
   > let () = print_int foo.bar
   > EOF
 
-
-FIXME: this is the position in the mli, not the ml file. 
-Requires adding labels to shapes in the compiler.
+Required adding labels to shapes in the compiler.
   $ $MERLIN single locate -look-for ml -position 1:25 \
   > -filename ./othermod.ml < ./othermod.ml | jq '.value'
   {
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
-      "line": 1,
-      "col": 26
+      "line": 2,
+      "col": 21
     }
   }
