@@ -269,6 +269,11 @@ let index_decl ~shape_index =
       | _ -> ());
       default_iterator.expr sub e);
 
+  binding_op = (fun sub ({bop_op_path; bop_op_name; bop_exp; _} as bop) ->
+    let lid = { bop_op_name with txt = Longident.Lident bop_op_name.txt } in
+    add_loc_to_index ~namespace:Value bop_exp.exp_env bop_op_path lid;
+    default_iterator.binding_op sub bop);
+
   typ =
     (fun sub ({ ctyp_desc; ctyp_env; _ } as ct) ->
       (match ctyp_desc with
