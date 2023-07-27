@@ -168,5 +168,12 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
           end else Some loc)
       | None -> log ~title:"locs_of" "No locs found in index."; []
     in
-    Ok (loc::locs)
+    (* We only prepend the location of the definition if it's int he scope of
+       the query *)
+    let loc_in_unit (loc : Location.t) =
+      let by = Env.get_unit_name () |> String.lowercase_ascii in
+      String.is_prefixed ~by (loc.loc_start.pos_fname |> String.lowercase_ascii)
+    in
+    if scope = `Project || loc_in_unit loc then Ok (loc::locs)
+    else Ok locs
   | None -> Error "nouid"
