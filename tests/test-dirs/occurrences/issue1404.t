@@ -1,6 +1,3 @@
-FIXME there is a discrepancy on the detection of the expression under the cursor
-between locate and occurrences.
-
 occurrences identifier-at 2:0 returns the occurrences of [x]
   $ $MERLIN single occurrences -identifier-at 2:0 -filename opt.ml <<EOF | \
   > jq '.value'
@@ -40,21 +37,21 @@ FIXME occurrences identifier-at 2:1 returns the occurrences of [x] (should be [+
     {
       "start": {
         "line": 1,
-        "col": 4
+        "col": 20
       },
       "end": {
         "line": 1,
-        "col": 5
+        "col": 21
       }
     },
     {
       "start": {
         "line": 2,
-        "col": 0
+        "col": 1
       },
       "end": {
         "line": 2,
-        "col": 1
+        "col": 2
       }
     }
   ]
