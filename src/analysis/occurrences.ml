@@ -122,11 +122,10 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       let node = Mbrowse.enclosing pos [browse] in
       let env, node = Mbrowse.leaf_node node in
       uid_and_loc_of_node env node
-    | `Found (uid, _, loc) ->
-        log ~title:"locs_of" "Found definition uid using locate: %a"
-          Logger.fmt (fun fmt ->
-            Format.pp_print_option (Shape.Uid.print) fmt uid);
-        Option.map ~f:(fun uid -> uid, loc) uid
+    | `Found (Some uid, _, loc) ->
+        log ~title:"locs_of" "Found definition uid using locate: %a "
+          Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
+        Some (uid, loc)
     | _ ->
       log ~title:"locs_of" "Locate failed to find a definition.";
       None
