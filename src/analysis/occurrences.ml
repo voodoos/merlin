@@ -70,15 +70,21 @@ let last_loc (loc : Location.t) lid =
       }
     }
 
-let uid_of_node env =
+let uid_and_loc_of_node env node =
   let open Browse_raw in
-  function
-  | Module_binding_name { mb_id = Some ident; _ } ->
+  log ~title:"occurrences" "Looking for uid of node %s"
+    @@ string_of_node node;
+  match node with
+  | Module_binding_name { mb_id = Some ident; mb_name; _ } ->
     let md = Env.find_module (Pident ident) env in
-    Some md.md_uid
-  | Pattern { pat_desc = Tpat_var (_, _, uid); _ } -> Some uid
-  | Type_declaration { typ_type; _ } -> Some typ_type.type_uid
-  | Value_description { val_val; _ } -> Some val_val.val_uid
+    Some (md.md_uid, mb_name.loc)
+  | Pattern { pat_desc =
+      Tpat_var (_, name, uid) | Tpat_alias (_, _, name, uid); _ } ->
+      Some (uid, name.loc)
+  | Type_declaration { typ_type; typ_name; _ } ->
+      Some (typ_type.type_uid, typ_name.loc)
+  | Value_description { val_val; val_name; _ } ->
+      Some (val_val.val_uid, val_name.loc)
   | _ -> None
 
 let loc_of_local_def ~local_defs uid =
@@ -96,7 +102,7 @@ let loc_of_local_def ~local_defs uid =
     (* we could check equality and raise with the result as soon that it arrive *)
     Shape.Uid.Tbl.find uid_to_locs_tbl uid
 
-let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
+let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
     path
     (Lexing.print_position () pos);
@@ -111,16 +117,11 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
     | `At_origin ->
       log ~title:"locs_of" "Cursor is on definition / declaration";
       (* We are on  a definition / declaration so we look for the node's uid  *)
-      (* todo: location of the definition *)
-      Option.map (uid_of_node env node)
-        ~f:(fun uid ->
-          try
-            let loc = loc_of_local_def ~local_defs uid in
-            uid, loc.loc
-          with Not_found ->
-            log ~title:"locs_of" "Location not found for local uid: %a"
-              Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
-            uid, Location.none)
+      (* todo: refactor *)
+      let browse = Mbrowse.of_typedtree local_defs in
+      let node = Mbrowse.enclosing pos [browse] in
+      let env, node = Mbrowse.leaf_node node in
+      uid_and_loc_of_node env node
     | `Found (uid, _, loc) ->
         log ~title:"locs_of" "Found definition uid using locate: %a"
           Logger.fmt (fun fmt ->
@@ -148,7 +149,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
         merge_tbl ~into:index external_uideps.defs
     end;
     (* TODO ignore externally indexed locs from the current buffer *)
-    let locs = (match Hashtbl.find_opt index uid with
+    let locs = match Hashtbl.find_opt index uid with
       | Some locs ->
         LidSet.elements locs
         |> List.filter_map ~f:(fun lid ->
@@ -165,7 +166,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node path =
               None
             | _ -> None
           end else Some loc)
-      | None -> Format.eprintf "None\n%!"; [])
+      | None -> log ~title:"locs_of" "No locs found in index."; []
     in
     Ok (loc::locs)
   | None -> Error "nouid"
