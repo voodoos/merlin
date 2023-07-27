@@ -63,16 +63,6 @@ This is due to a first-class module and shape fallbacking
     "value": [
       {
         "start": {
-          "line": 281,
-          "col": 7
-        },
-        "end": {
-          "line": 281,
-          "col": 14
-        }
-      },
-      {
-        "start": {
           "line": 1,
           "col": 17
         },
