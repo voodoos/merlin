@@ -710,8 +710,14 @@ end = struct
             log ~title:"lookup" "lookup in constructor namespace" ;
             let cd = Env.find_constructor_by_name ident env in
             let path, loc = path_and_loc_of_cstr cd env in
+            let path = match path with
+              | Path.Pdot (p, _name) -> Path (Pdot (p, cd.cstr_name))
+              | Pident _ ->
+                  Local_use_uid (Pident (Ident.create_local cd.cstr_name))
+              | path -> Path path
+            in
             (* TODO: Use [`Constr] here instead of [`Type] *)
-            raise (Found (Path path, Type,cd.cstr_uid, loc))
+            raise (Found (path, Type,cd.cstr_uid, loc))
           | `Mod ->
             log ~title:"lookup" "lookup in module namespace" ;
             let path, md = Env.find_module_by_name ident env in
@@ -756,14 +762,17 @@ end = struct
       ) ;
       log ~title:"lookup" "   ... not in the environment" ;
       None
-    with Found ((path, namespace, decl_uid, _loc) as x) ->
-      let path = match path with
-        | Path p | Local_use_uid p -> p
+    with Found ((path, namespace, decl_uid, loc) as x) ->
+      let path, local = match path with
+        | Path p -> p, ""
+        | Local_use_uid p -> p, " local"
       in
-      log ~title:"env_lookup" "found: '%a' in namespace %s with uid %a"
+      log ~title:"env_lookup" "found%s: '%a' in namespace %s with decl_uid %a\nat loc %a"
+        local
         Logger.fmt (fun fmt -> Path.print fmt path)
         (Shape.Sig_component_kind.to_string namespace)
-        Logger.fmt (fun fmt -> Shape.Uid.print fmt decl_uid);
+        Logger.fmt (fun fmt -> Shape.Uid.print fmt decl_uid)
+        Logger.fmt (fun fmt -> Location.print_loc fmt loc);
       Some x
 end
 
