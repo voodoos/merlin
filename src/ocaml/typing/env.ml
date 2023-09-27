@@ -40,13 +40,6 @@ let value_declarations  : unit usage_tbl ref = s_table Types.Uid.Tbl.create 16
 let type_declarations   : unit usage_tbl ref = s_table Types.Uid.Tbl.create 16
 let module_declarations : unit usage_tbl ref = s_table Types.Uid.Tbl.create 16
 
-let uid_to_loc : Location.t Types.Uid.Tbl.t ref =
-  s_table Types.Uid.Tbl.create 16
-
-let register_uid uid loc = Types.Uid.Tbl.add !uid_to_loc uid loc
-
-let get_uid_to_loc_tbl () = !uid_to_loc
-
 type constructor_usage = Positive | Pattern | Exported_private | Exported
 type constructor_usages =
   {
@@ -995,7 +988,6 @@ let reset_declaration_caches () =
   Types.Uid.Tbl.clear !module_declarations;
   Types.Uid.Tbl.clear !used_constructors;
   Types.Uid.Tbl.clear !used_labels;
-  Types.Uid.Tbl.clear !uid_to_loc;
   ()
 
 let reset_cache () =
@@ -1312,6 +1304,10 @@ let find_shape env (ns : Shape.Sig_component_kind.t) id =
   match ns with
   | Type ->
       (IdTbl.find_same id env.types).tda_shape
+  | Constructor ->
+      Shape.leaf ((TycompTbl.find_same id env.constrs).cda_description.cstr_uid)
+  | Label ->
+      Shape.leaf ((TycompTbl.find_same id env.labels).lbl_uid)
   | Extension_constructor ->
       (TycompTbl.find_same id env.constrs).cda_shape
   | Value ->
@@ -2453,8 +2449,6 @@ let enter_signature_and_shape ~scope ~parent_shape mod_shape sg env =
   enter_signature_and_shape ~scope ~parent_shape (Some mod_shape) sg env
 
 let add_value = add_value ?shape:None
-let add_type = add_type ?shape:None
-let add_extension = add_extension ?shape:None
 let add_class = add_class ?shape:None
 let add_cltype = add_cltype ?shape:None
 let add_modtype = add_modtype ?shape:None
@@ -2709,11 +2703,11 @@ let (initial_safe_string, initial_unsafe_string) =
     (add_extension ~check:false ~rebind:false)
     empty
 
-let add_type_long_path ~check id info env =
-  add_type ~check ~predef:false ~long_path:true id info env
+let add_type_long_path ~check ?shape id info env =
+  add_type ~check ?shape ~predef:false ~long_path:true id info env
 
-let add_type ~check id info env =
-  add_type ~check ~predef:false ~long_path:false id info env
+let add_type ~check ?shape id info env =
+  add_type ~check ?shape ~predef:false ~long_path:false id info env
 
 (* Tracking usage *)
 

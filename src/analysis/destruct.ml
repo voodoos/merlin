@@ -301,7 +301,7 @@ let rec destructible patt =
   let open Typedtree in
   match patt.pat_desc with
   | Tpat_any | Tpat_var _ -> true
-  | Tpat_alias (p, _, _)  -> destructible p
+  | Tpat_alias (p, _, _, _)  -> destructible p
   | _ -> false
 
 
@@ -335,8 +335,8 @@ let rec subst_patt initial ~by patt =
   | Tpat_any
   | Tpat_var _
   | Tpat_constant _ -> patt
-  | Tpat_alias (p,x,y) ->
-    { patt with pat_desc = Tpat_alias (f p, x, y) }
+  | Tpat_alias (p,x,y, uid) ->
+    { patt with pat_desc = Tpat_alias (f p, x, y, uid) }
   | Tpat_tuple lst ->
     { patt with pat_desc = Tpat_tuple (List.map lst ~f) }
   | Tpat_construct (lid, cd, lst, lco) ->
@@ -362,8 +362,8 @@ let rec rm_sub patt sub =
   | Tpat_any
   | Tpat_var _
   | Tpat_constant _ -> patt
-  | Tpat_alias (p,x,y) ->
-    { patt with pat_desc = Tpat_alias (f p, x, y)  }
+  | Tpat_alias (p,x,y,uid) ->
+    { patt with pat_desc = Tpat_alias (f p, x, y, uid)  }
   | Tpat_tuple lst ->
     { patt with pat_desc = Tpat_tuple (List.map lst ~f) }
   | Tpat_construct (lid, cd, lst, lco) ->
@@ -388,7 +388,8 @@ let rec qualify_constructors ~unmangling_tables f pat  =
   let qualify_constructors = qualify_constructors ~unmangling_tables in
   let pat_desc =
     match pat.pat_desc with
-    | Tpat_alias (p, id, loc) -> Tpat_alias (qualify_constructors f p, id, loc)
+    | Tpat_alias (p, id, loc, uid) ->
+      Tpat_alias (qualify_constructors f p, id, loc, uid)
     | Tpat_tuple ps -> Tpat_tuple (List.map ps ~f:(qualify_constructors f))
     | Tpat_record (labels, closed) ->
       let labels =
@@ -461,7 +462,7 @@ let find_branch patterns sub =
       | Tpat_var _
       | Tpat_constant _
       | Tpat_variant (_, None, _) -> false
-      | Tpat_alias (p,_,_)
+      | Tpat_alias (p,_,_,_)
       | Tpat_variant (_, Some p, _)
       | Tpat_lazy p ->
         is_sub_patt p ~sub

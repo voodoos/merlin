@@ -67,6 +67,8 @@ module Sig_component_kind = struct
   type t =
     | Value
     | Type
+    | Constructor
+    | Label
     | Module
     | Module_type
     | Extension_constructor
@@ -76,6 +78,8 @@ module Sig_component_kind = struct
   let to_string = function
     | Value -> "value"
     | Type -> "type"
+    | Constructor -> "constructor"
+    | Label -> "label"
     | Module -> "module"
     | Module_type -> "module type"
     | Extension_constructor -> "extension constructor"
@@ -87,6 +91,8 @@ module Sig_component_kind = struct
     | Extension_constructor ->
         false
     | Type
+    | Constructor
+    | Label
     | Module
     | Module_type
     | Class
@@ -99,10 +105,15 @@ module Item = struct
     type t = string * Sig_component_kind.t
     let compare = compare
 
+    let name (name, _) = name
+    let kind (_, kind) = kind
+
     let make str ns = str, ns
 
     let value id = Ident.name id, Sig_component_kind.Value
     let type_ id = Ident.name id, Sig_component_kind.Type
+    let constr id = Ident.name id, Sig_component_kind.Constructor
+    let label id = Ident.name id, Sig_component_kind.Label
     let module_ id = Ident.name id, Sig_component_kind.Module
     let module_type id = Ident.name id, Sig_component_kind.Module_type
     let extension_constructor id =
@@ -124,17 +135,19 @@ module Item = struct
 end
 
 type var = Ident.t
-type t = { uid: Uid.t option; desc: desc }
+type t = { uid: Uid.t option; desc: desc; approximated: bool }
 and desc =
   | Var of var
   | Abs of var * t
   | App of t * t
   | Struct of t Item.Map.t
+  | Alias of t
   | Leaf
   | Proj of t * Item.t
   | Comp_unit of string
+  | Error of string
 
-let print fmt =
+let print fmt t =
   let print_uid_opt =
     Format.pp_print_option (fun fmt -> Format.fprintf fmt "<%a>" Uid.print)
   in
@@ -171,48 +184,82 @@ let print fmt =
                 aux t
             )
         in
-        Format.fprintf fmt "{@[<v>%a@,%a@]}" print_uid_opt uid print_map map
+        if Item.Map.is_empty map then
+          Format.fprintf fmt "@[<hv>{%a}@]" print_uid_opt uid
+        else
+          Format.fprintf fmt "{@[<v>%a@,%a@]}" print_uid_opt uid print_map map
+    | Alias t ->
+        Format.fprintf fmt "Alias@[(@[<v>%a@,%a@])@]" print_uid_opt uid aux t
+    | Error s ->
+        Format.fprintf fmt "Error %s" s
   in
-  Format.fprintf fmt"@[%a@]@;" aux
+  if t.approximated then
+    Format.fprintf fmt "@[(approx)@ %a@]@;" aux t
+  else
+    Format.fprintf fmt "@[%a@]@;" aux t
 
 let fresh_var ?(name="shape-var") uid =
   let var = Ident.create_local name in
-  var, { uid = Some uid; desc = Var var }
+  var, { uid = Some uid; desc = Var var; approximated = false }
 
 let for_unnamed_functor_param = Ident.create_local "()"
 
 let var uid id =
-  { uid = Some uid; desc = Var id }
+  { uid = Some uid; desc = Var id; approximated = false }
 
 let abs ?uid var body =
-  { uid; desc = Abs (var, body) }
+  { uid; desc = Abs (var, body); approximated = false }
 
 let str ?uid map =
-  { uid; desc = Struct map }
+  { uid; desc = Struct map; approximated = false }
+
+let alias ?uid t =
+  { uid; desc = Alias t; approximated = false}
 
 let leaf uid =
-  { uid = Some uid; desc = Leaf }
+  { uid = Some uid; desc = Leaf; approximated = false }
+
+let approx t = { t with approximated = true}
 
 let proj ?uid t item =
   match t.desc with
   | Leaf ->
       (* When stuck projecting in a leaf we propagate the leaf
         as a best effort *)
-      t
+      approx t
   | Struct map ->
       begin try Item.Map.find item map
-      with Not_found -> t (* ill-typed program *)
+      with Not_found -> approx t (* ill-typed program *)
       end
   | _ ->
-      { uid; desc = Proj (t, item) }
+     { uid; desc = Proj (t, item); approximated = false }
 
 let app ?uid f ~arg =
-      { uid; desc = App (f, arg) }
+  { uid; desc = App (f, arg); approximated = false }
 
 let decompose_abs t =
   match t.desc with
   | Abs (x, t) -> Some (x, t)
   | _ -> None
+
+type reduction_result =
+  | Resolved of Uid.t
+  | Unresolved of t
+  | Approximated of Uid.t option
+  | Missing_uid
+
+let print_reduction_result fmt result =
+  match result with
+  | Resolved uid ->
+      Format.fprintf fmt "@[Resolved: %a@]@;" Uid.print uid
+  | Unresolved shape ->
+      Format.fprintf fmt "@[Unresolved: %a@]@;" print shape
+  | Approximated (Some uid) ->
+      Format.fprintf fmt "@[Approximated: %a@]@;" Uid.print uid
+  | Approximated None ->
+      Format.fprintf fmt "@[Approximated: No uid@]@;"
+  | Missing_uid ->
+      Format.fprintf fmt "@[Missing uid@]@;"
 
 module Make_reduce(Params : sig
   type env
@@ -223,16 +270,17 @@ end) = struct
   (* We implement a strong call-by-need reduction, following an
      evaluator from Nathanaelle Courant. *)
 
-  type nf = { uid: Uid.t option; desc: nf_desc }
+  type nf = { uid: Uid.t option; desc: nf_desc; approximated: bool }
   and nf_desc =
     | NVar of var
     | NApp of nf * nf
     | NAbs of local_env * var * t * delayed_nf
     | NStruct of delayed_nf Item.Map.t
+    | NAlias of nf
     | NProj of nf * Item.t
     | NLeaf
     | NComp_unit of string
-    | NoFuelLeft of desc
+    | NError of string
   (* A type of normal forms for strong call-by-need evaluation.
      The normal form of an abstraction
        Abs(x, t)
@@ -251,7 +299,8 @@ end) = struct
      by calling the normalization function as usual, but duplicate
      computations are precisely avoided by memoization.
    *)
-  and delayed_nf = Thunk of local_env * t
+  and thunk = { local_env : local_env; shape: t }
+  and delayed_nf = Thunk of thunk
 
   and local_env = delayed_nf option Ident.Map.t
   (* When reducing in the body of an abstraction [Abs(x, body)], we
@@ -272,11 +321,15 @@ end) = struct
         Hashtbl.replace memo_table memo_key res;
         res
 
+  let rec strip_head_aliases nf = match nf.desc with
+    | NAlias nf -> strip_head_aliases nf
+    | _ -> nf
+
   type env = {
     fuel: int ref;
     global_env: Params.env;
     local_env: local_env;
-    reduce_memo_table: (local_env * t, nf) Hashtbl.t;
+    reduce_memo_table: (thunk, nf) Hashtbl.t;
     read_back_memo_table: (nf, t) Hashtbl.t;
   }
 
@@ -284,8 +337,11 @@ end) = struct
     { env with local_env = Ident.Map.add var shape env.local_env }
 
   let rec reduce_ env t =
-    let memo_key = (env.local_env, t) in
-    in_memo_table env.reduce_memo_table memo_key (reduce__ env) t
+    let local_env = env.local_env in
+    let memo_key = { local_env; shape = t } in
+    in_memo_table
+      env.reduce_memo_table memo_key
+      (reduce__ env) t
   (* Memoization is absolutely essential for performance on this
      problem, because the normal forms we build can in some real-world
      cases contain an exponential amount of redundancy. Memoization
@@ -324,13 +380,20 @@ end) = struct
      same hash.
 *)
 
-  and reduce__ ({fuel; global_env; local_env; _} as env) (t : t) =
-    let reduce env t = reduce_ env t in
-    let delay_reduce env t = Thunk (env.local_env, t) in
-    let force (Thunk (local_env, t)) =
+  and reduce__
+    ({fuel; global_env; local_env; _} as env) (t : t) =
+    let reduce env t =
+      reduce_ env t
+    in
+    let delay_reduce { local_env; _ } t =
+      Thunk { local_env; shape = t }
+    in
+    let force (Thunk { local_env; shape = t }) =
       reduce { env with local_env } t in
-    let return desc : nf = { uid = t.uid; desc } in
-    if !fuel < 0 then return (NoFuelLeft t.desc)
+    let return ?(approximated = t.approximated) desc : nf =
+      { uid = t.uid; desc; approximated }
+    in
+    if !fuel < 0 then return ~approximated:true (NError "NoFuelLeft")
     else
       match t.desc with
       | Comp_unit unit_name ->
@@ -339,19 +402,18 @@ end) = struct
           | None -> return (NComp_unit unit_name)
           end
       | App(f, arg) ->
-          let f = reduce env f in
+          let f = reduce env f |> strip_head_aliases in
           begin match f.desc with
           | NAbs(clos_env, var, body, _body_nf) ->
               let arg = delay_reduce env arg in
               let env = bind { env with local_env = clos_env } var (Some arg) in
-              reduce env body
-              |> improve_uid t.uid
+              { (reduce env body) with uid = t.uid }
           | _ ->
               let arg = reduce env arg in
               return (NApp(f, arg))
           end
       | Proj(str, item) ->
-          let str = reduce env str in
+          let str = reduce env str |> strip_head_aliases in
           let nored () = return (NProj(str, item)) in
           begin match str.desc with
           | NStruct (items) ->
@@ -392,8 +454,10 @@ end) = struct
       | Struct m ->
           let mnf = Item.Map.map (delay_reduce env) m in
           return (NStruct mnf)
+      | Alias t -> return (NAlias (reduce env t))
+      | Error s -> return ~approximated:true (NError s)
 
-  let rec read_back env (nf : nf) : t =
+  and read_back env (nf : nf) : t =
     in_memo_table env.read_back_memo_table nf (read_back_ env) nf
   (* The [nf] normal form we receive may contain a lot of internal
      sharing due to the use of memoization in the evaluator. We have
@@ -401,11 +465,13 @@ end) = struct
      over the term as a tree. *)
 
   and read_back_ env (nf : nf) : t =
-    { uid = nf.uid; desc = read_back_desc env nf.desc }
+    { uid = nf.uid;
+      desc = read_back_desc env nf.desc;
+      approximated = nf.approximated }
 
   and read_back_desc env desc =
     let read_back nf = read_back env nf in
-    let read_back_force (Thunk (local_env, t)) =
+    let read_back_force (Thunk { local_env; shape = t }) =
       read_back (reduce_ { env with local_env } t) in
     match desc with
     | NVar v ->
@@ -416,44 +482,20 @@ end) = struct
         Abs(x, read_back_force nf)
     | NStruct nstr ->
         Struct (Item.Map.map read_back_force nstr)
+    | NAlias nf -> Alias (read_back nf)
     | NProj (nf, item) ->
         Proj (read_back nf, item)
     | NLeaf -> Leaf
     | NComp_unit s -> Comp_unit s
-    | NoFuelLeft t -> t
+    | NError s -> Error s
 
-  (* When in Merlin we don't need to perform full shape reduction since we are
-     only interested by uid's stored at the "top-level" of the shape once the
-     projections have been done. *)
-  let weak_read_back env (nf : nf) : t =
-    let cache = Hashtbl.create 42 in
-    let rec weak_read_back env nf =
-      let memo_key = (env.local_env, nf) in
-      in_memo_table cache memo_key (weak_read_back_ env) nf
-    and weak_read_back_ env nf : t =
-      { uid = nf.uid; desc = weak_read_back_desc env nf.desc }
-    and weak_read_back_desc env desc : desc =
-      let weak_read_back_no_force (Thunk (_local_env, t)) = t in
-      match desc with
-      | NVar v ->
-          Var v
-      | NApp (nft, nfu) ->
-          App(weak_read_back env nft, weak_read_back env nfu)
-      | NAbs (_env, x, _t, nf) ->
-          Abs(x, weak_read_back_no_force nf)
-      | NStruct nstr ->
-          Struct (Item.Map.map weak_read_back_no_force nstr)
-      | NProj (nf, item) ->
-          Proj (read_back env nf, item)
-      | NLeaf -> Leaf
-      | NComp_unit s -> Comp_unit s
-      | NoFuelLeft t -> t
-    in weak_read_back env nf
+  (* Sharing the memo tables is safe at the level of a compilation unit since
+    idents should be unique *)
+  let reduce_memo_table = Hashtbl.create 42
+  let read_back_memo_table = Hashtbl.create 42
 
   let reduce global_env t =
     let fuel = ref Params.fuel in
-    let reduce_memo_table = Hashtbl.create 42 in
-    let read_back_memo_table = Hashtbl.create 42 in
     let local_env = Ident.Map.empty in
     let env = {
       fuel;
@@ -464,10 +506,19 @@ end) = struct
     } in
     reduce_ env t |> read_back env
 
-  let weak_reduce global_env t =
+  let rec is_stuck_on_comp_unit (nf : nf) =
+    match nf.desc with
+    | NVar _ ->
+      (* This should not happen if we only reduce closed terms *)
+      false
+    | NApp (nf, _) | NProj (nf, _) | NAlias nf -> is_stuck_on_comp_unit nf
+    | NStruct _ | NAbs _ -> false
+    | NComp_unit _ -> true
+    | NError _ -> false
+    | NLeaf -> false
+
+  let reduce_for_uid global_env t =
     let fuel = ref Params.fuel in
-    let reduce_memo_table = Hashtbl.create 42 in
-    let read_back_memo_table = Hashtbl.create 42 in
     let local_env = Ident.Map.empty in
     let env = {
       fuel;
@@ -476,10 +527,24 @@ end) = struct
       read_back_memo_table;
       local_env;
     } in
-    reduce_ env t |> weak_read_back env
+    let nf = reduce_ env t in
+    if is_stuck_on_comp_unit nf then
+      Unresolved (read_back env nf)
+    else match nf with
+      | { uid = Some uid; approximated = false; _ } ->
+          Resolved uid
+      | { uid; approximated = true; _ } ->
+          Approximated uid
+      | { uid = None; approximated = false; _ } ->
+          (* A missing Uid after a complete reduction means the Uid was first
+             missing in the shape which is a code error. Having the
+             [Missing_uid] reported will allow Merlin (or another tool working
+             with the index) to ask users to report the issue if it does happen.
+          *)
+          Missing_uid
 end
 
-module Local_reduce =
+module Toplevel_local_reduce =
   (* Note: this definition with [type env = unit] is only suitable for
      reduction of toplevel shapes -- shapes of compilation units,
      where free variables are only Comp_unit names. If we wanted to
@@ -492,24 +557,45 @@ module Local_reduce =
     let find_shape _env _id = raise Not_found
   end)
 
-let local_reduce shape =
-  Local_reduce.reduce () shape
+let toplevel_local_reduce shape =
+  Toplevel_local_reduce.reduce () shape
 
-let dummy_mod = { uid = None; desc = Struct Item.Map.empty }
+let dummy_mod =
+  { uid = None; desc = Struct Item.Map.empty; approximated = false }
 
-let of_path ~find_shape ~namespace =
+let of_path ~find_shape ~namespace path =
   let rec aux : Sig_component_kind.t -> Path.t -> t = fun ns -> function
     | Pident id -> find_shape ns id
-    | Pdot (path, name) -> proj (aux Module path) (name, ns)
+    | Pdot (path, name) ->
+      (* We need to handle the following cases:
+        Path of constructor:
+          M.t.C
+        Path of label:
+          M.t.lbl
+        Path on label of inline record:
+          M.t.C.lbl *)
+      let is_capitalized name = String.capitalize_ascii name = name in
+      let is_label namespace = namespace = Sig_component_kind.Label in
+      let namespace : Sig_component_kind.t =
+        match path with
+        | Pident id when is_capitalized (Ident.name id) ->
+            if is_label ns then Constructor else Module
+        | Pident _ -> Type
+        | Pdot (_, name)  when is_capitalized name ->
+            if is_label ns then Constructor else Module
+        | Pdot _ -> Type
+        | Papply _ -> Module
+      in
+      proj (aux namespace path) (name, ns)
     | Papply (p1, p2) -> app (aux Module p1) ~arg:(aux Module p2)
   in
-  aux namespace
+  aux namespace path
 
 let for_persistent_unit s =
   { uid = Some (Uid.of_compilation_unit_id (Ident.create_persistent s));
-    desc = Comp_unit s }
+    desc = Comp_unit s; approximated = false }
 
-let leaf_for_unpack = { uid = None; desc = Leaf }
+let leaf_for_unpack = { uid = None; desc = Leaf; approximated = false }
 
 let set_uid_if_none t uid =
   match t.uid with
@@ -529,9 +615,19 @@ module Map = struct
     let item = Item.value id in
     Item.Map.add item (proj shape item) t
 
-  let add_type t id uid = Item.Map.add (Item.type_ id) (leaf uid) t
+  let add_type t id shape = Item.Map.add (Item.type_ id) shape t
   let add_type_proj t id shape =
     let item = Item.type_ id in
+    Item.Map.add item (proj shape item) t
+
+  let add_constr t id shape = Item.Map.add (Item.constr id) shape t
+  let add_constr_proj t id shape =
+    let item = Item.constr id in
+    Item.Map.add item (proj shape item) t
+
+  let add_label t id uid = Item.Map.add (Item.label id) (leaf uid) t
+  let add_label_proj t id shape =
+    let item = Item.label id in
     Item.Map.add item (proj shape item) t
 
   let add_module t id shape = Item.Map.add (Item.module_ id) shape t
@@ -545,8 +641,8 @@ module Map = struct
     let item = Item.module_type id in
     Item.Map.add item (proj shape item) t
 
-  let add_extcons t id uid =
-    Item.Map.add (Item.extension_constructor id) (leaf uid) t
+  let add_extcons t id shape =
+    Item.Map.add (Item.extension_constructor id) shape t
   let add_extcons_proj t id shape =
     let item = Item.extension_constructor id in
     Item.Map.add item (proj shape item) t
