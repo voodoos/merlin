@@ -7,6 +7,12 @@ fix would be for Dune to provide additional source path for "externatl" deps.
   > -filename bin/main.ml <bin/main.ml
   {
     "class": "return",
-    "value": "'Lib1.t' seems to originate from 'Lib2' whose ML file could not be found",
+    "value": {
+      "file": "$TESTCASE_ROOT/src/lib2/lib2.ml",
+      "pos": {
+        "line": 1,
+        "col": 5
+      }
+    },
     "notifications": []
   }

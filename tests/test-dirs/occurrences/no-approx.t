@@ -27,18 +27,8 @@ FIXME: but occurrences should not rely on that information:
     "value": [
       {
         "start": {
-          "line": 4,
-          "col": 7
-        },
-        "end": {
-          "line": 4,
-          "col": 8
-        }
-      },
-      {
-        "start": {
           "line": 8,
-          "col": 11
+          "col": 9
         },
         "end": {
           "line": 8,
@@ -63,18 +53,8 @@ This is due to a first-class module and shape fallbacking
     "value": [
       {
         "start": {
-          "line": 1,
-          "col": 17
-        },
-        "end": {
-          "line": 1,
-          "col": 33
-        }
-      },
-      {
-        "start": {
           "line": 2,
-          "col": 17
+          "col": 8
         },
         "end": {
           "line": 2,

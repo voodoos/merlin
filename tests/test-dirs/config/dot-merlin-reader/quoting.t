@@ -51,6 +51,7 @@
       }
     ],
     "stdlib": null,
+    "index_file": null,
     "reader": [],
     "protocol": "json",
     "log_file": null,
