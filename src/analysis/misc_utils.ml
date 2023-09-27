@@ -77,6 +77,7 @@ let loc_of_decl ~uid =
   | Label_declaration ld -> Some ld.ld_name
   | Module_binding mb -> of_option mb.mb_name
   | Module_declaration md -> of_option md.md_name
+  | Module_substitution ms -> Some ms.ms_name
   | Module_type_declaration mtd -> Some mtd.mtd_name
   | Type_declaration td -> Some td.typ_name
   | Value_description vd -> Some vd.val_name

@@ -1318,8 +1318,12 @@ let find_hash_type path env =
 
 let find_shape env (ns : Shape.Sig_component_kind.t) id =
   match ns with
-  | Type | Label ->
+  | Type ->
       (IdTbl.find_same id env.types).tda_shape
+  | Constructor ->
+      Shape.leaf ((TycompTbl.find_same id env.constrs).cda_description.cstr_uid)
+  | Label ->
+    Shape.leaf ((TycompTbl.find_same id env.labels).lbl_uid)
   | Extension_constructor ->
       (TycompTbl.find_same id env.constrs).cda_shape
   | Value ->

@@ -441,7 +441,7 @@ and module_binding =
     {
      mb_id: Ident.t option;
      mb_name: string option loc;
-     mb_decl_uid: Uid.t;
+     mb_uid: Uid.t;
      mb_presence: Types.module_presence;
      mb_expr: module_expr;
      mb_attributes: attributes;
@@ -531,6 +531,7 @@ and module_substitution =
     {
      ms_id: Ident.t;
      ms_name: string loc;
+     ms_uid: Uid.t;
      ms_manifest: Path.t;
      ms_txt: Longident.t loc;
      ms_attributes: attributes;

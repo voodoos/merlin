@@ -1046,7 +1046,7 @@ end = struct
     let open Sig_component_kind in
     match component with
     | Value -> names.values
-    | Type | Label -> names.types
+    | Type | Label | Constructor -> names.types
     | Module -> names.modules
     | Module_type -> names.modtypes
     | Extension_constructor -> names.typexts
@@ -2122,7 +2122,7 @@ let check_recmodule_inclusion env bindings =
           {
             mb_id = id;
             mb_name = name;
-            mb_decl_uid = uid;
+            mb_uid = uid;
             mb_presence = Mp_present;
             mb_expr = modl';
             mb_attributes = attrs;
@@ -2799,7 +2799,7 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
         let md_shape =
           match modl.mod_type with
           | Mty_alias _path ->
-            Shape.{ uid = Some md_uid; desc = Alias md_shape }
+            Shape.{ uid = Some md_uid; desc = Alias md_shape; approximated = false }
           | _ -> Shape.set_uid_if_none md_shape md_uid
         in
         Env.register_uid md_uid pmb_loc;
@@ -2826,7 +2826,7 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
           | Some id -> Shape.Map.add_module shape_map id md_shape
           | None -> shape_map
         in
-        Tstr_module {mb_id=id; mb_name=name; mb_decl_uid = md.md_uid;
+        Tstr_module {mb_id=id; mb_name=name; mb_uid = md.md_uid;
                      mb_expr=modl; mb_presence=pres; mb_attributes=attrs;
                      mb_loc=pmb_loc; },
         sg,
@@ -3249,7 +3249,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
       let simple_sg = Signature_names.simplify finalenv names sg in
       if !Clflags.print_types then begin
         Typecore.force_delayed_checks ();
-        let shape = Shape.local_reduce shape in
+        let shape = Shape.toplevel_local_reduce shape in
         Printtyp.wrap_printing_env ~error:false initial_env
           (fun () -> fprintf std_formatter "%a@."
               (Printtyp.printed_signature sourcefile) simple_sg
@@ -3282,7 +3282,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
           (* It is important to run these checks after the inclusion test above,
              so that value declarations which are not used internally but
              exported are not reported as being unused. *)
-          let shape = Shape.local_reduce shape in
+          let shape = Shape.toplevel_local_reduce shape in
           let annots = Cmt_format.Implementation str in
           Cmt_format.save_cmt (outputprefix ^ ".cmt") modulename
             annots (Some sourcefile) initial_env None (Some shape);
@@ -3305,7 +3305,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
              the values being exported. We can still capture unused
              declarations like "let x = true;; let x = 1;;", because in this
              case, the inferred signature contains only the last declaration. *)
-          let shape = Shape.local_reduce shape in
+          let shape = Shape.toplevel_local_reduce shape in
           if not !Clflags.dont_write_files then begin
             let alerts = Builtin_attributes.alerts_of_str ast in
             let cmi =

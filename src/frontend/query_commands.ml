@@ -399,7 +399,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
         | `Builtin -> `Builtin (Path.name path)
         | `Not_in_env _ as s -> s
         | `Not_found _ as s -> s
-        | `Found (_uid, file, loc) -> `Found (file, loc.Location.loc_start)
+        | `Found (_uid, file, loc, _) -> `Found (file, loc.Location.loc_start)
         | `File_not_found _ as s -> s
     end
 
@@ -529,7 +529,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
         ~traverse_aliases:true
         ~env ~local_defs ~pos ml_or_mli path
     with
-    | `Found (_, file, loc) ->
+    | `Found (_, file, loc, _) ->
       Locate.log ~title:"result"
         "found: %s" (Option.value ~default:"<local buffer>" file);
       `Found (file, loc.Location.loc_start)

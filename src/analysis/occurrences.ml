@@ -39,11 +39,12 @@ let index_buffer ~env ~local_defs () =
   in
   List.iter index ~f:(fun (item, lid) ->
     match item with
-    | Cmt_format.Resolved uid ->
+    | Cmt_format.Approximated _ | Missing_uid _ -> ()
+    | Resolved uid ->
         Index_file_format.(add defs uid (LidSet.singleton lid))
     | Unresolved shape ->
       match Shape_reduce.weak_reduce env shape with
-        | { Shape.desc = Leaf | Struct _; uid = Some uid } ->
+        | { Shape.desc = Leaf | Struct _; uid = Some uid; approximated = _ } ->
             Index_file_format.add defs uid (LidSet.singleton lid)
         | _ -> ());
   defs
@@ -122,7 +123,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       let node = Mbrowse.enclosing pos [browse] in
       let env, node = Mbrowse.leaf_node node in
       uid_and_loc_of_node env node
-    | `Found (Some uid, _, loc) ->
+    | `Found (Some uid, _, loc, false) ->
         log ~title:"locs_of" "Found definition uid using locate: %a "
           Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
         Some (uid, loc)

@@ -358,7 +358,7 @@ let of_expression_desc loc = function
   | Texp_letmodule (mb_id, mb_name, mb_presence, mb_expr, e) ->
     let mb =
       {mb_id;mb_name;mb_expr;mb_loc=Location.none;mb_attributes=[]
-      ; mb_presence ; mb_decl_uid = Uid.internal_not_actually_unique }
+      ; mb_presence ; mb_uid = Uid.internal_not_actually_unique }
     in
     app (Module_binding mb) ** of_expression e
   | Texp_letexception (ec,e) ->

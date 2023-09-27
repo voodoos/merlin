@@ -349,7 +349,7 @@ let uid_of_path ~config ~env ~ml_or_mli ~decl_uid ~traverse_aliases path ns =
     end)
   in
   match ml_or_mli with
-  | `MLI -> Some (scrape_alias ~fallback_uid:decl_uid ~env path)
+  | `MLI -> `Some (scrape_alias ~fallback_uid:decl_uid ~env path)
   | `ML ->
     let shape = Env.shape_of_path ~namespace:ns env path in
     log ~title:"shape_of_path" "initial: %a"
@@ -358,7 +358,10 @@ let uid_of_path ~config ~env ~ml_or_mli ~decl_uid ~traverse_aliases path ns =
     let r = if traverse_aliases then strip_aliases r else r in
     log ~title:"shape_of_path" "reduced: %a"
       Logger.fmt (fun fmt -> Shape.print fmt r);
-    r.uid
+    match r.uid, r.approximated with
+    | Some uid, true -> `Approx uid
+    | Some uid, false -> `Some uid
+    | None, _ -> `None
 
 let build_uid_to_locs_tbl ~(local_defs : Mtyper.typedtree) () =
   (* todo: cache or specialize ? *)
@@ -382,6 +385,12 @@ let from_uid ~config ~ml_or_mli ~local_defs uid loc path =
     | _ -> None
   in
   let title = "from_uid" in
+  let uid, approx =
+    match uid with
+    | `Some uid -> Some uid, false
+    | `Approx uid -> Some uid, true
+    | `None -> None, false
+  in
   match uid with
   | Some (Shape.Uid.Item { comp_unit; _ } as uid) ->
     let locopt =
@@ -435,7 +444,7 @@ let from_uid ~config ~ml_or_mli ~local_defs uid loc path =
       end
     in
     begin match locopt with
-    | Some (uid, loc) -> `Found (Some uid, loc)
+    | Some (uid, loc) -> `Found (Some uid, loc, approx)
     | None -> `Not_found (Path.name path, None)
     end
   | Some (Compilation_unit comp_unit as uid) ->
@@ -443,14 +452,14 @@ let from_uid ~config ~ml_or_mli ~local_defs uid loc path =
       log ~title "Got the uid of a compilation unit: %a"
         Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
       match loc_of_comp_unit comp_unit with
-      | Some loc -> `Found (Some uid, loc)
+      | Some loc -> `Found (Some uid, loc, approx)
       | _ -> log ~title "Failed to load the shapes";
         `Not_found (Path.name path, None)
     end
   | Some (Predef _) -> `Builtin
   | Some Internal | None ->
       log ~title "No UID found, fallbacking to lookup location.";
-      `Found (None, loc)
+      `Found (None, loc, approx)
 
 let locate ~config ~env ~ml_or_mli ~traverse_aliases decl_uid loc path ns =
   let uid =
@@ -784,7 +793,7 @@ let uid_from_longident ~config ~env ~traverse_aliases nss ml_or_mli ident =
   match Env_lookup.in_namespaces nss ident env with
   | None -> `Not_in_env str_ident
   | Some (Local_use_uid path, _namespace, uid, loc) ->
-    `Uid (Some uid, loc, path)
+    `Uid (`Some uid, loc, path)
   | Some (Path path, namespace, decl_uid, loc) ->
     if Utils.is_builtin_path path then
       `Builtin
@@ -819,9 +828,9 @@ let from_path
       with
       | `Not_found _ | `Builtin
       | `File_not_found _ as err -> err
-      | `Found (uid, loc) ->
+      | `Found (uid, loc, approx) ->
         match find_source ~config loc (Path.name path) with
-        | `Found (file, loc) -> `Found (uid, file, loc)
+        | `Found (file, loc) -> `Found (uid, file, loc, approx)
         | `File_not_found _ as otherwise -> otherwise
 
 let infer_namespace ?namespaces ~pos lid browse is_label =
@@ -870,9 +879,9 @@ let from_string ~config ~env ~local_defs
       with
       | `File_not_found _ | `Not_found _ | `Not_in_env _ as err -> err
       | `Builtin -> `Builtin path
-      | `Found (uid, loc) ->
+      | `Found (uid, loc, approx) ->
         match find_source ~config loc path with
-        | `Found (file, loc) -> `Found (uid, file, loc)
+        | `Found (file, loc) -> `Found (uid, file, loc, approx)
         | `File_not_found _ as otherwise -> otherwise
   in
   Option.value_map ~f:from_lid ~default:(`Not_found (path, None)) lid
@@ -1065,8 +1074,9 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
           ~config ~env ~local_defs ~namespace ~traverse_aliases:true `MLI path
       in
       begin match from_path with
-      | `Found (uid, _, loc) ->
+      | `Found (uid, _, loc, false) ->
         doc_from_uid ~config ~loc uid
+      | `Found (_, _, _, true) -> `No_documentation
       | (`Builtin |`Not_in_env _|`File_not_found _|`Not_found _)
         as otherwise -> otherwise
       end
@@ -1076,12 +1086,13 @@ let get_doc ~config ~env ~local_defs ~comments ~pos =
         from_string ~config ~env ~local_defs
           ~pos ~traverse_aliases:true `MLI path
       with
-      | `Found (uid, _, loc) ->
+      | `Found (uid, _, loc, false) ->
         doc_from_uid ~config ~loc uid
       | `At_origin ->
         `Found_loc { Location.loc_start = pos; loc_end = pos; loc_ghost = true }
       | `Missing_labels_namespace -> `No_documentation
       | `Builtin _ -> `Builtin
+      | `Found (_, _, _, true) -> `No_documentation
       | (`Not_in_env _ | `Not_found _ |`File_not_found _ )
         as otherwise -> otherwise
       end
