@@ -864,8 +864,8 @@ let find_doc_attributes_in_typedtree ~config ~comp_unit uid =
           let rec aux pat =
             let open Typedtree in
             match pat.pat_desc with
-            | Tpat_var (id, _) -> f id
-            | Tpat_alias (pat, _, _)
+            | Tpat_var (id, _, _) -> f id
+            | Tpat_alias (pat, _, _, _)
             | Tpat_variant (_, Some pat, _)
             | Tpat_lazy pat
             | Tpat_or (pat, _, _) ->
