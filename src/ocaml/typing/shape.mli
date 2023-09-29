@@ -217,11 +217,13 @@ module Make_reduce(Context : sig
 
     val find_shape : env -> Ident.t -> t
   end) : sig
-  val reduce : Context.env -> t -> t
+  val reduce :
+    ?keep_aliases:bool -> Context.env -> t -> t
 
   (** Perform weak reduction and return the head's uid if any. If reduction was
     incomplete the partially reduced shape is returned. *)
-  val reduce_for_uid : Context.env -> t -> reduction_result
+  val reduce_for_uid :
+    ?keep_aliases:bool -> Context.env -> t -> reduction_result
 end
 
 (** [toplevel_local_reduce] is only suitable to reduce toplevel shapes (shapes
