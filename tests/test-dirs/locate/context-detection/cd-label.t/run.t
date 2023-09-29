@@ -49,7 +49,7 @@ We could expect 2:12 or at least 2:4
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
       "line": 1,
-      "col": 0
+      "col": 5
     }
   }
 
@@ -60,14 +60,12 @@ We could expect 2:12 or at least 2:4
 
   $ $OCAMLC -c -bin-annot record.ml
 
-FIXME: Merlin looks for the Uid of the label in Record's `uid_to_loc` table but
-doesn't find it. We need a compiler fix for this, see #1505.
   $ $MERLIN single locate -look-for mli -position 2:24 \
   > -filename ./other_module.ml < ./other_module.ml | jq '.value'
   {
     "file": "$TESTCASE_ROOT/record.ml",
     "pos": {
       "line": 1,
-      "col": 0
+      "col": 11
     }
   }

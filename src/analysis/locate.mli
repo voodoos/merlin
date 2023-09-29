@@ -28,32 +28,52 @@
 
 val log : 'a Logger.printf
 
+type namespace = Namespace.t
 module Namespace : sig
   type t = [ `Type | `Mod | `Modtype | `Vals | `Constr | `Labels ]
 end
 
+type config = {
+  mconfig: Mconfig.t;
+  ml_or_mli: [ `ML | `MLI ];
+  traverse_aliases: bool;
+}
+
+type result = {
+  uid: Shape.Uid.t option;
+  file: string option;
+  location: Location.t;
+  approximated: bool;
+}
+
+val find_source
+  : config: Mconfig.t
+  -> Warnings.loc
+  -> string
+  -> [> `File_not_found of string
+      | `Found of string option * Location.t ]
+
 val from_path
-  : config:Mconfig.t
+  : config:config
   -> env:Env.t
-  -> namespace:Namespaced_path.Namespace.t
-  -> [ `ML | `MLI ]
+  -> local_defs:Mtyper.typedtree
+  -> namespace:namespace
   -> Path.t
   -> [> `File_not_found of string
-     | `Found of Shape.Uid.t option * string option * Lexing.position
+     | `Found of result
      | `Builtin
      | `Not_in_env of string
      | `Not_found of string * string option ]
 
 val from_string
-  :  config:Mconfig.t
+  :  config:config
   -> env:Env.t
   -> local_defs:Mtyper.typedtree
   -> pos:Lexing.position
   -> ?namespaces:Namespace.t list
-  -> [ `ML | `MLI ]
   -> string
   -> [> `File_not_found of string
-      | `Found of Shape.Uid.t option * string option * Lexing.position
+      | `Found of result
       | `Builtin of string
       | `Missing_labels_namespace
       | `Not_found of string * string option
@@ -67,8 +87,7 @@ val get_doc
   -> comments:(string * Location.t) list
   -> pos:Lexing.position
   -> [ `User_input of string
-     | `Completion_entry of
-        Namespaced_path.Namespace.t * Path.t * Location.t ]
+     | `Completion_entry of namespace * Path.t * Location.t ]
   -> [> `File_not_found of string
       | `Found of string
       | `Builtin of string

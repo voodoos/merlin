@@ -327,6 +327,7 @@ end) = struct
 
   type env = {
     fuel: int ref;
+    keep_aliases: bool;
     global_env: Params.env;
     local_env: local_env;
     reduce_memo_table: (thunk, nf) Hashtbl.t;
@@ -454,7 +455,11 @@ end) = struct
       | Struct m ->
           let mnf = Item.Map.map (delay_reduce env) m in
           return (NStruct mnf)
-      | Alias t -> return (NAlias (reduce env t))
+      | Alias t ->
+        let nf = reduce env t in
+        if env.keep_aliases then
+          return (NAlias nf)
+        else nf
       | Error s -> return ~approximated:true (NError s)
 
   and read_back env (nf : nf) : t =
@@ -494,11 +499,12 @@ end) = struct
   let reduce_memo_table = Hashtbl.create 42
   let read_back_memo_table = Hashtbl.create 42
 
-  let reduce global_env t =
+  let reduce ?(keep_aliases = true) global_env t =
     let fuel = ref Params.fuel in
     let local_env = Ident.Map.empty in
     let env = {
       fuel;
+      keep_aliases;
       global_env;
       reduce_memo_table;
       read_back_memo_table;
@@ -517,11 +523,12 @@ end) = struct
     | NError _ -> false
     | NLeaf -> false
 
-  let reduce_for_uid global_env t =
+  let reduce_for_uid ?(keep_aliases = true) global_env t =
     let fuel = ref Params.fuel in
     let local_env = Ident.Map.empty in
     let env = {
       fuel;
+      keep_aliases;
       global_env;
       reduce_memo_table;
       read_back_memo_table;

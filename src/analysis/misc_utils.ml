@@ -57,3 +57,28 @@ let parenthesize_name name =
     else
       "(" ^ name ^ ")"
   )
+
+let loc_of_decl ~uid =
+  let of_option name =
+    match name.Location.txt with
+    | Some txt -> Some { name with txt }
+    | None -> None
+  in
+  let of_value_binding vb =
+    let bound_idents = Typedtree.let_bound_idents_full [vb] in
+    ListLabels.find_map ~f:(fun (_, loc, _, uid') -> if uid = uid' then Some loc else None) bound_idents
+  in
+  function
+  | Cmt_format.Class_declaration cd -> Some cd.ci_id_name
+  | Class_description cd -> Some cd.ci_id_name
+  | Class_type_declaration ctd -> Some ctd.ci_id_name
+  | Extension_constructor ec -> Some ec.ext_name
+  | Module_binding mb -> of_option mb.mb_name
+  | Module_declaration md -> of_option md.md_name
+  | Module_type_declaration mtd -> Some mtd.mtd_name
+  | Module_substitution msd -> Some msd.ms_name;
+  | Type_declaration td -> Some td.typ_name
+  | Constructor_declaration cd -> Some cd.cd_name
+  | Label_declaration ld -> Some ld.ld_name
+  | Value_description vd -> Some vd.val_name
+  | Value_binding vb -> of_value_binding vb
