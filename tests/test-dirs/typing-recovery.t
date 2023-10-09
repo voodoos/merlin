@@ -106,7 +106,9 @@
                       Ttyp_constr \"t/273\"
                       []
                   Tpat_alias \"x/278\"
-                  pattern (test.ml[2,15+7]..test.ml[2,15+8])
+                  pattern (test.ml[2,15+7]..test.ml[2,15+8]) ghost
+                    attribute \"merlin.hide\"
+                      []
                     Tpat_any
                 expression (test.ml[3,31+2]..test.ml[6,69+12])
                   Texp_match

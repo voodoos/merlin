@@ -7,7 +7,7 @@ Trying them all:
       "file": "$TESTCASE_ROOT/test.ml",
       "pos": {
         "line": 1,
-        "col": 5
+        "col": 9
       }
     },
     "notifications": []
@@ -109,7 +109,7 @@ FIXME we failed to parse/reconstruct the ident, that's interesting
       "file": "$TESTCASE_ROOT/test.ml",
       "pos": {
         "line": 1,
-        "col": 5
+        "col": 9
       }
     },
     "notifications": []
@@ -151,7 +151,7 @@ FIXME this should jump to line 11:
       "file": "$TESTCASE_ROOT/test.ml",
       "pos": {
         "line": 13,
-        "col": 5
+        "col": 11
       }
     },
     "notifications": []
@@ -177,7 +177,7 @@ FIXME this should jump to line 11:
       "file": "$TESTCASE_ROOT/test.ml",
       "pos": {
         "line": 13,
-        "col": 5
+        "col": 11
       }
     },
     "notifications": []

@@ -6,7 +6,7 @@
       "file": "$TESTCASE_ROOT/field.ml",
       "pos": {
         "line": 1,
-        "col": 5
+        "col": 11
       }
     },
     "notifications": []
@@ -19,7 +19,7 @@
       "file": "$TESTCASE_ROOT/field.ml",
       "pos": {
         "line": 1,
-        "col": 5
+        "col": 11
       }
     },
     "notifications": []
