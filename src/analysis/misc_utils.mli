@@ -24,4 +24,5 @@ end
 val parenthesize_name : string -> string
 
 (** Extracts the loc from cmt's cmt_uid_to_decl tables *)
-val loc_of_decl : uid:Shape.Uid.t -> Cmt_format.item_declaration -> string Location.loc option
+val loc_of_decl :
+  uid:Shape.Uid.t -> Typedtree.item_declaration -> string Location.loc option

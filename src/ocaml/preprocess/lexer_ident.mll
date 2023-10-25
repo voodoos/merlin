@@ -91,6 +91,7 @@ rule token = parse
     { UIDENT ident }
   | "`"  { BACKQUOTE }
   | "'"  { QUOTE }
+  | "()" { LIDENT "()"}
   | "("  { LPAREN }
   | ")"  { RPAREN }
   | "."  { DOT }

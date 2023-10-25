@@ -4,19 +4,21 @@
 
   $ cat >constr.mli <<EOF
   > type t = A of int |  B
+  > type u = { label_a : int }
   > EOF
 
   $ cat >constr.ml <<EOF
-  > type u = C of int
+  > type u = { label_a : int }
   > type t = A of int |  B
   > let foo : t = A 42
   > EOF
 
   $ cat >main.ml <<EOF
   > let foo : Constr.t = Constr.A 42
+  > let bar : Constr.u = { Constr.label_a = 42 }
   > EOF
 
-  $ $OCAMLC -c -bin-annot -store-usage-index constr.mli constr.ml
+  $ $OCAMLC -c -bin-annot -bin-annot-occurrences constr.mli constr.ml
 
   $ $MERLIN single locate -look-for mli -position 1:28 \
   > -filename ./main.ml < ./main.ml | jq '.value'
@@ -35,6 +37,26 @@
     "pos": {
       "line": 2,
       "col": 9
+    }
+  }
+
+  $ $MERLIN single locate -look-for mli -position 2:30 \
+  > -filename ./main.ml < ./main.ml | jq '.value'
+  {
+    "file": "$TESTCASE_ROOT/constr.mli",
+    "pos": {
+      "line": 2,
+      "col": 11
+    }
+  }
+
+  $ $MERLIN single locate -look-for ml -position 2:30 \
+  > -filename ./main.ml < ./main.ml | jq '.value'
+  {
+    "file": "$TESTCASE_ROOT/constr.ml",
+    "pos": {
+      "line": 1,
+      "col": 11
     }
   }
 

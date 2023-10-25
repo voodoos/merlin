@@ -19,8 +19,9 @@ available:
     "notifications": []
   }
 
-  $ grep -A1 from_uid log | grep -v from_uid | sed '/^--$/d'
-  Loading the shapes for unit "A"
+  $ grep -A1 -e from_path -e find_loc_of_uid log | 
+  > grep -v -e from_path -e find_loc_of_uid | sed '/^--$/d'
+  Loading the cmt file for unit "A"
   Shapes successfully loaded, looking for A.0
   Found location: File "a.ml", line 1, characters 4-9
 
@@ -40,8 +41,9 @@ available:
     "notifications": []
   }
 
-  $ grep -A1 from_uid log | grep -v from_uid | sed '/^--$/d'
-  Loading the shapes for unit "A"
+  $ grep -A1 -e from_path -e find_loc_of_uid log | 
+  > grep -v -e from_path -e find_loc_of_uid | sed '/^--$/d'
+  Loading the cmt file for unit "A"
   Shapes successfully loaded, looking for A.0
   Found location: File "a.ml", line 1, characters 4-9
 
@@ -65,7 +67,11 @@ In the absence of cmt though, fallbacking to the cmi loc makes sense:
     "notifications": []
   }
 
-  $ grep -A1 from_uid log | grep -v from_uid
-  No UID found, fallbacking to lookup location.
+  $ grep -A1 -e from_path -e find_loc_of_uid log | 
+  > grep -v -e from_path -e find_loc_of_uid
+  No definition uid, falling back to the declaration uid: A.0
+  Loading the cmt file for unit "A"
+  Failed to load the cmt file
+  Falling back to the declaration's location: File "a.ml", line 1, characters 4-9
 
   $ rm log

@@ -49,6 +49,8 @@ module Directive : sig
     [ `EXT of string list
     | `FLG of string list
     | `STDLIB of string
+    | `INDEX_FILE of string
+    | `UNIT_NAME of string
     | `SUFFIX of string
     | `READER of string list
     | `EXCLUDE_QUERY_DIR

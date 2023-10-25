@@ -3,13 +3,33 @@ module LidSet = Index_format.LidSet
 
 let {Logger. log} = Logger.for_section "occurrences"
 
-let index_buffer ~env ~local_defs () =
-  let defs = Hashtbl.create 64 in
-  let index = Ast_iterators.index_usages ~(local_defs : Mtyper.typedtree) () in
-  let module Shape_reduce =
-    Shape.Make_reduce (struct
-      type env = Env.t
+let set_fname ~file (loc : Location.t) =
+  let pos_fname = file in
+  { loc with
+      loc_start = { loc.loc_start with pos_fname };
+      loc_end   = { loc.loc_end with pos_fname }}
 
+let decl_of_path_or_lid env namespace path lid =
+  match (namespace : Shape.Sig_component_kind.t) with
+  | Constructor ->
+    begin match Env.find_constructor_by_name lid env with
+    | exception Not_found -> None
+    | {cstr_uid; cstr_loc; _ } ->
+      Some { Env_lookup.uid = cstr_uid; loc = cstr_loc; namespace }
+    end
+  | Label ->
+    begin match Env.find_label_by_name lid env with
+    | exception Not_found -> None
+    | {lbl_uid; lbl_loc; _ } ->
+      Some { Env_lookup.uid = lbl_uid; loc = lbl_loc; namespace }
+    end
+  | _ -> Env_lookup.loc path namespace env
+
+let index_buffer ~scope ~current_buffer_path ~local_defs () =
+  let {Logger. log} = Logger.for_section "index" in
+  let defs = Hashtbl.create 64 in
+  let module Shape_reduce =
+    Shape_reduce.Make (struct
       let fuel = 10
 
       let read_unit_shape ~unit_name =
@@ -22,28 +42,72 @@ let index_buffer ~env ~local_defs () =
           | exception _ | _ ->
             log ~title:"read_unit_shape" "failed to find %s" unit_name;
             None
-
-      let find_shape env id = Env.shape_of_path
-        ~namespace:Shape.Sig_component_kind.Module env (Pident id)
     end)
   in
-  List.iter index ~f:(fun (lid, item) ->
-    match item with
-    | Shape.Approximated _ | Missing_uid -> ()
-    | Resolved uid ->
-        Index_format.(add defs uid (LidSet.singleton lid))
-    | Unresolved shape ->
-      (* Format.eprintf "Reducing %a\n%!" Shape.print shape; *)
-      match Shape_reduce.reduce env shape with
-        | { Shape.desc = Leaf | Struct _; uid = Some uid; approximated = _ } ->
-          (* Format.eprintf "Reduced %a\n%!" Shape.print s; *)
-            Index_format.add defs uid (LidSet.singleton lid)
-        | _ -> ());
+  let f ~namespace env path (lid : Longident.t Location.loc)  =
+    log ~title:"index_buffer" "Path: %a" Logger.fmt (Fun.flip Path.print path);
+    let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
+    let lid = { lid with loc = set_fname ~file:current_buffer_path lid.loc } in
+    let index_decl () =
+      begin match decl_of_path_or_lid env namespace path lid.txt with
+      | exception _ |  None -> log ~title:"index_buffer" "Declaration not found"
+      | Some decl ->
+        log ~title:"index_buffer" "Found declaration: %a"
+          Logger.fmt (Fun.flip Location.print_loc decl.loc);
+        Index_format.(add defs decl.uid (LidSet.singleton lid))
+      end
+    in
+     if not_ghost lid then
+      match Env.shape_of_path ~namespace env path with
+      | exception Not_found -> ()
+      | path_shape ->
+        log ~title:"index_buffer" "Shape of path: %a"
+          Logger.fmt (Fun.flip Shape.print path_shape);
+        begin match Shape_reduce.reduce_for_uid env path_shape with
+        | Internal_error_missing_uid ->
+          log ~title:"index_buffer" "Reduction failed: missing uid";
+          index_decl ()
+        | Resolved_alias l ->
+            let uid = Locate.uid_of_aliases ~traverse_aliases:false l in
+            Index_format.(add defs uid (LidSet.singleton lid))
+        | Resolved uid ->
+          log ~title:"index_buffer" "Found %s (%a) wiht uid %a"
+            (Longident.head lid.txt)
+            Logger.fmt (Fun.flip Location.print_loc lid.loc)
+            Logger.fmt (Fun.flip Shape.Uid.print uid);
+          Index_format.(add defs uid (LidSet.singleton lid))
+        | Approximated s  ->
+          log ~title:"index_buffer" "Shape is approximative, found uid: %a"
+            Logger.fmt (Fun.flip (Format.pp_print_option Shape.Uid.print) s);
+          index_decl ()
+        | Unresolved s ->
+          log ~title:"index_buffer" "Shape unresolved, stuck on: %a"
+            Logger.fmt (Fun.flip Shape.print s);
+          index_decl ()
+        end
+  in
+  let f ~namespace env path (lid : Longident.t Location.loc)  =
+    (* The compiler lacks sufficient location information to precisely hihglight
+       modules in paths. This function hacks around that issue when looking for
+       occurrences in the current buffer only. *)
+    let rec iter_on_path ~namespace path ({Location.txt; loc} as lid) =
+      let () = f ~namespace env path lid in
+      if scope = `Buffer then
+      match path, txt with
+      | Pdot (path, _), Ldot (lid, s) ->
+        let length_with_dot = String.length s + 1 in
+        let lid =
+          { Location.txt = lid; loc = { loc with loc_end = {loc.loc_end with
+            pos_cnum = loc.loc_end.pos_cnum - length_with_dot}} }
+        in
+        iter_on_path ~namespace:Module path lid
+      | Papply _, _ -> ()
+      | _, _ -> ()
+    in
+    iter_on_path ~namespace path lid
+  in
+  Ast_iterators.iter_on_usages ~f local_defs;
   defs
-
-let load_external_index ~index_file =
-  let uideps = Index_format.read ~file:index_file in
-  uideps
 
 let merge_tbl ~into tbl = Hashtbl.iter (Index_format.add into) tbl
 
@@ -76,6 +140,10 @@ let uid_and_loc_of_node env node =
       Some (uid, name.loc)
   | Type_declaration { typ_type; typ_name; _ } ->
       Some (typ_type.type_uid, typ_name.loc)
+  | Label_declaration { ld_uid; ld_loc ; _ } ->
+      Some (ld_uid, ld_loc)
+  | Constructor_declaration { cd_uid; cd_loc ; _ } ->
+      Some (cd_uid, cd_loc)
   | Value_description { val_val; val_name; _ } ->
       Some (val_val.val_uid, val_name.loc)
   | _ -> None
@@ -95,6 +163,28 @@ let loc_of_local_def ~local_defs uid =
     (* we could check equality and raise with the result as soon that it arrive *)
     Shape.Uid.Tbl.find uid_to_locs_tbl uid
 
+let comp_unit_of_uid = function
+  | Shape.Uid.Compilation_unit comp_unit
+  | Item { comp_unit; _ } -> Some comp_unit
+  | Internal | Predef _ -> None
+
+let check Index_format.{ stats; _ } file =
+  let open Index_format in
+  match Stats.find_opt file stats with
+  | None -> log ~title:"stat_check" "No mtime found for file %S." file; true
+  | Some { size; _ } ->
+    try
+      let stats = Unix.stat file in
+      let equal =
+        (* This is fast but approximative. A better option would be to check
+           [mtime] and then [source_digest] if the times differ. *)
+         Int.equal stats.st_size size
+      in
+      log ~title:"stat_check"
+        "File %s has been modified since the index was built." file;
+      equal
+    with Unix.Unix_error _ -> false
+
 let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
     path
@@ -104,7 +194,9 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
     ~config:{ mconfig = config; traverse_aliases=false; ml_or_mli = `ML}
     ~env ~local_defs ~pos path
   in
-  let def =
+  (* When we fail to find an exact definition we restrict the scope to the local
+     buffer *)
+  let def, scope =
     match locate_result with
     | `At_origin ->
       log ~title:"locs_of" "Cursor is on definition / declaration";
@@ -113,58 +205,85 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       let browse = Mbrowse.of_typedtree local_defs in
       let node = Mbrowse.enclosing pos [browse] in
       let env, node = Mbrowse.leaf_node node in
-      uid_and_loc_of_node env node
-    | `Found { uid = Some uid; location; approximated = false; _ } ->
+      uid_and_loc_of_node env node, scope
+    | `Found { uid; location; approximated = false; _ } ->
         log ~title:"locs_of" "Found definition uid using locate: %a "
           Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
-        Some (uid, location)
+        Some (uid, location), scope
+    | `Found { decl_uid; location; approximated = true; _ } ->
+        log ~title:"locs_of" "Approx: %a "
+          Logger.fmt (fun fmt -> Shape.Uid.print fmt decl_uid);
+        Some (decl_uid, location), `Buffer
+    | `Builtin (uid, s) ->
+        log ~title:"locs_of" "Locate found a builtin: %s" s;
+        Some (uid, Location.none), scope
     | _ ->
-      log ~title:"locs_of" "Locate failed to find a definition.";
-      None
+        log ~title:"locs_of" "Locate failed to find a definition.";
+        None, `Buffer
+  in
+  let current_buffer_path =
+    Filename.concat config.query.directory config.query.filename
   in
   match def with
-  | Some (uid, loc) ->
+  | Some (def_uid, def_loc) ->
     log ~title:"locs_of" "Definition has uid %a (%a)"
-      Logger.fmt (fun fmt -> Shape.Uid.print fmt uid)
-      Logger.fmt (fun fmt -> Location.print_loc fmt loc);
-    (* Todo: use magic number instead and don't use the lib *)
-    let index_file = None (* todo *) in
+      Logger.fmt (fun fmt -> Shape.Uid.print fmt def_uid)
+      Logger.fmt (fun fmt -> Location.print_loc fmt def_loc);
     log ~title:"locs_of" "Indexing current buffer";
-    let index = index_buffer ~env ~local_defs () in
-    if scope = `Project then begin
-      match index_file with
-      | None -> log ~title:"locs_of" "No external index specified"
-      | Some index_file ->
-        log ~title:"locs_of" "Using external index: %S" index_file;
-        let external_uideps = load_external_index ~index_file in
-        merge_tbl ~into:index external_uideps.defs
-    end;
-    (* TODO ignore externally indexed locs from the current buffer *)
-    let locs = match Hashtbl.find_opt index uid with
-      | Some locs ->
+    let buffer_index =
+      index_buffer ~scope ~current_buffer_path ~local_defs ()
+    in
+    let buffer_locs = Hashtbl.find_opt buffer_index def_uid in
+    let external_locs, desync =
+      if scope = `Buffer then None, false else begin
+      let exception File_changed in
+      let open Option.Infix in
+      try
+        let locs = config.merlin.index_file >>= fun file ->
+          let external_index = Index_format.read_exn ~file in
+          Hashtbl.find_opt external_index.defs def_uid
+          >>| fun locs -> LidSet.filter (fun {loc; _} ->
+            (* We ignore external results that concern the current buffer *)
+            let fname = loc.Location.loc_start.Lexing.pos_fname in
+            (* We ignore external results if the index is not up-to-date *)
+            (* We could return partial results from up-to-date file *)
+            if String.equal fname current_buffer_path then false
+            else begin
+              if not (check external_index fname) then raise File_changed;
+              true
+            end) locs
+          in
+          locs, false
+      with File_changed -> None, true
+      end
+    in
+    if desync then log ~title:"locs_of" "External index might be out-of-sync.";
+    let locs = match buffer_locs, external_locs with
+      | None, None -> LidSet.empty
+      | Some locs, None | None, Some locs -> locs
+      | Some b_locs, Some e_locs -> LidSet.union b_locs e_locs
+    in
+    let locs =
+        log ~title:"occurrences" "Found %i locs" (LidSet.cardinal locs);
         LidSet.elements locs
-        |> List.filter_map ~f:(fun lid ->
-          let loc = last_loc lid.Location.loc lid.txt in
+        |> List.filter_map ~f:(fun {Location.txt; loc} ->
+          log ~title:"occurrences" "Found occ: %s %a"
+            (Longident.head txt) Logger.fmt (Fun.flip Location.print_loc loc);
+          let loc = last_loc loc txt in
           let fname = loc.Location.loc_start.Lexing.pos_fname in
           if Filename.is_relative fname then begin
             match Locate.find_source ~config loc fname with
-            | `Found (Some file, _) -> Some { loc with loc_start =
-                { loc.loc_start with pos_fname = file}}
-            | `Found (None, _) -> Some { loc with loc_start =
-                { loc.loc_start with pos_fname = ""}}
+            | `Found (file, _) -> Some (set_fname ~file loc)
             | `File_not_found msg ->
-              log ~title:"occurrences" "%s" msg;
-              None
-            | _ -> None
+                log ~title:"occurrences" "%s" msg;
+                None
           end else Some loc)
-      | None -> log ~title:"locs_of" "No locs found in index."; []
     in
-    (* We only prepend the location of the definition if it's int he scope of
-       the query *)
-    let loc_in_unit (loc : Location.t) =
-      let by = Env.get_unit_name () |> String.lowercase_ascii in
-      String.is_prefixed ~by (loc.loc_start.pos_fname |> String.lowercase_ascii)
+    let def_uid_is_in_current_unit =
+      let uid_comp_unit = comp_unit_of_uid def_uid in
+      Option.value_map ~default:false uid_comp_unit
+        ~f:(String.equal @@ Env.get_unit_name ())
     in
-    if scope = `Project || loc_in_unit loc then Ok (loc::locs)
-    else Ok locs
+    if not def_uid_is_in_current_unit then Ok (locs, desync)
+    else Ok (set_fname ~file:current_buffer_path def_loc :: locs, desync)
   | None -> Error "nouid"

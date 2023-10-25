@@ -61,21 +61,6 @@ and binary_part =
   | Partial_signature_item of signature_item
   | Partial_module_type of module_type
 
-type item_declaration =
-  | Class_declaration of class_declaration
-  | Class_description of class_description
-  | Class_type_declaration of class_type_declaration
-  | Constructor_declaration of constructor_declaration
-  | Extension_constructor of extension_constructor
-  | Label_declaration of label_declaration
-  | Module_binding of module_binding
-  | Module_declaration of module_declaration
-  | Module_substitution of module_substitution
-  | Module_type_declaration of module_type_declaration
-  | Type_declaration of type_declaration
-  | Value_binding of value_binding
-  | Value_description of value_description
-
 type cmt_infos = {
   cmt_modname : string;
   cmt_annots : binary_annots;
@@ -94,8 +79,8 @@ type cmt_infos = {
   cmt_uid_to_decl : item_declaration Shape.Uid.Tbl.t;
   cmt_impl_shape : Shape.t option; (* None for mli *)
   cmt_ident_occurrences :
-    (Longident.t Location.loc * Shape.reduction_result) list
-}
+    (Longident.t Location.loc * Shape_reduce.result) list
+  }
 
 type error =
     Not_a_typedtree of string
@@ -117,89 +102,28 @@ let iter_on_annots (it : Tast_iterator.iterator) = function
   | Partial_implementation array -> Array.iter (iter_on_parts it) array
   | Partial_interface array -> Array.iter (iter_on_parts it) array
 
-module Local_reduce = Shape.Make_reduce(struct
-    type env = Env.t
-    let fuel = 10
+let iter_on_declaration f decl =
+  match decl with
+  | Value vd -> f vd.val_val.val_uid decl;
+  | Value_binding vb ->
+      let bound_idents = let_bound_idents_full [vb] in
+      List.iter ~f:(fun (_, _, _, uid) -> f uid decl) bound_idents
+  | Type td ->
+      if not (Btype.is_row_name (Ident.name td.typ_id)) then
+        f td.typ_type.type_uid (Type td)
+  | Constructor cd -> f cd.cd_uid decl
+  | Extension_constructor ec -> f ec.ext_type.ext_uid decl;
+  | Label ld -> f ld.ld_uid decl
+  | Module md -> f md.md_uid decl
+  | Module_type mtd -> f mtd.mtd_uid decl
+  | Module_substitution ms -> f ms.ms_uid decl
+  | Module_binding mb -> f mb.mb_uid decl
+  | Class cd -> f cd.ci_decl.cty_uid decl
+  | Class_type ct -> f ct.ci_decl.cty_uid decl
 
-    let read_unit_shape ~unit_name:_ = None
-
-    let find_shape env id =
-      let namespace = Shape.Sig_component_kind.Module in
-      Env.shape_of_path ~namespace env (Pident id)
-  end)
-
-let iter_on_declarations ~(f: Shape.Uid.t -> item_declaration -> unit) =
-  let f_lbl_decls ldecls =
-    List.iter ~f:(fun ({ ld_uid; _ } as ld) ->
-      f ld_uid (Label_declaration ld)) ldecls
-  in
-  Tast_iterator.{ default_iterator with
-
-  value_bindings = (fun sub ((_, vbs) as bindings) ->
-    let bound_idents = let_filter_bound vbs in
-    List.iter ~f:(fun (vb, uid) -> f uid (Value_binding vb)) bound_idents;
-    default_iterator.value_bindings sub bindings);
-
-  module_binding = (fun sub mb ->
-    f mb.mb_uid (Module_binding mb);
-    default_iterator.module_binding sub mb);
-
-  module_declaration = (fun sub md ->
-    f md.md_uid (Module_declaration md);
-    default_iterator.module_declaration sub md);
-
-  module_type_declaration = (fun sub mtd ->
-    f mtd.mtd_uid (Module_type_declaration mtd);
-    default_iterator.module_type_declaration sub mtd);
-
-  module_substitution = (fun sub ms ->
-    f ms.ms_uid (Module_substitution ms);
-    default_iterator.module_substitution sub ms);
-
-  value_description = (fun sub vd ->
-    f vd.val_val.val_uid (Value_description vd);
-    default_iterator.value_description sub vd);
-
-  type_declaration = (fun sub td ->
-    (* compiler-generated "row_names" share the uid of their corresponding
-       class declaration, so we ignore them to prevent duplication *)
-    if not (Btype.is_row_name (Ident.name td.typ_id)) then begin
-      f td.typ_type.type_uid (Type_declaration td);
-      (* We also register records labels and constructors *)
-      let f_lbl_decls ldecls =
-        List.iter ~f:(fun ({ ld_uid; _ } as ld) ->
-          f ld_uid (Label_declaration ld)) ldecls
-      in
-      match td.typ_kind with
-      | Ttype_variant constrs ->
-          List.iter ~f:(fun ({ cd_uid; cd_args; _ } as cd) ->
-            f cd_uid (Constructor_declaration cd);
-            match cd_args with
-            | Cstr_record ldecls -> f_lbl_decls ldecls
-            | Cstr_tuple _ -> ()) constrs
-      | Ttype_record labels -> f_lbl_decls labels
-      | _ -> ()
-    end;
-    default_iterator.type_declaration sub td);
-
-  extension_constructor = (fun sub ec ->
-    f ec.ext_type.ext_uid (Extension_constructor ec);
-    begin match ec.ext_kind with
-    | Text_decl (_, Cstr_record lbls,_) -> f_lbl_decls lbls
-    | _ -> () end;
-    default_iterator.extension_constructor sub ec);
-
-  class_declaration = (fun sub cd ->
-    f cd.ci_decl.cty_uid (Class_declaration cd);
-    default_iterator.class_declaration sub cd);
-
-  class_type_declaration = (fun sub ctd ->
-    f ctd.ci_decl.cty_uid (Class_type_declaration ctd);
-    default_iterator.class_type_declaration sub ctd);
-
-  class_description =(fun sub cd ->
-    f cd.ci_decl.cty_uid (Class_description cd);
-    default_iterator.class_description sub cd);
+let iter_on_declarations ~(f: Shape.Uid.t -> item_declaration -> unit) = {
+  Tast_iterator.default_iterator with
+  item_declaration = (fun _sub decl -> iter_on_declaration f decl);
 }
 
 let need_to_clear_env =
@@ -236,16 +160,12 @@ let clear_env binary_annots =
 
   else binary_annots
 
-let iter_on_usages ~index =
-  let f ~namespace env path lid =
-    let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
-    if not_ghost lid then
-      match Env.shape_of_path ~namespace env path with
-      | exception Not_found -> ()
-      | path_shape ->
-        let result = Local_reduce.reduce_for_uid env path_shape in
-        index := (lid, result) :: !index
-  in
+(* Every typedtree node with a located longident corresponding to user-facing
+   syntax should be indexed. *)
+let iter_on_occurrences
+  ~(f : namespace:Shape.Sig_component_kind.t ->
+        Env.t -> Path.t -> Longident.t Location.loc ->
+        unit) =
   let path_in_type typ name =
     match Types.get_desc typ with
     | Tconstr (type_path, _, _) ->
@@ -255,8 +175,11 @@ let iter_on_usages ~index =
   let add_constructor_description env lid =
     function
     | { Types.cstr_tag = Cstr_extension (path, _); _ } ->
-        f ~namespace:Extension_constructor env path lid
-    | { Types.cstr_uid = Predef _; _ } -> ()
+        let namespace : Shape.Sig_component_kind.t = Extension_constructor in
+        f ~namespace env path lid
+    | { Types.cstr_uid = Predef name; _} ->
+        let id = List.assoc name Predef.builtin_idents in
+        f ~namespace:Constructor env (Pident id) lid
     | { Types.cstr_res; cstr_name; _ } ->
         let path = path_in_type cstr_res cstr_name in
         Option.iter ~f:(fun path -> f ~namespace:Constructor env path lid) path
@@ -299,6 +222,12 @@ let iter_on_usages ~index =
             add_label exp_env lid label_descr
           | Overridden (lid, _) -> add_label exp_env lid label_descr
           | Kept _ -> ()) fields
+      | Texp_instvar  (_self_path, path, name) ->
+          let lid = { name with txt = Longident.Lident name.txt } in
+          f ~namespace:Value exp_env path lid
+      | Texp_setinstvar  (_self_path, path, name, _) ->
+          let lid = { name with txt = Longident.Lident name.txt } in
+          f ~namespace:Value exp_env path lid
       | _ -> ());
       default_iterator.expr sub e);
 
@@ -309,7 +238,10 @@ let iter_on_usages ~index =
           f ~namespace:Type ctyp_env path lid
       | Ttyp_package {pack_path; pack_txt} ->
           f ~namespace:Module_type ctyp_env pack_path pack_txt
-      | _ -> ());
+      | Ttyp_class (path, lid, _typs) ->
+          (* Deprecated syntax to extend a polymorphic variant *)
+          f ~namespace:Type ctyp_env path lid
+      |  _ -> ());
       default_iterator.typ sub ct);
 
   pat =
@@ -339,7 +271,7 @@ let iter_on_usages ~index =
             f ~namespace:Module pat_env path lid
         | Tpat_type (path, lid) ->
             f ~namespace:Type pat_env path lid
-        | _ -> ())
+        | Tpat_constraint _ | Tpat_unpack -> ())
         pat_extra;
       default_iterator.pat sub pat);
 
@@ -376,7 +308,7 @@ let iter_on_usages ~index =
     (fun sub ({ cl_desc; cl_env; _} as ce) ->
       (match cl_desc with
       | Tcl_ident (path, lid, _) -> f ~namespace:Class cl_env path lid
-      | _ -> ());
+      |  _ -> ());
       default_iterator.class_expr sub ce);
 
   class_type =
@@ -407,7 +339,7 @@ let iter_on_usages ~index =
           f ~namespace:Extension_constructor str_env path lid
       | Tstr_typext { tyext_path; tyext_txt } ->
           f ~namespace:Type str_env tyext_path tyext_txt
-      | _ -> ());
+      |  _ -> ());
       default_iterator.structure_item sub str_item)
 }
 
@@ -417,12 +349,22 @@ let index_declarations binary_annots =
   iter_on_annots (iter_on_declarations ~f) binary_annots;
   index
 
-let index_usages binary_annots =
-  let index : (Longident.t Location.loc * Shape.reduction_result) list ref =
+let index_occurrences binary_annots =
+  let index : (Longident.t Location.loc * Shape_reduce.result) list ref =
     ref []
   in
-  iter_on_annots (iter_on_usages ~index) binary_annots;
+  let f ~namespace env path lid =
+    let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
+    if not_ghost lid then
+      match Env.shape_of_path ~namespace env path with
+      | exception Not_found -> ()
+      | path_shape ->
+        let result = Shape_reduce.local_reduce_for_uid env path_shape in
+        index := (lid, result) :: !index
+  in
+  iter_on_annots (iter_on_occurrences ~f) binary_annots;
   !index
+
 
 exception Error of error
 
@@ -498,8 +440,8 @@ let save_cmt filename modname binary_annots sourcefile initial_env cmi shape =
            | Some cmi -> Some (output_cmi temp_file_name oc cmi)
          in
          let cmt_ident_occurrences =
-          if !Clflags.store_usage_index then
-            index_usages binary_annots
+          if !Clflags.store_occurrences then
+            index_occurrences binary_annots
           else
             []
          in

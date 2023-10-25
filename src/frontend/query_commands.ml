@@ -399,12 +399,12 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
                 ~config
                 ~env
                 ~local_defs
-                ~namespace:`Type
+                ~namespace:Type
                 path with
-        | `Builtin -> `Builtin (Path.name path)
+        | `Builtin (_, s) -> `Builtin s
         | `Not_in_env _ as s -> s
         | `Not_found _ as s -> s
-        | `Found { file; location; _ } -> `Found (file, location.loc_start)
+        | `Found { file; location; _ } -> `Found (Some file, location.loc_start)
         | `File_not_found _ as s -> s
     end
 
@@ -537,12 +537,15 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     begin match Locate.from_string ~config ~env ~local_defs ~pos path with
     | `Found { file; location; _ } ->
       Locate.log ~title:"result"
-        "found: %s" (Option.value ~default:"<local buffer>" file);
-      `Found (file, location.loc_start)
+        "found: %s"  file;
+      `Found (Some file, location.loc_start)
     | `Missing_labels_namespace ->
       (* Can't happen because we haven't passed a namespace as input. *)
       assert false
-    | (`Not_found _|`At_origin |`Not_in_env _|`File_not_found _|`Builtin _) as
+    | `Builtin (_, s) ->
+      Locate.log ~title:"result" "found builtin %s" s;
+      `Builtin s
+    | (`Not_found _|`At_origin |`Not_in_env _|`File_not_found _) as
       otherwise ->
       Locate.log ~title:"result" "not found";
       otherwise
@@ -806,13 +809,13 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
       Locate.log ~title:"reconstructed identifier" "%s" path;
       path
     in
-    let locs =
+    let locs, desync =
       Occurrences.locs_of ~config ~scope ~env ~local_defs ~node ~pos path
-      |> Result.value ~default:[]
+      |> Result.value ~default:([], false)
     in
     let loc_start l = l.Location.loc_start in
     let cmp l1 l2 = Lexing.compare_pos (loc_start l1) (loc_start l2) in
-    List.sort ~cmp locs
+    (List.sort ~cmp locs), desync
 
   | Version ->
     Printf.sprintf "The Merlin toolkit version %s, for Ocaml %s\n"

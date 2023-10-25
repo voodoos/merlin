@@ -35,6 +35,8 @@ type merlin = {
   extensions  : string list;
   suffixes    : (string * string) list;
   stdlib      : string option;
+  index_file  : string option;
+  unit_name   : string option;
   reader      : string list;
   protocol    : [`Json | `Sexp];
   log_file    : string option;
@@ -57,7 +59,7 @@ val dump_merlin : merlin -> json
 
 (** {1 Some flags affecting queries} *)
 
-module Verbosity : sig 
+module Verbosity : sig
   type t = Smart | Lvl of int
 
   (** the default value for verbosity, i.e., [Lvl 0] *)

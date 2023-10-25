@@ -18,6 +18,7 @@
 
   $ dune build ./main.exe 2> /dev/null
 
+Definition of t
   $ $MERLIN single locate -look-for ml -position 1:16 \
   > -filename main.ml <main.ml
   {
@@ -26,12 +27,13 @@
       "file": "$TESTCASE_ROOT/noimpl.mli",
       "pos": {
         "line": 1,
-        "col": 0
+        "col": 5
       }
     },
     "notifications": []
   }
 
+Declaration of t
   $ $MERLIN single locate -look-for mli -position 1:16 \
   > -filename main.ml <main.ml
   {
@@ -46,6 +48,7 @@
     "notifications": []
   }
 
+Definition of module Noimpl
   $ $MERLIN single locate -look-for ml -position 1:13 \
   > -filename main.ml <main.ml
   {
@@ -60,6 +63,7 @@
     "notifications": []
   }
 
+Declaration of module Noimpl
   $ $MERLIN single locate -look-for mli -position 1:13 \
   > -filename main.ml <main.ml
   {

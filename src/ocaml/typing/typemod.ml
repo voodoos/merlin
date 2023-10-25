@@ -2259,6 +2259,7 @@ and type_module_aux ~alias sttn funct_body anchor env smod =
       let shape =
         Env.shape_of_path ~namespace:Shape.Sig_component_kind.Module env path
       in
+      let shape = if alias && aliasable then Shape.alias shape else shape in
       let md =
         if alias && aliasable then
           (Env.add_required_global (Path.head path); md)
@@ -2710,11 +2711,7 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
             md_uid;
           }
         in
-        let md_shape =
-          match modl.mod_type with
-          | Mty_alias _path -> Shape.alias ~uid:md_uid md_shape
-          | _ -> Shape.set_uid_if_none md_shape md_uid
-        in
+        let md_shape = Shape.set_uid_if_none md_shape md_uid in
         (*prerr_endline (Ident.unique_toplevel_name id);*)
         Mtype.lower_nongen outer_scope md.md_type;
         let id, newenv, sg =
@@ -2855,12 +2852,11 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
             Signature_names.check_type names loc cls.cls_obj_id;
             Signature_names.check_type names loc cls.cls_typesharp_id;
             let uid = cls.cls_decl.cty_uid in
-            let map f id acc = f acc id uid in
-            let map_t f id acc = f acc id (Shape.str ~uid Shape.Map.empty) in
-            map Shape.Map.add_class cls.cls_id acc
-            |> map Shape.Map.add_class_type cls.cls_ty_id
-            |> map_t Shape.Map.add_type cls.cls_obj_id
-            |> map_t Shape.Map.add_type cls.cls_typesharp_id
+            let map f id v acc = f acc id v in
+            map Shape.Map.add_class cls.cls_id uid acc
+            |> map Shape.Map.add_class_type cls.cls_ty_id uid
+            |> map Shape.Map.add_type cls.cls_obj_id (Shape.leaf uid)
+            |> map Shape.Map.add_type cls.cls_typesharp_id (Shape.leaf uid)
           ) shape_map classes
         in
         Tstr_class
@@ -2888,11 +2884,10 @@ and type_structure ?(toplevel = false) ?(keep_warnings = false) funct_body ancho
             Signature_names.check_type names loc decl.clsty_obj_id;
             Signature_names.check_type names loc decl.clsty_typesharp_id;
             let uid = decl.clsty_ty_decl.clty_uid in
-            let map_t f id acc = f acc id (Shape.str ~uid Shape.Map.empty) in
-            let map f id acc = f acc id uid in
-            map Shape.Map.add_class_type decl.clsty_ty_id acc
-            |> map_t Shape.Map.add_type decl.clsty_obj_id
-            |> map_t Shape.Map.add_type decl.clsty_typesharp_id
+            let map f id v acc = f acc id v in
+            map Shape.Map.add_class_type decl.clsty_ty_id uid acc
+            |> map Shape.Map.add_type decl.clsty_obj_id (Shape.leaf uid)
+            |> map Shape.Map.add_type decl.clsty_typesharp_id (Shape.leaf uid)
           ) shape_map classes
         in
         Tstr_class_type
@@ -3166,7 +3161,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
       let simple_sg = Signature_names.simplify finalenv names sg in
       if !Clflags.print_types then begin
         Typecore.force_delayed_checks ();
-        let shape = Shape.toplevel_local_reduce shape in
+        let shape = Shape_reduce.local_reduce Env.empty shape in
         Printtyp.wrap_printing_env ~error:false initial_env
           (fun () -> fprintf std_formatter "%a@."
               (Printtyp.printed_signature sourcefile) simple_sg
@@ -3195,7 +3190,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
           (* It is important to run these checks after the inclusion test above,
              so that value declarations which are not used internally but
              exported are not reported as being unused. *)
-          let shape = Shape.toplevel_local_reduce shape in
+          let shape = Shape_reduce.local_reduce Env.empty shape in
           let annots = Cmt_format.Implementation str in
           Cmt_format.save_cmt (outputprefix ^ ".cmt") modulename
             annots (Some sourcefile) initial_env None (Some shape);
@@ -3218,7 +3213,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
              the value being exported. We can still capture unused
              declarations like "let x = true;; let x = 1;;", because in this
              case, the inferred signature contains only the last declaration. *)
-          let shape = Shape.toplevel_local_reduce shape in
+          let shape = Shape_reduce.local_reduce Env.empty shape in
           if not !Clflags.dont_write_files then begin
             let alerts = Builtin_attributes.alerts_of_str ast in
             let cmi =

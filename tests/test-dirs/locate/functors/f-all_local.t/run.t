@@ -38,7 +38,7 @@ Check that we can jump from inside the functor to the (sig of the) parameter:
       "file": "$TESTCASE_ROOT/all_local.ml",
       "pos": {
         "line": 2,
-        "col": 2
+        "col": 7
       }
     },
     "notifications": []
