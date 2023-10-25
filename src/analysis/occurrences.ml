@@ -41,10 +41,6 @@ let index_buffer ~env ~local_defs () =
         | _ -> ());
   defs
 
-let load_external_index ~index_file =
-  let uideps = Index_format.read ~file:index_file in
-  uideps
-
 let merge_tbl ~into tbl = Hashtbl.iter (Index_format.add into) tbl
 
 (* A longident can have the form: A.B.x Right now we are only interested in
@@ -76,6 +72,10 @@ let uid_and_loc_of_node env node =
       Some (uid, name.loc)
   | Type_declaration { typ_type; typ_name; _ } ->
       Some (typ_type.type_uid, typ_name.loc)
+  | Label_declaration { ld_uid; ld_loc ; _ } ->
+      Some (ld_uid, ld_loc)
+  | Constructor_declaration { cd_uid; cd_loc ; _ } ->
+      Some (cd_uid, cd_loc)
   | Value_description { val_val; val_name; _ } ->
       Some (val_val.val_uid, val_name.loc)
   | _ -> None
@@ -122,21 +122,22 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       log ~title:"locs_of" "Locate failed to find a definition.";
       None
   in
+  let current_buffer_path =
+    Filename.concat config.query.directory config.query.filename
+  in
   match def with
-  | Some (uid, loc) ->
+  | Some (uid, def_loc) ->
     log ~title:"locs_of" "Definition has uid %a (%a)"
       Logger.fmt (fun fmt -> Shape.Uid.print fmt uid)
-      Logger.fmt (fun fmt -> Location.print_loc fmt loc);
-    (* Todo: use magic number instead and don't use the lib *)
-    let index_file = None (* todo *) in
+      Logger.fmt (fun fmt -> Location.print_loc fmt def_loc);
     log ~title:"locs_of" "Indexing current buffer";
     let index = index_buffer ~env ~local_defs () in
     if scope = `Project then begin
-      match index_file with
+      match config.merlin.index_file with
       | None -> log ~title:"locs_of" "No external index specified"
-      | Some index_file ->
-        log ~title:"locs_of" "Using external index: %S" index_file;
-        let external_uideps = load_external_index ~index_file in
+      | Some file ->
+        log ~title:"locs_of" "Using external index: %S" file;
+        let external_uideps = Index_format.read_exn ~file in
         merge_tbl ~into:index external_uideps.defs
     end;
     (* TODO ignore externally indexed locs from the current buffer *)
@@ -146,7 +147,11 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
         |> List.filter_map ~f:(fun lid ->
           let loc = last_loc lid.Location.loc lid.txt in
           let fname = loc.Location.loc_start.Lexing.pos_fname in
-          if Filename.is_relative fname then begin
+          if String.equal fname current_buffer_path then
+            (* ignore locs coming from the external index for the buffer *)
+            (* maybe filter before *)
+            None
+          else if Filename.is_relative fname then begin
             match Locate.find_source ~config loc fname with
             | `Found (Some file, _) -> Some { loc with loc_start =
                 { loc.loc_start with pos_fname = file}}
@@ -165,6 +170,9 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       let by = Env.get_unit_name () |> String.lowercase_ascii in
       String.is_prefixed ~by (loc.loc_start.pos_fname |> String.lowercase_ascii)
     in
-    if scope = `Project || loc_in_unit loc then Ok (loc::locs)
-    else Ok locs
+    if loc_in_unit def_loc then
+      let def_loc = {def_loc with
+        loc_start = {def_loc.loc_start with pos_fname = current_buffer_path }} in
+      Ok (def_loc::locs)
+      else Ok locs
   | None -> Error "nouid"

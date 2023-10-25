@@ -141,6 +141,8 @@ let inspect_browse_tree ~cursor lid browse : t option =
     | Pattern p -> inspect_pattern ~cursor ~lid p
     | Value_description _
     | Type_declaration _
+    | Constructor_declaration _
+    | Label_declaration _
     | Extension_constructor _
     | Module_binding_name _
     | Module_declaration_name _ ->
