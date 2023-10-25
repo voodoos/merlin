@@ -305,6 +305,7 @@ type config = {
   pass_forward : Merlin_dot_protocol.Directive.no_processing_required list;
   to_canonicalize : (string * Merlin_dot_protocol.Directive.include_path) list;
   stdlib : string option;
+  index_file : string option;
   packages_to_load : string list;
   findlib : string option;
   findlib_path : string list;
@@ -315,6 +316,7 @@ let empty_config = {
   pass_forward      = [];
   to_canonicalize   = [];
   stdlib            = None;
+  index_file        = None;
   packages_to_load  = [];
   findlib           = None;
   findlib_path      = [];
@@ -339,6 +341,14 @@ let prepend_config ~cwd ~cfg =
         log ~title:"conflicting paths for stdlib" "%s\n%s" p canon_path
       end;
       { cfg with stdlib = Some canon_path }
+    | `INDEX_FILE path ->
+      let canon_path = canonicalize_filename ~cwd path in
+      begin match cfg.index_file with
+      | None -> ()
+      | Some p ->
+        log ~title:"conflicting paths for index file" "%s\n%s" p canon_path
+      end;
+      { cfg with index_file = Some canon_path }
     | `FINDLIB path ->
       let canon_path = canonicalize_filename ~cwd path in
       begin match cfg.stdlib with
