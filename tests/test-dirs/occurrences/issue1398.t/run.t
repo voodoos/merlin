@@ -17,7 +17,7 @@ Test finding occurrences of let-based binding operator, from reified syntax:
       {
         "start": {
           "line": 3,
-          "col": 10
+          "col": 12
         },
         "end": {
           "line": 3,
@@ -57,7 +57,7 @@ Test finding occurrences of and-based binding operator, from reified syntax:
       {
         "start": {
           "line": 3,
-          "col": 19
+          "col": 21
         },
         "end": {
           "line": 3,

@@ -30,10 +30,6 @@
   > EOF
 
   $ dune build @all
-  ld: warning: -undefined suppress is deprecated
-  ld: warning: -undefined suppress is deprecated
-  ld: warning: -undefined suppress is deprecated
-  ld: warning: -undefined suppress is deprecated
 
   $ ocaml-index dump _build/default/project.ocaml-index
   3 uids:
