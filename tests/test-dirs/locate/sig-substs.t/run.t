@@ -15,7 +15,6 @@ when both are present in the buffer (the struct will always be preferred).
     "notifications": []
   }
 
-TODO SHAPES: it could be more precise by answering 8:21
   $ $MERLIN single locate -look-for ml -position 10:13 -filename ./basic.ml < ./basic.ml
   {
     "class": "return",
@@ -23,7 +22,7 @@ TODO SHAPES: it could be more precise by answering 8:21
       "file": "$TESTCASE_ROOT/basic.ml",
       "pos": {
         "line": 8,
-        "col": 9
+        "col": 25
       }
     },
     "notifications": []

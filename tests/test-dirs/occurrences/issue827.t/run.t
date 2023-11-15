@@ -35,7 +35,7 @@ Reproduction case:
       {
         "start": {
           "line": 2,
-          "col": 18
+          "col": 16
         },
         "end": {
           "line": 2,

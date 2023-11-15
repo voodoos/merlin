@@ -20,7 +20,7 @@ available:
   }
 
   $ grep -A1 from_uid log | grep -v from_uid | sed '/^--$/d'
-  Loading the shapes for unit "A"
+  Loading the cmt file for unit "A"
   Shapes successfully loaded, looking for A.0
   Found location: File "a.ml", line 1, characters 4-9
 
@@ -41,7 +41,7 @@ available:
   }
 
   $ grep -A1 from_uid log | grep -v from_uid | sed '/^--$/d'
-  Loading the shapes for unit "A"
+  Loading the cmt file for unit "A"
   Shapes successfully loaded, looking for A.0
   Found location: File "a.ml", line 1, characters 4-9
 
@@ -66,6 +66,10 @@ In the absence of cmt though, fallbacking to the cmi loc makes sense:
   }
 
   $ grep -A1 from_uid log | grep -v from_uid
-  No UID found, fallbacking to lookup location.
+  No definition uid, fallbacking to the declaration uid: A.0
+  Loading the cmt file for unit "A"
+  --
+  Failed to load the shapes
+  Uid not found in the cmt table. Fallbacking to the node's location: File "a.ml", line 1, characters 4-9
 
   $ rm log
