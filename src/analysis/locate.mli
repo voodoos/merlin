@@ -28,11 +28,6 @@
 
 val log : 'a Logger.printf
 
-type namespace = Namespace.t
-module Namespace : sig
-  type t = [ `Type | `Mod | `Modtype | `Vals | `Constr | `Labels ]
-end
-
 type config = {
   mconfig: Mconfig.t;
   ml_or_mli: [ `ML | `MLI ];
@@ -59,7 +54,7 @@ val from_path
   : config:config
   -> env:Env.t
   -> local_defs:Mtyper.typedtree
-  -> namespace:namespace
+  -> namespace:Env_lookup.Namespace.t
   -> Path.t
   -> [> `File_not_found of string
      | `Found of result
@@ -72,7 +67,7 @@ val from_string
   -> env:Env.t
   -> local_defs:Mtyper.typedtree
   -> pos:Lexing.position
-  -> ?namespaces:Namespace.t list
+  -> ?namespaces:Env_lookup.Namespace.inferred_basic list
   -> string
   -> [> `File_not_found of string
       | `Found of result
@@ -89,7 +84,7 @@ val get_doc
   -> comments:(string * Location.t) list
   -> pos:Lexing.position
   -> [ `User_input of string
-     | `Completion_entry of namespace * Path.t * Location.t ]
+     | `Completion_entry of Env_lookup.Namespace.t * Path.t * Location.t ]
   -> [> `File_not_found of string
       | `Found of string
       | `Builtin of string
