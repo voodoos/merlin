@@ -35,8 +35,17 @@ let index_buffer ~local_defs () =
         begin match Shape_reduce.reduce_for_uid env path_shape with
         | Shape.Approximated _ | Missing_uid -> ()
         | Resolved uid ->
-            Index_format.(add defs uid (LidSet.singleton lid))
-            | Unresolved _ -> ()
+          Index_format.(add defs uid (LidSet.singleton lid))
+        | Unresolved s ->
+          log ~title:"index_buffer" "Could not resolve shape %a"
+            Logger.fmt (Fun.flip Shape.print s);
+          begin match Env_lookup.loc path namespace env with
+          | None -> log ~title:"index_buffer" "Declaration not found"
+          | Some decl ->
+            log ~title:"index_buffer" "Found the declaration: %a"
+              Logger.fmt (Fun.flip Location.print_loc decl.loc);
+            Index_format.(add defs decl.uid (LidSet.singleton lid))
+          end
         end
   in
   Ast_iterators.iter_on_usages ~f local_defs;
