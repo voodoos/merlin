@@ -2,28 +2,9 @@ open! Std
 let {Logger. log} = Logger.for_section "env-lookup"
 
 module Namespace = struct
-  type t = [
-    | `Vals
-    | `Type
-    | `Constr
-    | `Mod
-    | `Modtype
-    | `Functor
-    | `Labels
-    | `Unknown
-    | `Apply
-  ]
+  type t = Shape.Sig_component_kind.t
 
-  let to_string = function
-    | `Vals -> "(value) "
-    | `Type -> "(type) "
-    | `Constr -> "(constructor) "
-    | `Mod -> "(module) "
-    | `Modtype -> "(module type) "
-    | `Functor -> "(functor)"
-    | `Labels -> "(label) "
-    | `Unknown -> "(unknown)"
-    | `Apply -> "(functor application)"
+  let to_string = Shape.Sig_component_kind.to_string
 
   type under_type = [ `Constr | `Labels ]
 
@@ -55,25 +36,27 @@ type declaration = {
 
 let loc path (namespace : Namespace.t) env =
   try
-    let loc, uid, namespace =
+    let loc, uid, (namespace : Namespace.t) =
       match namespace with
-      | `Unknown
-      | `Apply
-      | `Vals ->
+      | Value ->
         let vd = Env.find_value path env in
-        vd.val_loc, vd.val_uid, Shape.Sig_component_kind.Value
-      | `Constr
-      | `Labels
-      | `Type ->
+        vd.val_loc, vd.val_uid, Value
+      | (Type | Extension_constructor | Constructor | Label) ->
         let td = Env.find_type path env in
-        td.type_loc, td.type_uid, Shape.Sig_component_kind.Type
-      | `Functor
-      | `Mod ->
+        td.type_loc, td.type_uid, Type
+      | Module ->
         let md = Env.find_module path env in
-        md.md_loc, md.md_uid, Shape.Sig_component_kind.Module
-      | `Modtype ->
+        md.md_loc, md.md_uid, Module
+      | Module_type ->
         let mtd = Env.find_modtype path env in
-        mtd.mtd_loc, mtd.mtd_uid, Shape.Sig_component_kind.Module_type
+        mtd.mtd_loc, mtd.mtd_uid, Module_type
+      | Class ->
+        let cty = Env.find_class path env in
+        cty.cty_loc, cty.cty_uid, Class
+      | Class_type ->
+        let clty = Env.find_cltype path env in
+        clty.clty_loc, clty.clty_uid, Class
+
     in
     Some { uid; loc; namespace }
   with

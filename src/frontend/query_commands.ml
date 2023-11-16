@@ -399,7 +399,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
                 ~config
                 ~env
                 ~local_defs
-                ~namespace:`Type
+                ~namespace:Type
                 path with
         | `Builtin s -> `Builtin s
         | `Not_in_env _ as s -> s

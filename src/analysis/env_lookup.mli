@@ -1,14 +1,5 @@
 module Namespace : sig
-  type t =
-      [ `Apply
-      | `Constr
-      | `Functor
-      | `Labels
-      | `Mod
-      | `Modtype
-      | `Type
-      | `Unknown
-      | `Vals ]
+  type t = Shape.Sig_component_kind.t
 
   val to_string : t -> string
 
@@ -31,7 +22,7 @@ end
 type declaration = {
   uid: Shape.Uid.t;
   loc: Location.t;
-  namespace: Shape.Sig_component_kind.t
+  namespace: Namespace.t
 }
 
 val loc
