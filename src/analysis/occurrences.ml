@@ -3,9 +3,8 @@ module LidSet = Index_format.LidSet
 
 let {Logger. log} = Logger.for_section "occurrences"
 
-let index_buffer ~env ~local_defs () =
+let index_buffer ~local_defs () =
   let defs = Hashtbl.create 64 in
-  let index = Ast_iterators.index_usages ~(local_defs : Mtyper.typedtree) () in
   let module Shape_reduce =
     Shape.Make_reduce (struct
       type env = Env.t
@@ -27,18 +26,20 @@ let index_buffer ~env ~local_defs () =
         ~namespace:Shape.Sig_component_kind.Module env (Pident id)
     end)
   in
-  List.iter index ~f:(fun (lid, item) ->
-    match item with
-    | Shape.Approximated _ | Missing_uid -> ()
-    | Resolved uid ->
-        Index_format.(add defs uid (LidSet.singleton lid))
-    | Unresolved shape ->
-      (* Format.eprintf "Reducing %a\n%!" Shape.print shape; *)
-      match Shape_reduce.reduce env shape with
-        | { Shape.desc = Leaf | Struct _; uid = Some uid; approximated = _ } ->
-          (* Format.eprintf "Reduced %a\n%!" Shape.print s; *)
-            Index_format.add defs uid (LidSet.singleton lid)
-        | _ -> ());
+  let f ~namespace env path lid  =
+    let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
+    if not_ghost lid then
+      match Env.shape_of_path ~namespace env path with
+      | exception Not_found -> ()
+      | path_shape ->
+        begin match Shape_reduce.reduce_for_uid env path_shape with
+        | Shape.Approximated _ | Missing_uid -> ()
+        | Resolved uid ->
+            Index_format.(add defs uid (LidSet.singleton lid))
+            | Unresolved _ -> ()
+        end
+  in
+  Ast_iterators.iter_on_usages ~f local_defs;
   defs
 
 let merge_tbl ~into tbl = Hashtbl.iter (Index_format.add into) tbl
@@ -118,6 +119,10 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
         log ~title:"locs_of" "Found definition uid using locate: %a "
           Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
         Some (uid, location)
+    | `Found { uid = Some uid; location; approximated = true; _ } ->
+        log ~title:"locs_of" "Approx: %a "
+          Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
+        Some (uid, location)
     | _ ->
       log ~title:"locs_of" "Locate failed to find a definition.";
       None
@@ -131,7 +136,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       Logger.fmt (fun fmt -> Shape.Uid.print fmt uid)
       Logger.fmt (fun fmt -> Location.print_loc fmt def_loc);
     log ~title:"locs_of" "Indexing current buffer";
-    let index = index_buffer ~env ~local_defs () in
+    let index = index_buffer ~local_defs () in
     if scope = `Project then begin
       match config.merlin.index_file with
       | None -> log ~title:"locs_of" "No external index specified"
@@ -153,10 +158,8 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
             None
           else if Filename.is_relative fname then begin
             match Locate.find_source ~config loc fname with
-            | `Found (Some file, _) -> Some { loc with loc_start =
+            | `Found (file, _) -> Some { loc with loc_start =
                 { loc.loc_start with pos_fname = file}}
-            | `Found (None, _) -> Some { loc with loc_start =
-                { loc.loc_start with pos_fname = ""}}
             | `File_not_found msg ->
               log ~title:"occurrences" "%s" msg;
               None

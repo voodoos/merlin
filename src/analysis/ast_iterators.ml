@@ -44,15 +44,10 @@ let build_uid_to_locs_tbl ~(local_defs : Mtyper.typedtree) () =
     iter.structure iter str end;
   uid_to_locs_tbl
 
-let index_usages  ~(local_defs : Mtyper.typedtree) () =
-  let index = ref [] in
+let iter_on_usages ~f (local_defs : Mtyper.typedtree) =
+  let iter = Cmt_format.iter_on_usages ~f () in
   begin match local_defs with
-  | `Interface signature ->
-    let iter = Cmt_format.iter_on_usages ~index in
-    iter.signature iter signature
-  | `Implementation structure ->
-    let iter = Cmt_format.iter_on_usages ~index in
-    iter.structure iter structure end;
-  !index
+  | `Interface signature -> iter.signature iter signature
+  | `Implementation structure -> iter.structure iter structure end
 
 

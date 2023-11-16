@@ -146,5 +146,10 @@ val iter_on_declarations :
   -> Tast_iterator.iterator
 
 val iter_on_usages :
-  index:(Longident.t Location.loc * Shape.reduction_result) list ref
+  f:(namespace:Shape.Sig_component_kind.t ->
+    Env.t ->
+    Path.t ->
+    Longident.t Location.loc ->
+    unit)
+  -> unit
   -> Tast_iterator.iterator

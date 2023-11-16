@@ -236,16 +236,7 @@ let clear_env binary_annots =
 
   else binary_annots
 
-let iter_on_usages ~index =
-  let f ~namespace env path lid =
-    let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
-    if not_ghost lid then
-      match Env.shape_of_path ~namespace env path with
-      | exception Not_found -> ()
-      | path_shape ->
-        let result = Local_reduce.reduce_for_uid env path_shape in
-        index := (lid, result) :: !index
-  in
+let iter_on_usages ~f () =
   let path_in_type typ name =
     match Types.get_desc typ with
     | Tconstr (type_path, _, _) ->
@@ -255,7 +246,8 @@ let iter_on_usages ~index =
   let add_constructor_description env lid =
     function
     | { Types.cstr_tag = Cstr_extension (path, _); _ } ->
-        f ~namespace:Extension_constructor env path lid
+        let namespace : Shape.Sig_component_kind.t = Extension_constructor in
+        f ~namespace env path lid
     | { Types.cstr_uid = Predef _; _ } -> ()
     | { Types.cstr_res; cstr_name; _ } ->
         let path = path_in_type cstr_res cstr_name in
@@ -421,7 +413,16 @@ let index_usages binary_annots =
   let index : (Longident.t Location.loc * Shape.reduction_result) list ref =
     ref []
   in
-  iter_on_annots (iter_on_usages ~index) binary_annots;
+  let f ~namespace env path lid  =
+    let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
+    if not_ghost lid then
+      match Env.shape_of_path ~namespace env path with
+      | exception Not_found -> ()
+      | path_shape ->
+        let result = Local_reduce.reduce_for_uid env path_shape in
+        index := (lid, result) :: !index
+  in
+  iter_on_annots (iter_on_usages ~f ()) binary_annots;
   !index
 
 exception Error of error
