@@ -354,7 +354,7 @@ let scrape_alias ~env ~fallback_uid ~namespace path =
   in
   non_alias_declaration_uid ~fallback_uid path
 
-let uid_of_path ~config ~env ~(decl : Env_lookup.declaration) path =
+let uid_of_path ~config ~env ~(decl : Env_lookup.item) path =
   let namespace = decl.namespace in
   let module Shape_reduce =
     Shape.Make_reduce (struct
@@ -404,7 +404,7 @@ let uid_of_path ~config ~env ~(decl : Env_lookup.declaration) path =
     reduced
 
 let from_reduction_result
-  ~config ~local_defs ~(decl : Env_lookup.declaration) shape_result path =
+  ~config ~local_defs ~(decl : Env_lookup.item) shape_result path =
   let title = "from_uid" in
   let loc_of_comp_unit comp_unit =
     match load_cmt ~config comp_unit with
@@ -631,21 +631,8 @@ let find_source ~config loc path =
                merlin doesn't know which is the right one: %s"
         matches)
 
-let uid_from_longident ~config ~env nss ident =
-  let str_ident =
-    try String.concat ~sep:"." (Longident.flatten ident)
-    with _-> "Not a flat longident"
-  in
-  match Env_lookup.in_namespaces nss ident env with
-  | None -> `Not_in_env str_ident
-  | Some (path, decl) ->
-    if Utils.is_builtin_path path then
-      `Builtin (Path.name path)
-    else
-      let shape_result = uid_of_path ~config ~env ~decl path in
-      `Uid (shape_result, path, decl)
-
-let from_shape_or_decl ~config ~local_defs ~decl shape_result path =
+let from_path ~config ~env ~local_defs ~decl path =
+  let shape_result = uid_of_path ~config ~env ~decl path in
   match from_reduction_result ~config ~local_defs ~decl shape_result path with
   | `Not_found _ | `Builtin _
   | `File_not_found _ as err -> err
@@ -662,10 +649,16 @@ let from_shape_or_decl ~config ~local_defs ~decl shape_result path =
     | `File_not_found _ as otherwise -> otherwise
 
 let from_longident ~config ~env ~local_defs nss ident =
-  match uid_from_longident ~config ~env nss ident with
-  | `Uid (shape_result, path, decl) ->
-    from_shape_or_decl ~config ~local_defs ~decl shape_result path
-  | (`Builtin _ | `Not_in_env _) as v -> v
+  let str_ident =
+    try String.concat ~sep:"." (Longident.flatten ident)
+    with _-> "Not a flat longident"
+  in
+  match Env_lookup.in_namespaces nss ident env with
+  | None -> `Not_in_env str_ident
+  | Some (path, decl) ->
+    if Utils.is_builtin_path path then
+      `Builtin (Path.name path)
+    else from_path ~config ~env ~local_defs ~decl path
 
 let from_path ~config ~env ~local_defs ~namespace path =
   File_switching.reset ();
@@ -674,9 +667,7 @@ let from_path ~config ~env ~local_defs ~namespace path =
   else
     match Env_lookup.loc path namespace env with
     | None -> `Not_in_env (Path.name path)
-    | Some decl ->
-      let res = uid_of_path ~config ~env ~decl path in
-      from_shape_or_decl ~config ~local_defs ~decl res path
+    | Some decl -> from_path ~config ~env ~local_defs ~decl path
 
 let infer_namespace ?namespaces ~pos lid browse is_label =
   match namespaces with

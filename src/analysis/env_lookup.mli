@@ -19,7 +19,7 @@ module Namespace : sig
   val from_context : Context.t -> inferred list
 end
 
-type declaration = {
+type item = {
   uid: Shape.Uid.t;
   loc: Location.t;
   namespace: Namespace.t
@@ -29,10 +29,10 @@ val loc
   : Path.t
   -> Namespace.t
   -> Env.t
-  -> declaration option
+  -> item option
 
 val in_namespaces
    : Namespace.inferred list
   -> Longident.t
   -> Env.t
-  -> (Path.t * declaration) option
+  -> (Path.t * item) option

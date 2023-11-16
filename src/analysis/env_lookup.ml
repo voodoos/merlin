@@ -28,7 +28,7 @@ module Namespace = struct
     | Constructor (c, _) -> [ `This_cstr c ]
 end
 
-type declaration = {
+type item = {
   uid: Shape.Uid.t;
   loc: Location.t;
   namespace: Shape.Sig_component_kind.t
