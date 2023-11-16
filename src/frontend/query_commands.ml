@@ -404,7 +404,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
         | `Builtin s -> `Builtin s
         | `Not_in_env _ as s -> s
         | `Not_found _ as s -> s
-        | `Found { file; location; _ } -> `Found (file, location.loc_start)
+        | `Found { file; location; _ } -> `Found (Some file, location.loc_start)
         | `File_not_found _ as s -> s
     end
 
@@ -537,8 +537,8 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     begin match Locate.from_string ~config ~env ~local_defs ~pos path with
     | `Found { file; location; _ } ->
       Locate.log ~title:"result"
-        "found: %s" (Option.value ~default:"<local buffer>" file);
-      `Found (file, location.loc_start)
+        "found: %s"  file;
+      `Found (Some file, location.loc_start)
     | `Missing_labels_namespace ->
       (* Can't happen because we haven't passed a namespace as input. *)
       assert false

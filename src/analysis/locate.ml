@@ -42,7 +42,7 @@ type result = {
   uid: Shape.Uid.t option;
   reduction_result: Shape.reduction_result;
   decl_uid: Shape.Uid.t;
-  file: string option;
+  file: string;
   location: Location.t;
   approximated: bool;
 }
@@ -796,7 +796,7 @@ let find_source ~config loc path =
       | exception _ -> failure
   in
   match (result : find_source_result) with
-  | Found src -> `Found (Some src, loc)
+  | Found src -> `Found (src, loc)
   | Not_found f -> File.explain_not_found path f
   | Multiple_matches lst ->
     let matches = String.concat lst ~sep:", " in
@@ -804,8 +804,6 @@ let find_source ~config loc path =
       sprintf "Several source files in your path have the same name, and \
                merlin doesn't know which is the right one: %s"
         matches)
-
-
 
 let uid_from_longident ~config ~env nss ident =
   let str_ident =
@@ -821,20 +819,21 @@ let uid_from_longident ~config ~env nss ident =
       let shape_result = uid_of_path ~config ~env ~decl path in
       `Uid (shape_result, path, decl)
 
-
 let from_shape_or_decl ~config ~local_defs ~decl shape_result path =
   match from_reduction_result ~config ~local_defs ~decl shape_result path with
   | `Not_found _ | `Builtin _
   | `File_not_found _ as err -> err
   | `Found (uid, loc, approximated) ->
-  match find_source ~config:config.mconfig loc (Path.name path) with
-  | `Found (file, location) ->
-    `Found {
-      uid;
-      reduction_result = shape_result;
-      decl_uid = decl.uid;
-      file; location; approximated }
-  | `File_not_found _ as otherwise -> otherwise
+    match find_source ~config:config.mconfig loc (Path.name path) with
+    | `Found (file, location) ->
+      log ~title:"find_source" "Found file: %s (%a)" file
+        Logger.fmt (Fun.flip Location.print_loc location);
+      `Found {
+        uid;
+        reduction_result = shape_result;
+        decl_uid = decl.uid;
+        file; location; approximated }
+    | `File_not_found _ as otherwise -> otherwise
 
 let from_longident ~config ~env ~local_defs nss ident =
   match uid_from_longident ~config ~env nss ident with

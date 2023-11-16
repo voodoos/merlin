@@ -43,7 +43,7 @@ type result = {
   uid: Shape.Uid.t option;
   reduction_result: Shape.reduction_result;
   decl_uid: Shape.Uid.t;
-  file: string option;
+  file: string;
   location: Location.t;
   approximated: bool;
 }
@@ -53,7 +53,7 @@ val find_source
   -> Warnings.loc
   -> string
   -> [> `File_not_found of string
-      | `Found of string option * Location.t ]
+      | `Found of string * Location.t ]
 
 val from_path
   : config:config
