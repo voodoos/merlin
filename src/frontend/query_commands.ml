@@ -401,7 +401,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
                 ~local_defs
                 ~namespace:`Type
                 path with
-        | `Builtin -> `Builtin (Path.name path)
+        | `Builtin s -> `Builtin s
         | `Not_in_env _ as s -> s
         | `Not_found _ as s -> s
         | `Found { file; location; _ } -> `Found (file, location.loc_start)

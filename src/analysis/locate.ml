@@ -40,6 +40,8 @@ type config = {
 
 type result = {
   uid: Shape.Uid.t option;
+  reduction_result: Shape.reduction_result;
+  decl_uid: Shape.Uid.t;
   file: string option;
   location: Location.t;
   approximated: bool;
@@ -604,9 +606,7 @@ let from_reduction_result
     | Shape.Resolved uid -> uid, false
     | Unresolved { uid = Some uid; desc = Comp_unit _; approximated } ->
         uid, approximated
-    (* | Unresolved { uid = Some uid; approximated; _ } ->
-        uid, approximated *)
-    | Unresolved _ | Approximated _ | Missing_uid ->
+    | Approximated _ | Unresolved _ | Missing_uid ->
         log ~title "No definition uid, fallbacking to the declaration uid: %a"
           Logger.fmt (Fun.flip Shape.Uid.print decl.uid);
         decl.uid, true
@@ -663,7 +663,8 @@ let from_reduction_result
       | _ -> log ~title "Failed to load the CU's cmt";
         `Not_found (Path.name path, None)
     end
-  | Predef _ | Internal -> `Builtin
+  | Predef s -> `Builtin s
+  | Internal -> `Builtin "<internal>"
 
 type find_source_result =
   | Found of string
@@ -815,33 +816,42 @@ let uid_from_longident ~config ~env nss ident =
   | None -> `Not_in_env str_ident
   | Some (path, decl) ->
     if Utils.is_builtin_path path then
-      `Builtin
+      `Builtin (Path.name path)
     else
       let shape_result = uid_of_path ~config ~env ~decl path in
       `Uid (shape_result, path, decl)
 
+
+let from_shape_or_decl ~config ~local_defs ~decl shape_result path =
+  match from_reduction_result ~config ~local_defs ~decl shape_result path with
+  | `Not_found _ | `Builtin _
+  | `File_not_found _ as err -> err
+  | `Found (uid, loc, approximated) ->
+  match find_source ~config:config.mconfig loc (Path.name path) with
+  | `Found (file, location) ->
+    `Found {
+      uid;
+      reduction_result = shape_result;
+      decl_uid = decl.uid;
+      file; location; approximated }
+  | `File_not_found _ as otherwise -> otherwise
+
 let from_longident ~config ~env ~local_defs nss ident =
   match uid_from_longident ~config ~env nss ident with
   | `Uid (shape_result, path, decl) ->
-    from_reduction_result ~config ~local_defs ~decl shape_result path
-  | (`Builtin | `Not_in_env _) as v -> v
+    from_shape_or_decl ~config ~local_defs ~decl shape_result path
+  | (`Builtin _ | `Not_in_env _) as v -> v
 
 let from_path ~config ~env ~local_defs ~namespace path =
   File_switching.reset ();
   if Utils.is_builtin_path path then
-    `Builtin
+    `Builtin (Path.name path)
   else
     match Env_lookup.loc path namespace env with
     | None -> `Not_in_env (Path.name path)
     | Some decl ->
       let res = uid_of_path ~config ~env ~decl path in
-      match from_reduction_result ~config ~local_defs ~decl res path with
-      | `Not_found _ | `Builtin
-      | `File_not_found _ as err -> err
-      | `Found (uid, loc, approximated) ->
-        match find_source ~config:config.mconfig loc (Path.name path) with
-        | `Found (file, location) -> `Found { uid; file; location; approximated }
-        | `File_not_found _ as otherwise -> otherwise
+      from_shape_or_decl ~config ~local_defs ~decl res path
 
 let infer_namespace ?namespaces ~pos lid browse is_label =
   match namespaces with
@@ -883,13 +893,7 @@ let from_string ~config ~env ~local_defs ~pos ?namespaces path =
       log ~title:"from_string"
         "looking for the source of '%s' (prioritizing %s files)"
         path (match config.ml_or_mli with `ML -> ".ml" | `MLI -> ".mli");
-      match from_longident ~config ~env ~local_defs nss ident with
-      | `File_not_found _ | `Not_found _ | `Not_in_env _ as err -> err
-      | `Builtin -> `Builtin path
-      | `Found (uid, loc, approximated) ->
-        match find_source ~config:config.mconfig loc path with
-        | `Found (file, location) -> `Found { uid; file; location; approximated }
-        | `File_not_found _ as otherwise -> otherwise
+      from_longident ~config ~env ~local_defs nss ident
   in
   Option.value_map ~f:from_lid ~default:(`Not_found (path, None)) lid
 
@@ -1084,7 +1088,7 @@ let get_doc ~config:mconfig ~env ~local_defs ~comments ~pos =
       begin match from_path with
       | `Found { uid; location = loc; _ } ->
         doc_from_uid ~config ~loc uid
-      | (`Builtin |`Not_in_env _|`File_not_found _|`Not_found _)
+      | (`Builtin _ |`Not_in_env _|`File_not_found _|`Not_found _)
         as otherwise -> otherwise
       end
     | `User_input path ->
@@ -1095,8 +1099,7 @@ let get_doc ~config:mconfig ~env ~local_defs ~comments ~pos =
       | `At_origin ->
         `Found_loc { Location.loc_start = pos; loc_end = pos; loc_ghost = true }
       | `Missing_labels_namespace -> `No_documentation
-      | `Builtin _ -> `Builtin
-      | (`Not_in_env _ | `Not_found _ |`File_not_found _ )
+      | (`Builtin _ | `Not_in_env _ | `Not_found _ |`File_not_found _ )
         as otherwise -> otherwise
       end
   in
@@ -1104,7 +1107,7 @@ let get_doc ~config:mconfig ~env ~local_defs ~comments ~pos =
   | `Found_doc doc -> `Found doc
   | `Found_loc loc ->
       doc_from_comment_list ~local_defs ~buffer_comments:comments loc
-  | `Builtin ->
+  | `Builtin _ ->
     begin match path with
     | `User_input path -> `Builtin path
     | `Completion_entry (_, path, _) -> `Builtin (Path.name path)

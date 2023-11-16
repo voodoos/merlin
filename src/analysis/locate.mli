@@ -41,6 +41,8 @@ type config = {
 
 type result = {
   uid: Shape.Uid.t option;
+  reduction_result: Shape.reduction_result;
+  decl_uid: Shape.Uid.t;
   file: string option;
   location: Location.t;
   approximated: bool;
@@ -61,7 +63,7 @@ val from_path
   -> Path.t
   -> [> `File_not_found of string
      | `Found of result
-     | `Builtin
+     | `Builtin of string
      | `Not_in_env of string
      | `Not_found of string * string option ]
 
