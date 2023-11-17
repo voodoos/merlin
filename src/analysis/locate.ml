@@ -209,10 +209,6 @@ end
 
 
 module Utils = struct
-  let is_builtin_path = function
-    | Path.Pident id -> Ident.is_predef id
-    | _ -> false
-
   (* Reuse the code of [Misc.find_in_path_uncap] but returns all the files
      matching, instead of the first one. This is only used when looking for ml
      files, not cmts. Indeed for cmts we know that the load path will only ever
@@ -599,8 +595,8 @@ let from_path ~config ~env ~local_defs ~decl path =
   in
   (* Step 2:  Uid => Location *)
   let loc = match uid with
-    | Predef s -> `Builtin s
-    | Internal -> `Builtin "<internal>"
+    | Predef s -> `Builtin (uid, s)
+    | Internal -> `Builtin (uid, "<internal>")
     | Item {comp_unit; _} -> find_loc_of_uid ~config ~local_defs uid comp_unit
     | Compilation_unit comp_unit -> find_loc_of_comp_unit ~config uid comp_unit
   in
@@ -633,19 +629,13 @@ let from_longident ~config ~env ~local_defs nss ident =
   in
   match Env_lookup.in_namespaces nss ident env with
   | None -> `Not_in_env str_ident
-  | Some (path, decl) ->
-    if Utils.is_builtin_path path then
-      `Builtin (Path.name path)
-    else from_path ~config ~env ~local_defs ~decl path
+  | Some (path, decl) -> from_path ~config ~env ~local_defs ~decl path
 
 let from_path ~config ~env ~local_defs ~namespace path =
   File_switching.reset ();
-  if Utils.is_builtin_path path then
-    `Builtin (Path.name path)
-  else
-    match Env_lookup.loc path namespace env with
-    | None -> `Not_in_env (Path.name path)
-    | Some decl -> from_path ~config ~env ~local_defs ~decl path
+  match Env_lookup.loc path namespace env with
+  | None -> `Not_in_env (Path.name path)
+  | Some decl -> from_path ~config ~env ~local_defs ~decl path
 
 let infer_namespace ?namespaces ~pos lid browse is_label =
   match namespaces with

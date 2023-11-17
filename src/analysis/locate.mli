@@ -57,7 +57,7 @@ val from_path
   -> Path.t
   -> [> `File_not_found of string
      | `Found of result
-     | `Builtin of string
+     | `Builtin of Shape.Uid.t * string
      | `Not_in_env of string
      | `Not_found of string * string option ]
 
@@ -70,7 +70,7 @@ val from_string
   -> string
   -> [> `File_not_found of string
       | `Found of result
-      | `Builtin of string
+      | `Builtin of Shape.Uid.t * string
       | `Missing_labels_namespace
       | `Not_found of string * string option
       | `Not_in_env of string

@@ -401,7 +401,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
                 ~local_defs
                 ~namespace:Type
                 path with
-        | `Builtin s -> `Builtin s
+        | `Builtin (_, s) -> `Builtin s
         | `Not_in_env _ as s -> s
         | `Not_found _ as s -> s
         | `Found { file; location; _ } -> `Found (Some file, location.loc_start)
@@ -542,7 +542,10 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
     | `Missing_labels_namespace ->
       (* Can't happen because we haven't passed a namespace as input. *)
       assert false
-    | (`Not_found _|`At_origin |`Not_in_env _|`File_not_found _|`Builtin _) as
+    | `Builtin (_, s) ->
+      Locate.log ~title:"result" "found builtin %s" s;
+      `Builtin s
+    | (`Not_found _|`At_origin |`Not_in_env _|`File_not_found _) as
       otherwise ->
       Locate.log ~title:"result" "not found";
       otherwise
