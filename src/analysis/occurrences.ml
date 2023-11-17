@@ -124,14 +124,15 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       let node = Mbrowse.enclosing pos [browse] in
       let env, node = Mbrowse.leaf_node node in
       uid_and_loc_of_node env node
-    | `Found { uid = Some uid; location; approximated = false; _ } ->
+    | `Found { uid; location; approximated = false; _ } ->
         log ~title:"locs_of" "Found definition uid using locate: %a "
           Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
         Some (uid, location)
-    | `Found { uid = Some uid; location; approximated = true; _ } ->
+    | `Found { uid; location; approximated = true; _ } ->
         log ~title:"locs_of" "Approx: %a "
           Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
         Some (uid, location)
+    | `Builtin (uid, s) -> log ~title:"locs_of" "Locate found a builtin: %s" s; Some (uid, Location.none)
     | _ ->
       log ~title:"locs_of" "Locate failed to find a definition.";
       None

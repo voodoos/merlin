@@ -248,7 +248,6 @@ let iter_on_usages ~f () =
     | { Types.cstr_tag = Cstr_extension (path, _); _ } ->
         let namespace : Shape.Sig_component_kind.t = Extension_constructor in
         f ~namespace env path lid
-    | { Types.cstr_uid = Predef _; _ } -> ()
     | { Types.cstr_res; cstr_name; _ } ->
         let path = path_in_type cstr_res cstr_name in
         Option.iter ~f:(fun path -> f ~namespace:Constructor env path lid) path
