@@ -35,8 +35,7 @@ type config = {
 }
 
 type result = {
-  uid: Shape.Uid.t option;
-  reduction_result: Shape.reduction_result;
+  uid: Shape.Uid.t;
   decl_uid: Shape.Uid.t;
   file: string;
   location: Location.t;
