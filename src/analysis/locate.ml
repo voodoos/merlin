@@ -559,8 +559,13 @@ let find_definition_uid ~config ~env ~(decl : Env_lookup.item) path =
   let shape = Env.shape_of_path ~namespace env path in
   log ~title:"shape_of_path" "initial: %a"
     Logger.fmt (Fun.flip Shape.print shape);
+  let keep_aliases =
+    if config.traverse_aliases
+    then (fun _ -> false)
+    else (fun _ -> true)
+  in
   let reduced = Shape_reduce.reduce_for_uid
-    ~keep_aliases:(not config.traverse_aliases) env shape
+    ~keep_aliases env shape
   in
   log ~title:"shape_of_path" "reduced: %a"
     Logger.fmt (fun fmt -> Shape.print_reduction_result fmt reduced);
