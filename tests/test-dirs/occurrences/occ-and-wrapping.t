@@ -21,7 +21,7 @@
 
   $ cat >main.ml <<'EOF'
   > open Lib
-  > let () = print_int Wrapped_module.x
+  > let _y = print_int Wrapped_module.x
   > EOF
 
   $ cat >dune <<'EOF'
@@ -30,12 +30,14 @@
   >  (libraries lib))
   > EOF
 
-  $ dune build @uideps @all
+  $ dune build @uideps @all 
 
   $ ocaml-index dump _build/default/project.ocaml-index
-  6 uids:
+  7 uids:
   {uid: Lib__Wrapped_module; locs:
      "Lib__Wrapped_module": File "$TESTCASE_ROOT/lib/lib.ml-gen", line 4, characters 24-43
+   uid: Dune__exe__Main.0; locs:
+     "_y": File "$TESTCASE_ROOT/main.ml", line 2, characters 4-6
    uid: Stdlib.313; locs:
      "print_int": File "$TESTCASE_ROOT/main.ml", line 2, characters 9-18
    uid: Lib.0; locs:
@@ -88,8 +90,6 @@
     }
   ]
 
-FIXME: These are only the local occurrences. This is due to Merlin identifing
-the uid as part of `Wrapped_module` instead of `Lib__wrapped_module`.
   $ $MERLIN single occurrences -scope project -identifier-at 2:11 \
   > -filename lib/wrapped_module.ml <lib/wrapped_module.ml | jq '.value'
   [
@@ -113,6 +113,17 @@ the uid as part of `Wrapped_module` instead of `Lib__wrapped_module`.
       "end": {
         "line": 2,
         "col": 12
+      }
+    },
+    {
+      "file": "$TESTCASE_ROOT/main.ml",
+      "start": {
+        "line": 2,
+        "col": 34
+      },
+      "end": {
+        "line": 2,
+        "col": 35
       }
     }
   ]

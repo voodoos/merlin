@@ -4,6 +4,7 @@ module LidSet = Index_format.LidSet
 let {Logger. log} = Logger.for_section "occurrences"
 
 let index_buffer ~local_defs () =
+  let {Logger. log} = Logger.for_section "index" in
   let defs = Hashtbl.create 64 in
   let module Shape_reduce =
     Shape.Make_reduce (struct
@@ -105,6 +106,11 @@ let loc_of_local_def ~local_defs uid =
     (* we could check equality and raise with the result as soon that it arrive *)
     Shape.Uid.Tbl.find uid_to_locs_tbl uid
 
+let comp_unit_of_uid = function
+  | Shape.Uid.Compilation_unit comp_unit
+  | Item { comp_unit; _ } -> Some comp_unit
+  | Internal | Predef _ -> None
+
 let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
     path
@@ -141,9 +147,9 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
     Filename.concat config.query.directory config.query.filename
   in
   match def with
-  | Some (uid, def_loc) ->
+  | Some (def_uid, def_loc) ->
     log ~title:"locs_of" "Definition has uid %a (%a)"
-      Logger.fmt (fun fmt -> Shape.Uid.print fmt uid)
+      Logger.fmt (fun fmt -> Shape.Uid.print fmt def_uid)
       Logger.fmt (fun fmt -> Location.print_loc fmt def_loc);
     log ~title:"locs_of" "Indexing current buffer";
     let index = index_buffer ~local_defs () in
@@ -156,11 +162,14 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
         merge_tbl ~into:index external_uideps.defs
     end;
     (* TODO ignore externally indexed locs from the current buffer *)
-    let locs = match Hashtbl.find_opt index uid with
+    let locs = match Hashtbl.find_opt index def_uid with
       | Some locs ->
+        log ~title:"occurrences" "Found %i locs" (LidSet.cardinal locs);
         LidSet.elements locs
-        |> List.filter_map ~f:(fun lid ->
-          let loc = last_loc lid.Location.loc lid.txt in
+        |> List.filter_map ~f:(fun {Location.txt; loc} ->
+          log ~title:"occurrences" "Found occ: %s %a"
+            (Longident.head txt) Logger.fmt (Fun.flip Location.print_loc loc);
+          let loc = last_loc loc txt in
           let fname = loc.Location.loc_start.Lexing.pos_fname in
           if String.equal fname current_buffer_path then
             (* ignore locs coming from the external index for the buffer *)
@@ -177,13 +186,13 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
           end else Some loc)
       | None -> log ~title:"locs_of" "No locs found in index."; []
     in
-    (* We only prepend the location of the definition if it's int he scope of
-       the query *)
-    let loc_in_unit (loc : Location.t) =
-      let by = Env.get_unit_name () |> String.lowercase_ascii in
-      String.is_prefixed ~by (loc.loc_start.pos_fname |> String.lowercase_ascii)
+    (* We only prepend the loc of the definition for the current buffer *)
+    let uid_in_current_unit =
+      let uid_comp_unit = comp_unit_of_uid def_uid in
+      Option.value_map ~default:false uid_comp_unit
+        ~f:(String.equal @@ Env.get_unit_name ())
     in
-    if loc_in_unit def_loc then
+    if uid_in_current_unit then
       let def_loc = {def_loc with
         loc_start = {def_loc.loc_start with pos_fname = current_buffer_path }} in
       Ok (def_loc::locs)
