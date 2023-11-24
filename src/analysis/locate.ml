@@ -308,12 +308,12 @@ let move_to filename cmt_infos =
   in
   File_switching.move_to ~digest filename
 
-let load_cmt ~config comp_unit =
+let load_cmt ~config ?(with_fallback = true) comp_unit =
   Preferences.set config.ml_or_mli;
   let file =
     Preferences.build comp_unit
   in
-  match Utils.find_file ~config:config.mconfig ~with_fallback:true file with
+  match Utils.find_file ~config:config.mconfig ~with_fallback file with
   | Some path ->
       let cmt_infos = (Cmt_cache.read path).cmt_infos in
       let source_file = cmt_infos.cmt_sourcefile in
@@ -543,7 +543,10 @@ let find_definition_uid ~config ~env ~(decl : Env_lookup.item) path =
 
       let read_unit_shape ~unit_name =
           log ~title:"read_unit_shape" "inspecting %s" unit_name;
-          match load_cmt ~config:({config with ml_or_mli = `ML}) unit_name with
+          match
+            load_cmt ~config:({config with ml_or_mli = `ML})
+                     ~with_fallback:false unit_name
+          with
           | Ok (filename, cmt_infos) ->
             move_to filename cmt_infos;
             log ~title:"read_unit_shape" "shapes loaded for %s" unit_name;
@@ -562,7 +565,14 @@ let find_definition_uid ~config ~env ~(decl : Env_lookup.item) path =
   let keep_aliases =
     if config.traverse_aliases
     then (fun _ -> false)
-    else (fun _ -> true)
+    else (function
+    | Shape. { uid = Some (Item { comp_unit; _ });
+               desc = Alias { desc = Comp_unit alias_cu; _ };
+               _ }
+      when let by = comp_unit ^ "__" in
+        Merlin_utils.Std.String.is_prefixed ~by alias_cu ->
+      false
+    | _ -> true)
   in
   let reduced = Shape_reduce.reduce_for_uid
     ~keep_aliases env shape
