@@ -3,6 +3,22 @@ module LidSet = Index_format.LidSet
 
 let {Logger. log} = Logger.for_section "occurrences"
 
+let decl_of_path_or_lid env namespace path lid =
+  match (namespace : Shape.Sig_component_kind.t) with
+  | Constructor ->
+    begin match Env.find_constructor_by_name lid env with
+    | exception Not_found -> None
+    | {cstr_uid; cstr_loc; _ } ->
+      Some { Env_lookup.uid = cstr_uid; loc = cstr_loc; namespace }
+    end
+  | Label ->
+    begin match Env.find_label_by_name lid env with
+    | exception Not_found -> None
+    | {lbl_uid; lbl_loc; _ } ->
+      Some { Env_lookup.uid = lbl_uid; loc = lbl_loc; namespace }
+    end
+  | _ -> Env_lookup.loc path namespace env
+
 let index_buffer ~local_defs () =
   let {Logger. log} = Logger.for_section "index" in
   let defs = Hashtbl.create 64 in
@@ -40,8 +56,8 @@ let index_buffer ~local_defs () =
         | Unresolved s ->
           log ~title:"index_buffer" "Could not resolve shape %a"
             Logger.fmt (Fun.flip Shape.print s);
-          begin match Env_lookup.loc path namespace env with
-          | None -> log ~title:"index_buffer" "Declaration not found"
+          begin match decl_of_path_or_lid env namespace path lid.txt with
+          | exception _ |  None -> log ~title:"index_buffer" "Declaration not found"
           | Some decl ->
             log ~title:"index_buffer" "Found the declaration: %a"
               Logger.fmt (Fun.flip Location.print_loc decl.loc);
