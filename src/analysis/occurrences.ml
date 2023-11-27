@@ -43,7 +43,7 @@ let index_buffer ~local_defs () =
         ~namespace:Shape.Sig_component_kind.Module env (Pident id)
     end)
   in
-  let f ~namespace env path lid  =
+  let f ~namespace env path (lid : Longident.t Location.loc)  =
     let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
     if not_ghost lid then
       match Env.shape_of_path ~namespace env path with
@@ -52,6 +52,10 @@ let index_buffer ~local_defs () =
         begin match Shape_reduce.reduce_for_uid env path_shape with
         | Shape.Approximated _ | Missing_uid -> ()
         | Resolved uid ->
+          log ~title:"index_buffer" "Found %s (%a) wiht uid %a"
+            (Longident.head lid.txt)
+            Logger.fmt (Fun.flip Location.print_loc lid.loc)
+            Logger.fmt (Fun.flip Shape.Uid.print uid);
           Index_format.(add defs uid (LidSet.singleton lid))
         | Unresolved s ->
           log ~title:"index_buffer" "Could not resolve shape %a"
