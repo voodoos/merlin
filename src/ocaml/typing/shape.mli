@@ -57,6 +57,8 @@ module Uid : sig
     | Predef of string
 
   val reinit : unit -> unit
+  val get_current_stamp : unit -> int
+  val restore_stamp : int -> unit
 
   val mk : current_unit:string -> t
   val of_compilation_unit_id : Ident.t -> t
