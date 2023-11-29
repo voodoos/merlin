@@ -131,6 +131,19 @@ let comp_unit_of_uid = function
   | Item { comp_unit; _ } -> Some comp_unit
   | Internal | Predef _ -> None
 
+let check Index_format.{ stats; _ } file =
+  let open Index_format in
+  match Stats.find_opt file stats with
+  | None -> log ~title:"stat_check" "No mtime found for file %S." file; true
+  | Some mtime ->
+    try
+      let equal = Float.equal (Unix.stat file).st_mtime mtime in
+      log ~title:"stat_check"
+        "File %s has been modified since the index was built." file;
+      equal
+    with Unix.Unix_error _ -> false
+
+
 let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
     path
@@ -172,18 +185,38 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       Logger.fmt (fun fmt -> Shape.Uid.print fmt def_uid)
       Logger.fmt (fun fmt -> Location.print_loc fmt def_loc);
     log ~title:"locs_of" "Indexing current buffer";
-    let index = index_buffer ~local_defs () in
-    if scope = `Project then begin
-      match config.merlin.index_file with
-      | None -> log ~title:"locs_of" "No external index specified"
-      | Some file ->
-        log ~title:"locs_of" "Using external index: %S" file;
-        let external_uideps = Index_format.read_exn ~file in
-        merge_tbl ~into:index external_uideps.defs
-    end;
-    (* TODO ignore externally indexed locs from the current buffer *)
-    let locs = match Hashtbl.find_opt index def_uid with
-      | Some locs ->
+    let buffer_index = index_buffer ~local_defs () in
+    let buffer_locs = Hashtbl.find_opt buffer_index def_uid in
+    let external_locs, desync =
+      if scope = `Buffer then None, false else begin
+      let exception File_changed in
+      let open Option.Infix in
+      try
+        let locs = config.merlin.index_file  >>= fun file ->
+          let external_index = Index_format.read_exn ~file in
+          Hashtbl.find_opt external_index.defs def_uid
+          >>| fun locs -> LidSet.filter (fun {loc; _} ->
+            (* We ignore external results that concern the current buffer *)
+            let fname = loc.Location.loc_start.Lexing.pos_fname in
+            (* We ignore external results if the index is not up-to-date *)
+            (* We could return partial results from up-to-date file *)
+            if String.equal fname current_buffer_path then false
+            else begin
+              if not (check external_index fname) then raise File_changed;
+              true
+            end) locs
+          in
+          locs, false
+      with File_changed -> None, true
+      end
+    in
+    if desync then log ~title:"locs_of" "External index might be out-of-sync.";
+    let locs = match buffer_locs, external_locs with
+      | None, None -> LidSet.empty
+      | Some locs, None | None, Some locs -> locs
+      | Some b_locs, Some e_locs -> LidSet.union b_locs e_locs
+    in
+    let locs =
         log ~title:"occurrences" "Found %i locs" (LidSet.cardinal locs);
         LidSet.elements locs
         |> List.filter_map ~f:(fun {Location.txt; loc} ->
@@ -204,7 +237,6 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
               None
             | _ -> None
           end else Some loc)
-      | None -> log ~title:"locs_of" "No locs found in index."; []
     in
     (* We only prepend the loc of the definition for the current buffer *)
     let uid_in_current_unit =

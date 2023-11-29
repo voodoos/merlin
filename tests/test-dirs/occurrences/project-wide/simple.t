@@ -38,9 +38,9 @@
    uid: Stdlib.313; locs:
      "print_int": File "$TESTCASE_ROOT/exe/main.ml", line 1, characters 0-9
    uid: Lib.0; locs:
-     "Lib.x": File "$TESTCASE_ROOT/exe/main.ml", line 1, characters 10-15;
      "x": File "$TESTCASE_ROOT/lib/lib.ml", line 1, characters 4-5;
-     "x": File "$TESTCASE_ROOT/lib/lib.ml", line 2, characters 8-9
+     "x": File "$TESTCASE_ROOT/lib/lib.ml", line 2, characters 8-9;
+     "Lib.x": File "$TESTCASE_ROOT/exe/main.ml", line 1, characters 10-15
    }, 0 approx shapes: {}, and shapes for CUS .
 
 Occurrences of Lib.x
@@ -85,3 +85,32 @@ Occurrences of Lib.x
     ],
     "notifications": []
   }
+
+
+  $ sleep 1 # Make sure that the time will change
+  $ touch lib/lib.ml
+
+  $ $MERLIN single occurrences -scope project -identifier-at 1:15 \
+  > -log-file log -log-section occurrences \
+  > -filename exe/main.ml <exe/main.ml
+  {
+    "class": "return",
+    "value": [
+      {
+        "file": "$TESTCASE_ROOT/exe/main.ml",
+        "start": {
+          "line": 1,
+          "col": 14
+        },
+        "end": {
+          "line": 1,
+          "col": 15
+        }
+      }
+    ],
+    "notifications": []
+  }
+
+  $ cat log | grep index
+  File $TESTCASE_ROOT/lib/lib.ml has been modified since the index was built.
+  External index might be out-of-sync.
