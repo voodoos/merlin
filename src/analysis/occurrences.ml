@@ -239,14 +239,14 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
           end else Some loc)
     in
     (* We only prepend the loc of the definition for the current buffer *)
-    let uid_in_current_unit =
+    let def_uid_is_in_current_unit =
       let uid_comp_unit = comp_unit_of_uid def_uid in
       Option.value_map ~default:false uid_comp_unit
         ~f:(String.equal @@ Env.get_unit_name ())
     in
-    if uid_in_current_unit then
+    if def_uid_is_in_current_unit then
       let def_loc = {def_loc with
         loc_start = {def_loc.loc_start with pos_fname = current_buffer_path }} in
-      Ok (def_loc::locs)
-      else Ok locs
+      Ok ((def_loc::locs), desync)
+      else Ok (locs, desync)
   | None -> Error "nouid"

@@ -809,13 +809,13 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a =
       Locate.log ~title:"reconstructed identifier" "%s" path;
       path
     in
-    let locs =
+    let locs, desync =
       Occurrences.locs_of ~config ~scope ~env ~local_defs ~node ~pos path
-      |> Result.value ~default:[]
+      |> Result.value ~default:([], false)
     in
     let loc_start l = l.Location.loc_start in
     let cmp l1 l2 = Lexing.compare_pos (loc_start l1) (loc_start l2) in
-    List.sort ~cmp locs
+    (List.sort ~cmp locs), desync
 
   | Version ->
     Printf.sprintf "The Merlin toolkit version %s, for Ocaml %s\n"
