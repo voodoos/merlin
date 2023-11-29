@@ -5,7 +5,8 @@ module Lid : Set.OrderedType with type t = Longident.t Location.loc = struct
   type t = Longident.t Location.loc
 
   let compare_pos (p1 : Lexing.position) (p2 : Lexing.position) =
-    match String.compare p1.pos_fname p2.pos_fname with
+    let p1f, p2f = Filename.(basename p1.pos_fname, basename p2.pos_fname) in
+    match String.compare p1f p2f with
     | 0 -> Int.compare p1.pos_cnum p2.pos_cnum
     | n -> n
 
