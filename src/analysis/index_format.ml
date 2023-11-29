@@ -18,6 +18,8 @@ end
 
 module LidSet = Set.Make (Lid)
 
+module Stats = Map.Make (String)
+
 (** [add tbl uid locs] adds a binding of [uid] to the locations [locs]. If this key is
     already present the locations are merged. *)
 let add tbl uid locs =
@@ -31,6 +33,7 @@ type index = {
   approximated : (Shape.Uid.t, LidSet.t) Hashtbl.t;
   load_path : string list;
   cu_shape : (string, Shape.t) Hashtbl.t;
+  stats : float Stats.t;
 }
 
 let pp_partials (fmt : Format.formatter)
@@ -71,7 +74,7 @@ let pp (fmt : Format.formatter) pl =
   Format.fprintf fmt "and shapes for CUS %s.@ "
     (String.concat ";@," (Hashtbl.to_seq_keys pl.cu_shape |> List.of_seq))
 
-let ext = "uideps"
+let ext = "ocaml-index"
 
 (* [magic_number] Must be the same lenght as cmt's magic numbers *)
 let magic_number = "Merl2023I001"
