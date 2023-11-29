@@ -11,7 +11,6 @@ module Lid : Set.OrderedType with type t = Longident.t Location.loc = struct
     | n -> n
 
   let compare (t1 : t) (t2 : t) =
-    (* TODO CHECK...*)
     match compare_pos t1.loc.loc_start t2.loc.loc_start with
     | 0 -> compare_pos t1.loc.loc_end t2.loc.loc_end
     | n -> n
