@@ -23,9 +23,7 @@ let index_buffer ~local_defs () =
   let {Logger. log} = Logger.for_section "index" in
   let defs = Hashtbl.create 64 in
   let module Shape_reduce =
-    Shape.Make_reduce (struct
-      type env = Env.t
-
+    Shape_reduce.Make (struct
       let fuel = 10
 
       let read_unit_shape ~unit_name =
@@ -38,19 +36,24 @@ let index_buffer ~local_defs () =
           | exception _ | _ ->
             log ~title:"read_unit_shape" "failed to find %s" unit_name;
             None
-
-      let find_shape env id = Env.shape_of_path
-        ~namespace:Shape.Sig_component_kind.Module env (Pident id)
     end)
   in
   let f ~namespace env path (lid : Longident.t Location.loc)  =
+    log ~title:"index_buffer" "pouet %a" Logger.fmt (Fun.flip Path.print path);
     let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
     if not_ghost lid then
       match Env.shape_of_path ~namespace env path with
       | exception Not_found -> ()
       | path_shape ->
+
+    log ~title:"index_buffer" "pouet SOP %a"
+      Logger.fmt (Fun.flip Shape.print path_shape);
         begin match Shape_reduce.reduce_for_uid env path_shape with
-        | Shape.Approximated _ | Missing_uid -> ()
+        | Ocaml_typing.Shape_reduce.Approximated _
+        | Internal_error_missing_uid -> ()
+        | Resolved_alias l ->
+            let uid = Locate.uid_of_aliases ~traverse_aliases:false l in
+            Index_format.(add defs uid (LidSet.singleton lid))
         | Resolved uid ->
           log ~title:"index_buffer" "Found %s (%a) wiht uid %a"
             (Longident.head lid.txt)

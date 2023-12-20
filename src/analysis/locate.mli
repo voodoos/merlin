@@ -42,6 +42,8 @@ type result = {
   approximated: bool;
 }
 
+val uid_of_aliases : traverse_aliases:bool -> Shape.Uid.t list -> Shape.Uid.t
+
 val find_source
   : config: Mconfig.t
   -> Warnings.loc

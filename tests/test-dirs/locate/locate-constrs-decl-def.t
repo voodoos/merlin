@@ -18,7 +18,7 @@
   > let bar : Constr.u = { Constr.label_a = 42 }
   > EOF
 
-  $ $OCAMLC -c -bin-annot -store-usage-index constr.mli constr.ml
+  $ $OCAMLC -c -bin-annot -bin-annot-occurrences constr.mli constr.ml
 
   $ $MERLIN single locate -look-for mli -position 1:28 \
   > -filename ./main.ml < ./main.ml | jq '.value'

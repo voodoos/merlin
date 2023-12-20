@@ -30,7 +30,7 @@
   >  (libraries lib))
   > EOF
 
-  $ dune build @uideps @all 
+  $ dune build @ocaml-index @all 
 
   $ ocaml-index dump _build/default/project.ocaml-index
   7 uids:
@@ -43,9 +43,9 @@
    uid: Lib.0; locs:
      "Wrapped_module": File "$TESTCASE_ROOT/lib/lib.ml-gen", line 4, characters 7-21
    uid: Lib__Wrapped_module.0; locs:
+     "Wrapped_module.x": File "$TESTCASE_ROOT/main.ml", line 2, characters 19-35;
      "x": File "$TESTCASE_ROOT/lib/wrapped_module.ml", line 1, characters 4-5;
-     "x": File "$TESTCASE_ROOT/lib/wrapped_module.ml", line 2, characters 11-12;
-     "Wrapped_module.x": File "$TESTCASE_ROOT/main.ml", line 2, characters 19-35
+     "x": File "$TESTCASE_ROOT/lib/wrapped_module.ml", line 2, characters 11-12
    uid: Lib; locs:
      "Lib": File "$TESTCASE_ROOT/main.ml", line 1, characters 5-8
    uid: Lib__Wrapped_module.1; locs:

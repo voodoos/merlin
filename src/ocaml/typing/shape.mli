@@ -26,7 +26,7 @@
     - Build the Shape corresponding to the value's path:
       [let shape = Env.shape_of_path ~namespace env path]
 
-    - Instantiate the [Make_reduce] functor with a way to load shapes from
+    - Instantiate the [Shape_reduce.Make] functor with a way to load shapes from
       external units and to looks for shapes in the environment (usually using
       [Env.shape_of_path]).
 
@@ -40,7 +40,7 @@
       for example when hitting first-class modules.
 
     - The location of the definition can be easily found with the
-      [cmt_format.cmt_uid_to_decl] talbe of the corresponding compilation unit.
+      [cmt_format.cmt_uid_to_decl] table of the corresponding compilation unit.
 
   See:
   - {{: https://icfp22.sigplan.org/details/mlfamilyworkshop-2022-papers/10/Module-Shapes-for-Modern-Tooling }
@@ -49,6 +49,12 @@
     a talk about the reduction strategy
 *)
 
+(** A [Uid.t] is associated with every declaration in signatures and
+    implementations, they uniquely identify bindings in the program.
+    When associated with these bindings' locations they are useful to
+    external tools when trying to jump to the declaration of
+    definitions of identifiers. They are stored to that effect in the
+    [uid_to_decl] table of cmt files. *)
 module Uid : sig
   type t = private
     | Compilation_unit of string
@@ -88,7 +94,8 @@ module Sig_component_kind : sig
   val can_appear_in_types : t -> bool
 end
 
-(** Shape's items are elements of a structure modeling module components. *)
+(** Shape's items are elements of a structure. These structures models module
+    components and nested types' constructors and labels *)
 module Item : sig
   type t = string * Sig_component_kind.t
   val name : t -> string
@@ -124,15 +131,9 @@ and desc =
   | Comp_unit of string
   | Error of string
 
-type reduction_result =
-  | Resolved of Uid.t
-  | Unresolved of t
-  | Approximated of Uid.t option
-  | Missing_uid
-
-val print_reduction_result : Format.formatter -> reduction_result -> unit
-
 val print : Format.formatter -> t -> unit
+
+val strip_head_aliases : t -> t
 
 (* Smart constructors *)
 
@@ -199,37 +200,3 @@ val of_path :
   namespace:Sig_component_kind.t -> Path.t -> t
 
 val set_uid_if_none : t -> Uid.t -> t
-
-(** The [Make_reduce] functor is used to generate a reduction function for
-    shapes.
-
-    It is parametrized by:
-    - an environment and a function to find shapes by path in that environment
-    - a function to load the shape of an external compilation unit
-    - some fuel, which is used to bound recursion when dealing with recursive
-      shapes introduced by recursive modules. (FTR: merlin currently uses a
-      fuel of 10, which seems to be enough for most practical examples)
-*)
-module Make_reduce(Context : sig
-    type env
-
-    val fuel : int
-
-    val read_unit_shape : unit_name:string -> t option
-
-    val find_shape : env -> Ident.t -> t
-  end) : sig
-  val reduce :
-    ?keep_aliases:(t -> bool) -> Context.env -> t -> t
-
-  (** Perform weak reduction and return the head's uid if any. If reduction was
-    incomplete the partially reduced shape is returned. *)
-  val reduce_for_uid :
-    ?keep_aliases:(t -> bool) -> Context.env -> t -> reduction_result
-end
-
-(** [toplevel_local_reduce] is only suitable to reduce toplevel shapes (shapes
-  of compilation units). Use the [Make_reduce] functor for other cases that
-  require access to the environment.*)
-val toplevel_local_reduce : t -> t
-

@@ -45,7 +45,7 @@ let build_uid_to_locs_tbl ~(local_defs : Mtyper.typedtree) () =
   uid_to_locs_tbl
 
 let iter_on_usages ~f (local_defs : Mtyper.typedtree) =
-  let iter = Cmt_format.iter_on_usages ~f () in
+  let iter = Cmt_format.iter_on_occurrences ~f in
   begin match local_defs with
   | `Interface signature -> iter.signature iter signature
   | `Implementation structure -> iter.structure iter structure end

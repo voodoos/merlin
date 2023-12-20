@@ -535,10 +535,7 @@ let find_loc_of_comp_unit ~config uid comp_unit =
 
 let find_definition_uid ~config ~env ~(decl : Env_lookup.item) path =
   let namespace = decl.namespace in
-  let module Shape_reduce =
-    Shape.Make_reduce (struct
-      type env = Env.t
-
+  let module Reduce = Shape_reduce.Make (struct
       let fuel = 10
 
       let read_unit_shape ~unit_name =
@@ -554,15 +551,12 @@ let find_definition_uid ~config ~env ~(decl : Env_lookup.item) path =
           | Error () ->
             log ~title:"read_unit_shape" "failed to find %s" unit_name;
             None
-
-      let find_shape env id = Env.shape_of_path
-        ~namespace:Shape.Sig_component_kind.Module env (Pident id)
     end)
   in
   let shape = Env.shape_of_path ~namespace env path in
   log ~title:"shape_of_path" "initial: %a"
     Logger.fmt (Fun.flip Shape.print shape);
-  let keep_aliases =
+  let _keep_aliases =
     if config.traverse_aliases
     then (fun _ -> false)
     else (function
@@ -574,12 +568,23 @@ let find_definition_uid ~config ~env ~(decl : Env_lookup.item) path =
       false
     | _ -> true)
   in
-  let reduced = Shape_reduce.reduce_for_uid
-    ~keep_aliases env shape
+  let reduced = Reduce.reduce_for_uid env shape
   in
   log ~title:"shape_of_path" "reduced: %a"
-    Logger.fmt (fun fmt -> Shape.print_reduction_result fmt reduced);
+    Logger.fmt (fun fmt -> Shape_reduce.print_result fmt reduced);
   reduced
+
+let rec uid_of_aliases ~traverse_aliases = function
+  | [] -> assert false
+  | [ def ] -> def
+  | (Shape.Uid.Item { comp_unit; _ })
+    :: (((Compilation_unit comp_unit') :: _) as tl)
+    when let by = comp_unit ^ "__" in String.is_prefixed ~by comp_unit' ->
+      (* Always traverse dune-wrapper aliases *)
+      uid_of_aliases ~traverse_aliases tl
+  | [ alias; def ] -> if traverse_aliases then def else alias
+  | _alias :: tl when traverse_aliases -> uid_of_aliases ~traverse_aliases tl
+  | alias :: _tl -> alias
 
 (** This is the main function here *)
 let from_path ~config ~env ~local_defs ~decl path =
@@ -599,11 +604,13 @@ let from_path ~config ~env ~local_defs ~decl path =
   let uid, approximated = match config.ml_or_mli with
     | `MLI -> decl.uid, false
     | `ML ->
+      let traverse_aliases = config.traverse_aliases in
       match find_definition_uid ~config ~env ~decl path with
-      | Shape.Resolved uid -> uid, false
+      | Resolved uid -> uid, false
+      | Resolved_alias aliases -> uid_of_aliases ~traverse_aliases aliases, false
       | Unresolved { uid = Some uid; desc = Comp_unit _; approximated } ->
           uid, approximated
-      | Approximated _ | Unresolved _ | Missing_uid ->
+      | Approximated _ | Unresolved _ | Internal_error_missing_uid ->
           log ~title "No definition uid, falling back to the declaration uid: %a"
             Logger.fmt (Fun.flip Shape.Uid.print decl.uid);
           decl.uid, true

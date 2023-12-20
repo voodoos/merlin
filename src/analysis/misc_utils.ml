@@ -69,16 +69,15 @@ let loc_of_decl ~uid =
     ListLabels.find_map ~f:(fun (_, loc, _, uid') -> if uid = uid' then Some loc else None) bound_idents
   in
   function
-  | Cmt_format.Class_declaration cd -> Some cd.ci_id_name
-  | Class_description cd -> Some cd.ci_id_name
-  | Class_type_declaration ctd -> Some ctd.ci_id_name
-  | Extension_constructor ec -> Some ec.ext_name
-  | Module_binding mb -> of_option mb.mb_name
-  | Module_declaration md -> of_option md.md_name
-  | Module_type_declaration mtd -> Some mtd.mtd_name
-  | Module_substitution msd -> Some msd.ms_name;
-  | Type_declaration td -> Some td.typ_name
-  | Constructor_declaration cd -> Some cd.cd_name
-  | Label_declaration ld -> Some ld.ld_name
-  | Value_description vd -> Some vd.val_name
+  | Typedtree.Value vd -> Some vd.val_name
   | Value_binding vb -> of_value_binding vb
+  | Type td -> Some td.typ_name
+  | Constructor cd -> Some cd.cd_name
+  | Label ld -> Some ld.ld_name
+  | Module md -> of_option md.md_name
+  | Module_type mtd -> Some mtd.mtd_name
+  | Module_substitution msd -> Some msd.ms_name;
+  | Module_binding mb -> of_option mb.mb_name
+  | Class cd -> Some cd.ci_id_name
+  | Class_type ctd -> Some ctd.ci_id_name
+  | Extension_constructor ec -> Some ec.ext_name

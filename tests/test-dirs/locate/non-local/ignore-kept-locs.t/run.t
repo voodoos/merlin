@@ -71,7 +71,6 @@ In the absence of cmt though, fallbacking to the cmi loc makes sense:
   > grep -v -e from_path -e find_loc_of_uid
   No definition uid, falling back to the declaration uid: A.0
   Loading the cmt file for unit "A"
-  --
   Failed to load the cmt file
   Falling back to the declaration's location: File "a.ml", line 1, characters 4-9
 
