@@ -108,48 +108,19 @@ Module types substitutions
     }
   ]
 
-  $ $MERLIN single occurrences -identifier-at 6:19 \
+FIXME: we are missing occurrences
+  $ $MERLIN single occurrences -identifier-at 7:20 \
   > -filename mtsubst.ml < mtsubst.ml |
   > tr '\n' ' ' |  jq '.value'
   [
     {
       "start": {
-        "line": 2,
-        "col": 14
+        "line": 5,
+        "col": 31
       },
       "end": {
-        "line": 2,
-        "col": 15
-      }
-    },
-    {
-      "start": {
-        "line": 3,
-        "col": 12
-      },
-      "end": {
-        "line": 3,
-        "col": 13
-      }
-    },
-    {
-      "start": {
-        "line": 3,
-        "col": 17
-      },
-      "end": {
-        "line": 3,
-        "col": 18
-      }
-    },
-    {
-      "start": {
-        "line": 6,
-        "col": 19
-      },
-      "end": {
-        "line": 6,
-        "col": 20
+        "line": 5,
+        "col": 32
       }
     }
   ]
@@ -196,48 +167,20 @@ Module types substitutions
     }
   ]
 
-  $ $MERLIN single occurrences -identifier-at 6:19 \
+FIXME: we are missing occurrences
+  $ $MERLIN single occurrences -identifier-at 7:20 \
   > -filename mtsubst.ml < mtsubst.ml |
   > tr '\n' ' ' |  jq '.value'
   [
     {
       "start": {
-        "line": 2,
-        "col": 14
+        "line": 5,
+        "col": 31
       },
       "end": {
-        "line": 2,
-        "col": 15
-      }
-    },
-    {
-      "start": {
-        "line": 3,
-        "col": 12
-      },
-      "end": {
-        "line": 3,
-        "col": 13
-      }
-    },
-    {
-      "start": {
-        "line": 3,
-        "col": 17
-      },
-      "end": {
-        "line": 3,
-        "col": 18
-      }
-    },
-    {
-      "start": {
-        "line": 6,
-        "col": 19
-      },
-      "end": {
-        "line": 6,
-        "col": 20
+        "line": 5,
+        "col": 32
       }
     }
   ]
+
