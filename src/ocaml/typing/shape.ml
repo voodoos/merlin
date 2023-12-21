@@ -45,6 +45,10 @@ module Uid = struct
   let get_current_stamp () = !id
   let restore_stamp i = id := i
 
+  let stamp_of_uid = function
+    | Item { id; _ } -> Some id
+    | _ -> None
+
   let mk  ~current_unit =
       incr id;
       Item { comp_unit = current_unit; id = !id }

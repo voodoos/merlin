@@ -65,6 +65,7 @@ module Uid : sig
   val reinit : unit -> unit
   val get_current_stamp : unit -> int
   val restore_stamp : int -> unit
+  val stamp_of_uid : t -> int option
 
   val mk : current_unit:string -> t
   val of_compilation_unit_id : Ident.t -> t

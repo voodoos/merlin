@@ -131,6 +131,7 @@ let type_implementation config caught parsetree =
   Btype.backtrack snap';
   Warnings.restore warn';
   Env.cleanup_functor_caches ~stamp:stamp';
+  Env.cleanup_usage_tables ~stamp:uid';
   Shape.Uid.restore_stamp uid';
   let suffix = type_structure caught env' parsetree in
   return_and_cache
@@ -154,6 +155,7 @@ let type_interface config caught parsetree =
   Btype.backtrack snap';
   Warnings.restore warn';
   Env.cleanup_functor_caches ~stamp:stamp';
+  Env.cleanup_usage_tables ~stamp:uid';
   Shape.Uid.restore_stamp uid';
   let suffix = type_signature caught env' parsetree in
   return_and_cache
