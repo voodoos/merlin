@@ -33,23 +33,16 @@
   $ dune build @ocaml-index @all 
 
   $ ocaml-index dump _build/default/project.ocaml-index
-  7 uids:
+  4 uids:
   {uid: Lib__Wrapped_module; locs:
      "Lib__Wrapped_module": File "$TESTCASE_ROOT/lib/lib.ml-gen", line 4, characters 24-43
-   uid: Dune__exe__Main.0; locs:
-     "_y": File "$TESTCASE_ROOT/main.ml", line 2, characters 4-6
    uid: Stdlib.313; locs:
      "print_int": File "$TESTCASE_ROOT/main.ml", line 2, characters 9-18
-   uid: Lib.0; locs:
-     "Wrapped_module": File "$TESTCASE_ROOT/lib/lib.ml-gen", line 4, characters 7-21
    uid: Lib__Wrapped_module.0; locs:
      "Wrapped_module.x": File "$TESTCASE_ROOT/main.ml", line 2, characters 19-35;
-     "x": File "$TESTCASE_ROOT/lib/wrapped_module.ml", line 1, characters 4-5;
      "x": File "$TESTCASE_ROOT/lib/wrapped_module.ml", line 2, characters 11-12
    uid: Lib; locs:
      "Lib": File "$TESTCASE_ROOT/main.ml", line 1, characters 5-8
-   uid: Lib__Wrapped_module.1; locs:
-     "f": File "$TESTCASE_ROOT/lib/wrapped_module.ml", line 2, characters 4-5
    }, 0 approx shapes: {}, and shapes for CUS .
 
   $ $MERLIN single occurrences -scope project -identifier-at 2:34 \

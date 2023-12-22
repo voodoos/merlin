@@ -146,6 +146,11 @@ let check Index_format.{ stats; _ } file =
       equal
     with Unix.Unix_error _ -> false
 
+let set_fname ~file (loc : Location.t) =
+  let pos_fname = file in
+  { loc with
+      loc_start = { loc.loc_start with pos_fname };
+      loc_end   = { loc.loc_end with pos_fname }}
 
 let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
@@ -233,23 +238,29 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
             None
           else if Filename.is_relative fname then begin
             match Locate.find_source ~config loc fname with
-            | `Found (file, _) -> Some { loc with loc_start =
-                { loc.loc_start with pos_fname = file}}
+            | `Found (file, _) -> Some (set_fname ~file loc)
             | `File_not_found msg ->
-              log ~title:"occurrences" "%s" msg;
-              None
-            | _ -> None
+                log ~title:"occurrences" "%s" msg;
+                None
           end else Some loc)
     in
-    (* We only prepend the loc of the definition for the current buffer *)
     let def_uid_is_in_current_unit =
       let uid_comp_unit = comp_unit_of_uid def_uid in
       Option.value_map ~default:false uid_comp_unit
         ~f:(String.equal @@ Env.get_unit_name ())
     in
-    if def_uid_is_in_current_unit then
-      let def_loc = {def_loc with
-        loc_start = {def_loc.loc_start with pos_fname = current_buffer_path }} in
-      Ok ((def_loc::locs), desync)
-      else Ok (locs, desync)
+    let def_loc =
+      if def_uid_is_in_current_unit
+      then set_fname ~file:current_buffer_path def_loc
+      else match
+       Locate.find_source ~config def_loc def_loc.loc_start.pos_fname
+      with
+      | `Found (file, _) -> set_fname ~file def_loc
+      | `File_not_found msg ->
+          log ~title:"occurrences" "%s" msg;
+          { def_loc with loc_ghost = true }
+    in
+    if not def_loc.loc_ghost && (def_uid_is_in_current_unit || scope = `Project)
+    then Ok (def_loc::locs, desync)
+    else Ok (locs, desync)
   | None -> Error "nouid"

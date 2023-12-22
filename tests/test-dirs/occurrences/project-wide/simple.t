@@ -32,13 +32,10 @@
   $ dune build @all
 
   $ ocaml-index dump _build/default/project.ocaml-index
-  3 uids:
-  {uid: Lib.1; locs:
-     "y": File "$TESTCASE_ROOT/lib/lib.ml", line 2, characters 4-5
-   uid: Stdlib.313; locs:
+  2 uids:
+  {uid: Stdlib.313; locs:
      "print_int": File "$TESTCASE_ROOT/exe/main.ml", line 1, characters 0-9
    uid: Lib.0; locs:
-     "x": File "$TESTCASE_ROOT/lib/lib.ml", line 1, characters 4-5;
      "x": File "$TESTCASE_ROOT/lib/lib.ml", line 2, characters 8-9;
      "Lib.x": File "$TESTCASE_ROOT/exe/main.ml", line 1, characters 10-15
    }, 0 approx shapes: {}, and shapes for CUS .
@@ -96,6 +93,17 @@ Occurrences of Lib.x
   {
     "class": "return",
     "value": [
+      {
+        "file": "$TESTCASE_ROOT/lib/lib.ml",
+        "start": {
+          "line": 1,
+          "col": 4
+        },
+        "end": {
+          "line": 1,
+          "col": 5
+        }
+      },
       {
         "file": "$TESTCASE_ROOT/exe/main.ml",
         "start": {

@@ -54,21 +54,9 @@ FIXME: remove duplicates
     }
   ]
 
-FIXME: remove duplicates
   $ $MERLIN single occurrences -scope project -identifier-at 2:15 \
   > -filename lib.ml <lib.ml | jq '.value'
   [
-    {
-      "file": "$TESTCASE_ROOT/lib.ml",
-      "start": {
-        "line": 1,
-        "col": 4
-      },
-      "end": {
-        "line": 1,
-        "col": 17
-      }
-    },
     {
       "file": "$TESTCASE_ROOT/lib.ml",
       "start": {
@@ -104,21 +92,9 @@ FIXME: remove duplicates
     }
   ]
 
-FIXME: remove duplicates
   $ $MERLIN single occurrences -scope project -identifier-at 1:10 \
   > -filename lib.ml <lib.ml | jq '.value'
   [
-    {
-      "file": "$TESTCASE_ROOT/lib.ml",
-      "start": {
-        "line": 1,
-        "col": 4
-      },
-      "end": {
-        "line": 1,
-        "col": 17
-      }
-    },
     {
       "file": "$TESTCASE_ROOT/lib.ml",
       "start": {

@@ -18,6 +18,17 @@
   > -filename main.ml <main.ml | jq '.value'
   [
     {
+      "file": "$TESTCASE_ROOT/oui_ml.ml",
+      "start": {
+        "line": 1,
+        "col": 5
+      },
+      "end": {
+        "line": 1,
+        "col": 6
+      }
+    },
+    {
       "file": "$TESTCASE_ROOT/main.ml",
       "start": {
         "line": 1,
