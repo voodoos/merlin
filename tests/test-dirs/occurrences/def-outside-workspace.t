@@ -3,7 +3,7 @@
   > let _ = Bytes.create 0
   > EOF
 
-FIXME: we shouldn't return the definition when it's not in the current workspace
+We shouldn't return the definition when it's not in the current workspace
   $ $MERLIN single occurrences -scope project -identifier-at 2:17 \
   > -filename main.ml <main.ml
   {
@@ -29,17 +29,6 @@ FIXME: we shouldn't return the definition when it's not in the current workspace
         "end": {
           "line": 2,
           "col": 20
-        }
-      },
-      {
-        "file": "lib/ocaml/bytes.ml",
-        "start": {
-          "line": 28,
-          "col": 9
-        },
-        "end": {
-          "line": 28,
-          "col": 15
         }
       }
     ],

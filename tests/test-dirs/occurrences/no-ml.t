@@ -12,7 +12,12 @@
   > let (y : t) = 43
   > EOF
 
-  $ $OCAMLC -bin-annot -c oui_ml.ml no_ml.mli
+  $ $OCAMLC -bin-annot -bin-annot-occurrences -c oui_ml.ml no_ml.mli main.ml
+  $ ocaml-index aggregate oui_ml.cmt no_ml.cmti main.cmt -o project.index
+
+  $ cat >.merlin <<'EOF'
+  > INDEX_FILE project.index
+  > EOF
 
   $ $MERLIN single occurrences -scope project -identifier-at 1:15 \
   > -filename main.ml <main.ml | jq '.value'

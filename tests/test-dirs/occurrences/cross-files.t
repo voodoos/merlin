@@ -8,7 +8,7 @@
   > EOF
 
   $ $OCAMLC -c -bin-annot -bin-annot-occurrences - lib.ml main.ml
-  $ ocaml-index aggregate lib.cmt main.cmt -o project.index
+  $ ocaml-index aggregate --root ${PWD} lib.cmt main.cmt -o project.index
 
   $ cat >.merlin <<'EOF'
   > INDEX_FILE project.index

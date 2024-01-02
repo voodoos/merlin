@@ -200,7 +200,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       let exception File_changed in
       let open Option.Infix in
       try
-        let locs = config.merlin.index_file  >>= fun file ->
+        let locs = config.merlin.index_file >>= fun file ->
           let external_index = Index_format.read_exn ~file in
           Hashtbl.find_opt external_index.defs def_uid
           >>| fun locs -> LidSet.filter (fun {loc; _} ->
@@ -252,13 +252,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
     let def_loc =
       if def_uid_is_in_current_unit
       then set_fname ~file:current_buffer_path def_loc
-      else match
-       Locate.find_source ~config def_loc def_loc.loc_start.pos_fname
-      with
-      | `Found (file, _) -> set_fname ~file def_loc
-      | `File_not_found msg ->
-          log ~title:"occurrences" "%s" msg;
-          { def_loc with loc_ghost = true }
+      else { def_loc with loc_ghost = true }
     in
     if not def_loc.loc_ghost && (def_uid_is_in_current_unit || scope = `Project)
     then Ok (def_loc::locs, desync)
