@@ -78,6 +78,7 @@ Module types substitutions
   > end
   > EOF
 
+1.
   $ $MERLIN single type-enclosing -position 6:25 \
   > -filename mtsubst.ml < mtsubst.ml |
   > tr '\n' ' ' |  jq '.value[0:2]'
@@ -108,7 +109,7 @@ Module types substitutions
     }
   ]
 
-FIXME: we are missing occurrences
+2.
   $ $MERLIN single occurrences -identifier-at 7:20 \
   > -filename mtsubst.ml < mtsubst.ml |
   > tr '\n' ' ' |  jq '.value'
@@ -121,6 +122,26 @@ FIXME: we are missing occurrences
       "end": {
         "line": 5,
         "col": 32
+      }
+    },
+    {
+      "start": {
+        "line": 6,
+        "col": 25
+      },
+      "end": {
+        "line": 6,
+        "col": 26
+      }
+    },
+    {
+      "start": {
+        "line": 7,
+        "col": 20
+      },
+      "end": {
+        "line": 7,
+        "col": 21
       }
     }
   ]
@@ -137,6 +158,7 @@ FIXME: we are missing occurrences
   > end
   > EOF
 
+3.
   $ $MERLIN single type-enclosing -position 6:26 \
   > -filename mtsubst.ml < mtsubst.ml |
   > tr '\n' ' ' |  jq '.value[0:2]'
@@ -167,7 +189,7 @@ FIXME: we are missing occurrences
     }
   ]
 
-FIXME: we are missing occurrences
+4.
   $ $MERLIN single occurrences -identifier-at 7:20 \
   > -filename mtsubst.ml < mtsubst.ml |
   > tr '\n' ' ' |  jq '.value'
@@ -180,6 +202,26 @@ FIXME: we are missing occurrences
       "end": {
         "line": 5,
         "col": 32
+      }
+    },
+    {
+      "start": {
+        "line": 6,
+        "col": 26
+      },
+      "end": {
+        "line": 6,
+        "col": 27
+      }
+    },
+    {
+      "start": {
+        "line": 7,
+        "col": 20
+      },
+      "end": {
+        "line": 7,
+        "col": 21
       }
     }
   ]

@@ -9,7 +9,7 @@
   >   end
   > EOF
 
-FIXME: there are two occurrences of P.url
+There are two usages of P.url
   $ $MERLIN single occurrences -identifier-at 6:17 \
   > -filename main.ml <main.ml | jq '.value'
   [
@@ -21,6 +21,26 @@ FIXME: there are two occurrences of P.url
       "end": {
         "line": 2,
         "col": 11
+      }
+    },
+    {
+      "start": {
+        "line": 5,
+        "col": 16
+      },
+      "end": {
+        "line": 5,
+        "col": 19
+      }
+    },
+    {
+      "start": {
+        "line": 6,
+        "col": 17
+      },
+      "end": {
+        "line": 6,
+        "col": 20
       }
     }
   ]

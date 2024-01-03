@@ -57,7 +57,9 @@ let index_buffer ~local_defs () =
         log ~title:"index_buffer" "Shape of path: %a"
           Logger.fmt (Fun.flip Shape.print path_shape);
         begin match Shape_reduce.reduce_for_uid env path_shape with
-        | Internal_error_missing_uid -> ()
+        | Internal_error_missing_uid ->
+          log ~title:"index_buffer" "Reduction failed: mssing uid";
+          index_decl ()
         | Resolved_alias l ->
             let uid = Locate.uid_of_aliases ~traverse_aliases:false l in
             Index_format.(add defs uid (LidSet.singleton lid))
