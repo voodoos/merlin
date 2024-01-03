@@ -7,7 +7,28 @@ display local occurrences based on the declarations uid for that.
   > let _z : string = Filename.basename "/" 
   > EOF
 
-FIXME: there are two occurrences of Filename.is_relative
+There are two occurrences of Filename.is_relative
   $ $MERLIN single occurrences -identifier-at 1:30 \
   > -filename local.ml <local.ml | jq '.value'
-  []
+  [
+    {
+      "start": {
+        "line": 1,
+        "col": 25
+      },
+      "end": {
+        "line": 1,
+        "col": 36
+      }
+    },
+    {
+      "start": {
+        "line": 2,
+        "col": 25
+      },
+      "end": {
+        "line": 2,
+        "col": 36
+      }
+    }
+  ]

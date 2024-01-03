@@ -39,17 +39,24 @@ let index_buffer ~local_defs () =
     end)
   in
   let f ~namespace env path (lid : Longident.t Location.loc)  =
-    log ~title:"index_buffer" "pouet %a" Logger.fmt (Fun.flip Path.print path);
+    log ~title:"index_buffer" "Path: %a" Logger.fmt (Fun.flip Path.print path);
     let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
-    if not_ghost lid then
+    let index_decl () =
+      begin match decl_of_path_or_lid env namespace path lid.txt with
+      | exception _ |  None -> log ~title:"index_buffer" "Declaration not found"
+      | Some decl ->
+        log ~title:"index_buffer" "Found declaration: %a"
+          Logger.fmt (Fun.flip Location.print_loc decl.loc);
+        Index_format.(add defs decl.uid (LidSet.singleton lid))
+      end
+    in
+     if not_ghost lid then
       match Env.shape_of_path ~namespace env path with
       | exception Not_found -> ()
       | path_shape ->
-
-    log ~title:"index_buffer" "pouet SOP %a"
-      Logger.fmt (Fun.flip Shape.print path_shape);
+        log ~title:"index_buffer" "Shape of path: %a"
+          Logger.fmt (Fun.flip Shape.print path_shape);
         begin match Shape_reduce.reduce_for_uid env path_shape with
-        | Ocaml_typing.Shape_reduce.Approximated _
         | Internal_error_missing_uid -> ()
         | Resolved_alias l ->
             let uid = Locate.uid_of_aliases ~traverse_aliases:false l in
@@ -60,16 +67,14 @@ let index_buffer ~local_defs () =
             Logger.fmt (Fun.flip Location.print_loc lid.loc)
             Logger.fmt (Fun.flip Shape.Uid.print uid);
           Index_format.(add defs uid (LidSet.singleton lid))
+        | Approximated s  ->
+          log ~title:"index_buffer" "Shape is approximative, found uid: %a"
+            Logger.fmt (Fun.flip (Format.pp_print_option Shape.Uid.print) s);
+          index_decl ()
         | Unresolved s ->
-          log ~title:"index_buffer" "Could not resolve shape %a"
+          log ~title:"index_buffer" "Shape unresolved, stuck on: %a"
             Logger.fmt (Fun.flip Shape.print s);
-          begin match decl_of_path_or_lid env namespace path lid.txt with
-          | exception _ |  None -> log ~title:"index_buffer" "Declaration not found"
-          | Some decl ->
-            log ~title:"index_buffer" "Found the declaration: %a"
-              Logger.fmt (Fun.flip Location.print_loc decl.loc);
-            Index_format.(add defs decl.uid (LidSet.singleton lid))
-          end
+          index_decl ()
         end
   in
   Ast_iterators.iter_on_usages ~f local_defs;
@@ -175,10 +180,10 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
         log ~title:"locs_of" "Found definition uid using locate: %a "
           Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
         Some (uid, location)
-    | `Found { uid; location; approximated = true; _ } ->
+    | `Found { decl_uid; location; approximated = true; _ } ->
         log ~title:"locs_of" "Approx: %a "
-          Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
-        Some (uid, location)
+          Logger.fmt (fun fmt -> Shape.Uid.print fmt decl_uid);
+        Some (decl_uid, location)
     | `Builtin (uid, s) -> log ~title:"locs_of" "Locate found a builtin: %s" s; Some (uid, Location.none)
     | _ ->
       log ~title:"locs_of" "Locate failed to find a definition.";
