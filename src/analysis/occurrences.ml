@@ -168,7 +168,9 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
     ~config:{ mconfig = config; traverse_aliases=false; ml_or_mli = `ML}
     ~env ~local_defs ~pos path
   in
-  let def =
+  (* When we fail to find an exact definition we restrict the scope to the local
+     buffer *)
+  let def, scope =
     match locate_result with
     | `At_origin ->
       log ~title:"locs_of" "Cursor is on definition / declaration";
@@ -177,19 +179,21 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       let browse = Mbrowse.of_typedtree local_defs in
       let node = Mbrowse.enclosing pos [browse] in
       let env, node = Mbrowse.leaf_node node in
-      uid_and_loc_of_node env node
+      uid_and_loc_of_node env node, scope
     | `Found { uid; location; approximated = false; _ } ->
         log ~title:"locs_of" "Found definition uid using locate: %a "
           Logger.fmt (fun fmt -> Shape.Uid.print fmt uid);
-        Some (uid, location)
+        Some (uid, location), scope
     | `Found { decl_uid; location; approximated = true; _ } ->
         log ~title:"locs_of" "Approx: %a "
           Logger.fmt (fun fmt -> Shape.Uid.print fmt decl_uid);
-        Some (decl_uid, location)
-    | `Builtin (uid, s) -> log ~title:"locs_of" "Locate found a builtin: %s" s; Some (uid, Location.none)
+        Some (decl_uid, location), `Buffer
+    | `Builtin (uid, s) ->
+        log ~title:"locs_of" "Locate found a builtin: %s" s;
+        Some (uid, Location.none), scope
     | _ ->
-      log ~title:"locs_of" "Locate failed to find a definition.";
-      None
+        log ~title:"locs_of" "Locate failed to find a definition.";
+        None, `Buffer
   in
   let current_buffer_path =
     Filename.concat config.query.directory config.query.filename
@@ -256,12 +260,6 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       Option.value_map ~default:false uid_comp_unit
         ~f:(String.equal @@ Env.get_unit_name ())
     in
-    let def_loc =
-      if def_uid_is_in_current_unit
-      then set_fname ~file:current_buffer_path def_loc
-      else { def_loc with loc_ghost = true }
-    in
-    if not def_loc.loc_ghost && (def_uid_is_in_current_unit || scope = `Project)
-    then Ok (def_loc::locs, desync)
-    else Ok (locs, desync)
+    if not def_uid_is_in_current_unit then Ok (locs, desync)
+    else Ok (set_fname ~file:current_buffer_path def_loc :: locs, desync)
   | None -> Error "nouid"
