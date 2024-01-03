@@ -3,6 +3,12 @@ module LidSet = Index_format.LidSet
 
 let {Logger. log} = Logger.for_section "occurrences"
 
+let set_fname ~file (loc : Location.t) =
+  let pos_fname = file in
+  { loc with
+      loc_start = { loc.loc_start with pos_fname };
+      loc_end   = { loc.loc_end with pos_fname }}
+
 let decl_of_path_or_lid env namespace path lid =
   match (namespace : Shape.Sig_component_kind.t) with
   | Constructor ->
@@ -19,7 +25,7 @@ let decl_of_path_or_lid env namespace path lid =
     end
   | _ -> Env_lookup.loc path namespace env
 
-let index_buffer ~local_defs () =
+let index_buffer ~current_buffer_path ~local_defs () =
   let {Logger. log} = Logger.for_section "index" in
   let defs = Hashtbl.create 64 in
   let module Shape_reduce =
@@ -41,6 +47,7 @@ let index_buffer ~local_defs () =
   let f ~namespace env path (lid : Longident.t Location.loc)  =
     log ~title:"index_buffer" "Path: %a" Logger.fmt (Fun.flip Path.print path);
     let not_ghost { Location.loc = { loc_ghost; _ }; _ } = not loc_ghost in
+    let lid = { lid with loc = set_fname ~file:current_buffer_path lid.loc } in
     let index_decl () =
       begin match decl_of_path_or_lid env namespace path lid.txt with
       | exception _ |  None -> log ~title:"index_buffer" "Declaration not found"
@@ -153,12 +160,6 @@ let check Index_format.{ stats; _ } file =
       equal
     with Unix.Unix_error _ -> false
 
-let set_fname ~file (loc : Location.t) =
-  let pos_fname = file in
-  { loc with
-      loc_start = { loc.loc_start with pos_fname };
-      loc_end   = { loc.loc_end with pos_fname }}
-
 let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
   log ~title:"occurrences" "Looking for occurences of %s (pos: %s)"
     path
@@ -204,7 +205,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       Logger.fmt (fun fmt -> Shape.Uid.print fmt def_uid)
       Logger.fmt (fun fmt -> Location.print_loc fmt def_loc);
     log ~title:"locs_of" "Indexing current buffer";
-    let buffer_index = index_buffer ~local_defs () in
+    let buffer_index = index_buffer ~current_buffer_path ~local_defs () in
     let buffer_locs = Hashtbl.find_opt buffer_index def_uid in
     let external_locs, desync =
       if scope = `Buffer then None, false else begin
@@ -243,11 +244,7 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
             (Longident.head txt) Logger.fmt (Fun.flip Location.print_loc loc);
           let loc = last_loc loc txt in
           let fname = loc.Location.loc_start.Lexing.pos_fname in
-          if String.equal fname current_buffer_path then
-            (* ignore locs coming from the external index for the buffer *)
-            (* maybe filter before *)
-            None
-          else if Filename.is_relative fname then begin
+          if Filename.is_relative fname then begin
             match Locate.find_source ~config loc fname with
             | `Found (file, _) -> Some (set_fname ~file loc)
             | `File_not_found msg ->
