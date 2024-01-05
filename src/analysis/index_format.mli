@@ -7,7 +7,7 @@ val add : ('a, LidSet.t) Hashtbl.t -> 'a -> LidSet.t -> unit
 
 module Stats : Map.S with type key = String.t
 
-type stat = { mtime : float; size : int }
+type stat = { mtime : float; size : int; source_digest: string option }
 type index = {
   defs : (Shape.Uid.t, LidSet.t) Hashtbl.t;
   approximated : (Shape.Uid.t, LidSet.t) Hashtbl.t;

@@ -28,7 +28,7 @@ let add tbl uid locs =
     Hashtbl.replace tbl uid (LidSet.union locs locations)
   with Not_found -> Hashtbl.add tbl uid locs
 
-type stat = { mtime : float; size : int }
+type stat = { mtime : float; size : int; source_digest: string option }
 type index = {
   defs : (Shape.Uid.t, LidSet.t) Hashtbl.t;
   approximated : (Shape.Uid.t, LidSet.t) Hashtbl.t;
