@@ -28,12 +28,13 @@ let add tbl uid locs =
     Hashtbl.replace tbl uid (LidSet.union locs locations)
   with Not_found -> Hashtbl.add tbl uid locs
 
+type stat = { mtime : float; size : int }
 type index = {
   defs : (Shape.Uid.t, LidSet.t) Hashtbl.t;
   approximated : (Shape.Uid.t, LidSet.t) Hashtbl.t;
   load_path : string list;
   cu_shape : (string, Shape.t) Hashtbl.t;
-  stats : float Stats.t;
+  stats : stat Stats.t;
 }
 
 let pp_partials (fmt : Format.formatter)

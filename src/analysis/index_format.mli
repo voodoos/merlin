@@ -7,12 +7,13 @@ val add : ('a, LidSet.t) Hashtbl.t -> 'a -> LidSet.t -> unit
 
 module Stats : Map.S with type key = String.t
 
+type stat = { mtime : float; size : int }
 type index = {
   defs : (Shape.Uid.t, LidSet.t) Hashtbl.t;
   approximated : (Shape.Uid.t, LidSet.t) Hashtbl.t;
   load_path : string list;
   cu_shape : (string, Shape.t) Hashtbl.t;
-  stats : float Stats.t;
+  stats : stat Stats.t;
 }
 
 type file_content = Cmt of Cmt_format.cmt_infos | Index of index | Unknown

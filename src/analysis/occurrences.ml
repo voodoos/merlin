@@ -152,9 +152,13 @@ let check Index_format.{ stats; _ } file =
   let open Index_format in
   match Stats.find_opt file stats with
   | None -> log ~title:"stat_check" "No mtime found for file %S." file; true
-  | Some mtime ->
+  | Some { mtime; size } ->
     try
-      let equal = Float.equal (Unix.stat file).st_mtime mtime in
+      let stats = Unix.stat file in
+      let equal =
+        Float.equal stats.st_mtime mtime
+        || Int.equal stats.st_size size
+      in
       log ~title:"stat_check"
         "File %s has been modified since the index was built." file;
       equal
