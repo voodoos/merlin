@@ -88,7 +88,7 @@ Occurrences of Lib.x
 
 
   $ sleep 1 # Make sure that the time will change
-  $ touch lib/lib.ml
+  $ echo " (* *)" >> lib/lib.ml
 
   $ $MERLIN single occurrences -scope project -identifier-at 1:15 \
   > -log-file log -log-section occurrences \
