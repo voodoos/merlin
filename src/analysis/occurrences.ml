@@ -25,7 +25,7 @@ let decl_of_path_or_lid env namespace path lid =
     end
   | _ -> Env_lookup.loc path namespace env
 
-let index_buffer ~current_buffer_path ~local_defs () =
+let index_buffer ~scope ~current_buffer_path ~local_defs () =
   let {Logger. log} = Logger.for_section "index" in
   let defs = Hashtbl.create 64 in
   let module Shape_reduce =
@@ -65,7 +65,7 @@ let index_buffer ~current_buffer_path ~local_defs () =
           Logger.fmt (Fun.flip Shape.print path_shape);
         begin match Shape_reduce.reduce_for_uid env path_shape with
         | Internal_error_missing_uid ->
-          log ~title:"index_buffer" "Reduction failed: mssing uid";
+          log ~title:"index_buffer" "Reduction failed: missing uid";
           index_decl ()
         | Resolved_alias l ->
             let uid = Locate.uid_of_aliases ~traverse_aliases:false l in
@@ -85,6 +85,26 @@ let index_buffer ~current_buffer_path ~local_defs () =
             Logger.fmt (Fun.flip Shape.print s);
           index_decl ()
         end
+  in
+  let f ~namespace env path (lid : Longident.t Location.loc)  =
+    (* The compiler lacks sufficient location information to precisely hihglight
+       modules in paths. This function hacks around that issue when looking for
+       occurrences in the current buffer only. *)
+    let rec iter_on_path ~namespace path ({Location.txt; loc} as lid) =
+      let () = f ~namespace env path lid in
+      if scope = `Buffer then
+      match path, txt with
+      | Pdot (path, _), Ldot (lid, s) ->
+        let length_with_dot = String.length s + 1 in
+        let lid =
+          { Location.txt = lid; loc = { loc with loc_end = {loc.loc_end with
+            pos_cnum = loc.loc_end.pos_cnum - length_with_dot}} }
+        in
+        iter_on_path ~namespace:Module path lid
+      | Papply _, _ -> ()
+      | _, _ -> ()
+    in
+    iter_on_path ~namespace path lid
   in
   Ast_iterators.iter_on_usages ~f local_defs;
   defs
@@ -210,7 +230,9 @@ let locs_of ~config ~scope ~env ~local_defs ~pos ~node:_ path =
       Logger.fmt (fun fmt -> Shape.Uid.print fmt def_uid)
       Logger.fmt (fun fmt -> Location.print_loc fmt def_loc);
     log ~title:"locs_of" "Indexing current buffer";
-    let buffer_index = index_buffer ~current_buffer_path ~local_defs () in
+    let buffer_index =
+      index_buffer ~scope ~current_buffer_path ~local_defs ()
+    in
     let buffer_locs = Hashtbl.find_opt buffer_index def_uid in
     let external_locs, desync =
       if scope = `Buffer then None, false else begin
