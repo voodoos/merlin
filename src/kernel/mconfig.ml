@@ -77,6 +77,8 @@ type merlin = {
   extensions  : string list;
   suffixes    : (string * string) list;
   stdlib      : string option;
+  index_file  : string option;
+  unit_name   : string option;
   reader      : string list;
   protocol    : [`Json | `Sexp];
   log_file    : string option;
@@ -115,6 +117,8 @@ let dump_merlin x =
         ]) x.suffixes
     );
     "stdlib"       , Json.option Json.string x.stdlib;
+    "index_file"   , Json.option Json.string x.index_file;
+    "unit_name"    , Json.option Json.string x.unit_name;
     "reader"       , `List (List.map ~f:Json.string x.reader);
     "protocol"     , (match x.protocol with
         | `Json -> `String "json"
@@ -251,6 +255,8 @@ let get_external_config path t =
       extensions = dot.extensions @ merlin.extensions;
       suffixes = dot.suffixes @ merlin.suffixes;
       stdlib = (if dot.stdlib = None then merlin.stdlib else dot.stdlib);
+      index_file = dot.index_file;
+      unit_name = dot.unit_name;
       reader =
         if dot.reader = []
         then merlin.reader
@@ -623,6 +629,8 @@ let initial = {
     extensions  = [];
     suffixes    = [(".ml", ".mli"); (".re", ".rei")];
     stdlib      = None;
+    index_file  = None;
+    unit_name   = None;
     reader      = [];
     protocol    = `Json;
     log_file    = None;
@@ -795,4 +803,7 @@ let global_modules ?(include_current=false) config = (
 
 let filename t = t.query.filename
 
-let unitname t = Misc.unitname t.query.filename
+let unitname t =
+  match t.merlin.unit_name with
+  | None -> Misc.unitname t.query.filename
+  | Some unit_name -> String.capitalize_ascii unit_name

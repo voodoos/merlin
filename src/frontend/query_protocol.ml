@@ -195,6 +195,6 @@ type _ t =
     -> string list t
   | Occurrences(* *)
     : [`Ident_at of Msource.position] * [`Project | `Buffer]
-    -> Location.t list t
+    -> (Location.t list * bool) t
   | Version
     : string t

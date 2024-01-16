@@ -537,6 +537,7 @@ type pattern_variable =
     pv_loc: Location.t;
     pv_as_var: bool;
     pv_attributes: attributes;
+    pv_uid : Uid.t;
   }
 
 type module_variable =
@@ -570,19 +571,21 @@ let enter_variable ?(is_module=false) ?(is_as_variable=false) loc name ty
       !pattern_variables
   then raise(error(loc, Env.empty, Multiply_bound_variable name.txt));
   let id = Ident.create_local name.txt in
+  let pv_uid = Uid.mk ~current_unit:(Env.get_unit_name ()) in
   pattern_variables :=
     {pv_id = id;
      pv_type = ty;
      pv_loc = loc;
      pv_as_var = is_as_variable;
-     pv_attributes = attrs} :: !pattern_variables;
+     pv_attributes = attrs;
+     pv_uid} :: !pattern_variables;
   if is_module then begin
     (* Note: unpack patterns enter a variable of the same name *)
     if not !allow_modules then
       raise (error (loc, Env.empty, Modules_not_allowed));
     module_variables := (name, loc) :: !module_variables
   end;
-  id
+  id, pv_uid
 
 let sort_pattern_variables vs =
   List.sort
@@ -648,7 +651,7 @@ let rec build_as_type ~refine (env : Env.t ref) p =
 and build_as_type_aux ~refine (env : Env.t ref) p =
   let build_as_type = build_as_type ~refine in
   match p.pat_desc with
-    Tpat_alias(p1,_, _) -> build_as_type env p1
+    Tpat_alias(p1,_, _, _) -> build_as_type env p1
   | Tpat_tuple pl ->
       let tyl = List.map (build_as_type env) pl in
       newty (Ttuple tyl)
@@ -1783,14 +1786,14 @@ and type_pat_aux
       end
   | Ppat_var name ->
       let ty = instance expected_ty in
-      let id = (* PR#7330 *)
+      let id, uid = (* PR#7330 *)
         if name.txt = "*extension*" then
-          Ident.create_local name.txt
+          Ident.create_local name.txt, Uid.internal_not_actually_unique
         else
           enter_variable loc name ty sp.ppat_attributes
       in
       rvp k {
-        pat_desc = Tpat_var (id, name);
+        pat_desc = Tpat_var (id, name, uid);
         pat_loc = loc; pat_extra=[];
         pat_type = ty;
         pat_attributes = sp.ppat_attributes;
@@ -1809,9 +1812,9 @@ and type_pat_aux
             pat_env = !env }
       | Some s ->
           let v = { name with txt = s } in
-          let id = enter_variable loc v t ~is_module:true sp.ppat_attributes in
+          let id, uid = enter_variable loc v t ~is_module:true sp.ppat_attributes in
           rvp k {
-            pat_desc = Tpat_var (id, v);
+            pat_desc = Tpat_var (id, v, uid);
             pat_loc = sp.ppat_loc;
             pat_extra=[Tpat_unpack, loc, sp.ppat_attributes];
             pat_type = t;
@@ -1825,8 +1828,8 @@ and type_pat_aux
       assert construction_not_used_in_counterexamples;
       let cty, ty, ty' =
         solve_Ppat_poly_constraint ~refine env lloc sty expected_ty in
-      let id = enter_variable lloc name ty' attrs in
-      rvp k { pat_desc = Tpat_var (id, name);
+      let id, uid = enter_variable lloc name ty' attrs in
+      rvp k { pat_desc = Tpat_var (id, name, uid);
               pat_loc = lloc;
               pat_extra = [Tpat_constraint cty, loc, sp.ppat_attributes];
               pat_type = ty;
@@ -1836,11 +1839,11 @@ and type_pat_aux
       assert construction_not_used_in_counterexamples;
       type_pat Value sq expected_ty (fun q ->
         let ty_var = solve_Ppat_alias ~refine env q in
-        let id =
+        let id, uid =
           enter_variable ~is_as_variable:true loc name ty_var sp.ppat_attributes
         in
         rvp k {
-          pat_desc = Tpat_alias(q, id, name);
+          pat_desc = Tpat_alias(q, id, name, uid);
           pat_loc = loc; pat_extra=[];
           pat_type = q.pat_type;
           pat_attributes = sp.ppat_attributes;
@@ -2159,12 +2162,16 @@ and type_pat_aux
         let extra = (Tpat_constraint cty, loc, sp.ppat_attributes) in
         let p : k general_pattern =
           match category, (p : k general_pattern) with
-          | Value, {pat_desc = Tpat_var (id,s); _} ->
+          | Value, {pat_desc = Tpat_var (id,s,uid); _} ->
             {p with
               pat_type = ty;
               pat_desc =
                 Tpat_alias
-                  ({p with pat_desc = Tpat_any; pat_attributes = []}, id,s);
+                  ({p with
+                    pat_desc = Tpat_any;
+                    pat_attributes = (* Merlin should ignore these nodes *)
+                      [Ast_helper.Attr.mk (mknoloc "merlin.hide") (PStr [])];
+                    pat_loc = { p.pat_loc with loc_ghost = true }}, id,s,uid);
               pat_extra = [extra];
             }
           | _, p ->
@@ -2256,12 +2263,12 @@ let iter_pattern_variables_type f : pattern_variable list -> unit =
 
 let add_pattern_variables ?check ?check_as env pv =
   List.fold_right
-    (fun {pv_id; pv_type; pv_loc; pv_as_var; pv_attributes} env ->
+    (fun {pv_id; pv_type; pv_loc; pv_as_var; pv_attributes; pv_uid} env ->
        let check = if pv_as_var then check_as else check in
        Env.add_value ?check pv_id
          {val_type = pv_type; val_kind = Val_reg; Types.val_loc = pv_loc;
           val_attributes = pv_attributes;
-          val_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
+          val_uid = pv_uid;
          } env
     )
     pv env
@@ -2885,8 +2892,8 @@ let rec name_pattern default = function
     [] -> Ident.create_local default
   | p :: rem ->
     match p.pat_desc with
-      Tpat_var (id, _) -> id
-    | Tpat_alias(_, id, _) -> id
+      Tpat_var (id, _, _) -> id
+    | Tpat_alias(_, id, _, _) -> id
     | _ -> name_pattern default rem
 
 let name_cases default lst =
@@ -3873,10 +3880,12 @@ and type_expect_
         | _ -> Mp_present
       in
       let scope = create_scope () in
+      let md_uid = Uid.mk ~current_unit:(Env.get_unit_name ()) in
       let md =
         { md_type = modl.mod_type; md_attributes = []; md_loc = name.loc;
-          md_uid = Uid.mk ~current_unit:(Env.get_unit_name ()); }
+          md_uid; }
       in
+      let md_shape = Shape.set_uid_if_none md_shape md_uid in
       let (id, new_env) =
         match name.txt with
         | None -> None, env
@@ -3902,7 +3911,7 @@ and type_expect_
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_letexception(cd, sbody) ->
-      let (cd, newenv) = Typedecl.transl_exception env cd in
+      let (cd, newenv, _shape) = Typedecl.transl_exception env cd in
       let body = type_expect newenv sbody ty_expected_explained in
       re {
         exp_desc = Texp_letexception(cd, body);
@@ -4701,7 +4710,10 @@ and type_argument ?explanation ?recarg env sarg ty_expected' ty_expected =
           }
         in
         let exp_env = Env.add_value id desc env in
-        {pat_desc = Tpat_var (id, mknoloc name); pat_type = ty;pat_extra=[];
+        {pat_desc =
+          Tpat_var (id, mknoloc name, desc.val_uid);
+         pat_type = ty;
+         pat_extra=[];
          pat_attributes = [];
          pat_loc = Location.none; pat_env = env},
         {exp_type = ty; exp_loc = Location.none; exp_env = exp_env;
@@ -5574,7 +5586,7 @@ and type_let
     List.iter
       (fun {vb_pat=pat} -> match pat.pat_desc with
            Tpat_var _ -> ()
-         | Tpat_alias ({pat_desc=Tpat_any}, _, _) -> ()
+         | Tpat_alias ({pat_desc=Tpat_any}, _, _, _) -> ()
          | _ -> raise(error(pat.pat_loc, env, Illegal_letrec_pat)))
       l;
   List.iter (function

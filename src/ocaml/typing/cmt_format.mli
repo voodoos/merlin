@@ -65,8 +65,10 @@ type cmt_infos = {
   cmt_imports : crcs;
   cmt_interface_digest : Digest.t option;
   cmt_use_summaries : bool;
-  cmt_uid_to_loc : Location.t Shape.Uid.Tbl.t;
+  cmt_uid_to_decl : item_declaration Shape.Uid.Tbl.t;
   cmt_impl_shape : Shape.t option; (* None for mli *)
+  cmt_ident_occurrences :
+    (Longident.t Location.loc * Shape_reduce.result) list
 }
 
 type error =
@@ -112,7 +114,6 @@ val set_saved_types : binary_part list -> unit
 val record_value_dependency:
   Types.value_description -> Types.value_description -> unit
 
-
 (*
 
   val is_magic_number : string -> bool
@@ -124,3 +125,15 @@ val record_value_dependency:
   val read_signature : 'a -> string -> Types.signature * 'b list * 'c list
 
 *)
+
+val iter_on_declarations :
+  f:(Types.Uid.t -> item_declaration -> unit)
+  -> Tast_iterator.iterator
+
+val iter_on_occurrences :
+  f:(namespace:Shape.Sig_component_kind.t ->
+    Env.t ->
+    Path.t ->
+    Longident.t Location.loc ->
+    unit)
+  -> Tast_iterator.iterator

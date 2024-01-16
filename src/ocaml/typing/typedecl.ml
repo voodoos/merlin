@@ -82,12 +82,12 @@ let get_unboxed_from_attributes sdecl =
 
 (* Enter all declared types in the environment as abstract types *)
 
-let add_type ~long_path ~check id decl env =
+let add_type ~long_path ~check ?shape id decl env =
   Builtin_attributes.warning_scope ~ppwarning:false decl.type_attributes
     (fun () ->
        match long_path with
-       | true -> Env.add_type_long_path ~check id decl env
-       | false -> Env.add_type ~check id decl env)
+       | true -> Env.add_type_long_path ~check ?shape id decl env
+       | false -> Env.add_type ~check ?shape id decl env)
 
 let enter_type rec_flag env sdecl (id, uid) =
   let needed =
@@ -225,7 +225,9 @@ let transl_labels env univars closed lbls =
          let arg = Ast_helper.Typ.force_poly arg in
          let cty = transl_simple_type env ?univars closed arg in
          {ld_id = Ident.create_local name.txt;
-          ld_name = name; ld_mutable = mut;
+          ld_name = name;
+          ld_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
+          ld_mutable = mut;
           ld_type = cty; ld_loc = loc; ld_attributes = attrs}
       )
   in
@@ -235,14 +237,12 @@ let transl_labels env univars closed lbls =
       (fun ld ->
          let ty = ld.ld_type.ctyp_type in
          let ty = match get_desc ty with Tpoly(t,[]) -> t | _ -> ty in
-         let ld_uid = Uid.mk ~current_unit:(Env.get_unit_name ()) in
-         Env.register_uid ld_uid ld.ld_loc;
          {Types.ld_id = ld.ld_id;
           ld_mutable = ld.ld_mutable;
           ld_type = ty;
           ld_loc = ld.ld_loc;
           ld_attributes = ld.ld_attributes;
-          ld_uid;
+          ld_uid = ld.ld_uid;
          }
       )
       lbls in
@@ -311,6 +311,25 @@ let make_constructor env loc type_path type_params svars sargs sret_type =
       end;
       widen z;
       targs, Some tret_type, args, Some ret_type
+
+let shape_map_labels =
+  List.fold_left (fun map { ld_id; ld_uid; _} ->
+    Shape.Map.add_label map ld_id ld_uid)
+    Shape.Map.empty
+
+let shape_map_cstrs =
+  List.fold_left (fun map { cd_id; cd_uid; cd_args; _ } ->
+    let cstr_shape_map =
+      let label_decls =
+        match cd_args with
+        | Cstr_tuple _ -> []
+        | Cstr_record ldecls -> ldecls
+      in
+      shape_map_labels label_decls
+    in
+    Shape.Map.add_constr map cd_id
+      @@ Shape.str ~uid:cd_uid cstr_shape_map)
+    (Shape.Map.empty)
 
 let transl_declaration env sdecl (id, uid) =
   (* Bind type parameters *)
@@ -398,6 +417,7 @@ let transl_declaration env sdecl (id, uid) =
           let tcstr =
             { cd_id = name;
               cd_name = scstr.pcd_name;
+              cd_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
               cd_vars = scstr.pcd_vars;
               cd_args = targs;
               cd_res = tret_type;
@@ -405,14 +425,12 @@ let transl_declaration env sdecl (id, uid) =
               cd_attributes = scstr.pcd_attributes }
           in
           let cstr =
-            let cd_uid = Uid.mk ~current_unit:(Env.get_unit_name ()) in
-            Env.register_uid cd_uid scstr.pcd_loc;
             { Types.cd_id = name;
               cd_args = args;
               cd_res = ret_type;
               cd_loc = scstr.pcd_loc;
               cd_attributes = scstr.pcd_attributes;
-              cd_uid; }
+              cd_uid = tcstr.cd_uid; }
           in
             tcstr, cstr
         in
@@ -477,18 +495,32 @@ let transl_declaration env sdecl (id, uid) =
       in
       set_private_row env sdecl.ptype_loc p decl
     end;
-    {
-      typ_id = id;
-      typ_name = sdecl.ptype_name;
-      typ_params = tparams;
-      typ_type = decl;
-      typ_cstrs = cstrs;
-      typ_loc = sdecl.ptype_loc;
-      typ_manifest = tman;
-      typ_kind = tkind;
-      typ_private = sdecl.ptype_private;
-      typ_attributes = sdecl.ptype_attributes;
-    }
+    let decl =
+      {
+        typ_id = id;
+        typ_name = sdecl.ptype_name;
+        typ_params = tparams;
+        typ_type = decl;
+        typ_cstrs = cstrs;
+        typ_loc = sdecl.ptype_loc;
+        typ_manifest = tman;
+        typ_kind = tkind;
+        typ_private = sdecl.ptype_private;
+        typ_attributes = sdecl.ptype_attributes;
+      }
+    in
+    let typ_shape =
+      let uid = decl.typ_type.type_uid in
+      let map = match decl.typ_kind with
+        | Ttype_variant cstrs -> Some (shape_map_cstrs cstrs)
+        | Ttype_record labels -> Some (shape_map_labels labels)
+        | Ttype_abstract | Ttype_open -> None
+      in
+      Option.map (Shape.str ~uid) map
+      (* Abstract types are just leafs *)
+      |> Option.value ~default:(Shape.leaf uid)
+    in
+    decl, typ_shape
 
 (* Generalize a type declaration *)
 
@@ -848,10 +880,11 @@ let check_redefined_unit (td: Parsetree.type_declaration) =
   | _ ->
       ()
 
-let add_types_to_env decls env =
-  List.fold_right
-    (fun (id, decl) env -> add_type ~long_path:false ~check:true id decl env)
-    decls env
+let add_types_to_env decls shapes env =
+  List.fold_right2
+    (fun (id, decl) shape env ->
+      add_type ~long_path:false ~check:true ~shape id decl env)
+    decls shapes env
 
 (* Translate a set of type declarations, mutually recursive or not *)
 let transl_type_decl env rec_flag sdecl_list =
@@ -917,13 +950,16 @@ let transl_type_decl env rec_flag sdecl_list =
   in
   let tdecls =
     List.map2 transl_declaration sdecl_list (List.map ids_slots ids_list) in
-  let decls =
-    List.map (fun tdecl -> (tdecl.typ_id, tdecl.typ_type)) tdecls in
+  let decls, shapes =
+    List.map (fun (tdecl, tshape) -> (tdecl.typ_id, tdecl.typ_type), tshape)
+      tdecls
+    |> List.split
+  in
   current_slot := None;
   (* Check for duplicates *)
   check_duplicates sdecl_list;
   (* Build the final env. *)
-  let new_env = add_types_to_env decls env in
+  let new_env = add_types_to_env decls shapes env in
   (* Update stubs *)
   begin match rec_flag with
     | Asttypes.Nonrecursive -> ()
@@ -950,11 +986,12 @@ let transl_type_decl env rec_flag sdecl_list =
     check_well_founded_decl new_env (List.assoc id id_loc_list) (Path.Pident id)
       decl to_check)
     decls;
-  List.iter
-    (check_abbrev_recursion ~orig_env:env new_env id_loc_list to_check) tdecls;
+  List.iter (fun (decl, _shape) ->
+    check_abbrev_recursion ~orig_env:env new_env id_loc_list to_check decl)
+    tdecls;
   (* Check that all type variables are closed *)
   List.iter2
-    (fun sdecl tdecl ->
+    (fun sdecl (tdecl, _shape) ->
       let decl = tdecl.typ_type in
        match Ctype.closed_type_decl decl with
          Some ty ->
@@ -981,18 +1018,18 @@ let transl_type_decl env rec_flag sdecl_list =
         raise (Error (loc, Separability err))
   in
   (* Compute the final environment with variance and immediacy *)
-  let final_env = add_types_to_env decls env in
+  let final_env = add_types_to_env decls shapes env in
   (* Check re-exportation *)
   List.iter2 (check_abbrev final_env) sdecl_list decls;
   (* Keep original declaration *)
   let final_decls =
     List.map2
-      (fun tdecl (_id2, decl) ->
+      (fun (tdecl, _shape) (_id2, decl) ->
         { tdecl with typ_type = decl }
       ) tdecls decls
   in
   (* Done *)
-  (final_decls, final_env)
+  (final_decls, final_env, shapes)
 
 (* Translating type extensions *)
 
@@ -1101,12 +1138,22 @@ let transl_extension_constructor ~scope env type_path type_params
       ext_uid = Uid.mk ~current_unit:(Env.get_unit_name ());
     }
   in
+  let ext_cstrs =
     { ext_id = id;
       ext_name = sext.pext_name;
       ext_type = ext;
       ext_kind = kind;
       Typedtree.ext_loc = sext.pext_loc;
       Typedtree.ext_attributes = sext.pext_attributes; }
+  in
+  let shape =
+    let map =  match ext_cstrs.ext_kind with
+    | Text_decl (_, Cstr_record lbls, _) -> shape_map_labels lbls
+    | _ -> Shape.Map.empty
+    in
+    Shape.str ~uid:ext_cstrs.ext_type.ext_uid map
+ in
+  ext_cstrs, shape
 
 let transl_extension_constructor ~scope env type_path type_params
     typext_params priv sext =
@@ -1183,13 +1230,13 @@ let transl_type_extension extend env loc styext =
   (* Generalize types *)
   List.iter Ctype.generalize type_params;
   List.iter
-    (fun ext ->
+    (fun (ext, _shape) ->
        Btype.iter_type_expr_cstr_args Ctype.generalize ext.ext_type.ext_args;
        Option.iter Ctype.generalize ext.ext_type.ext_ret_type)
     constructors;
   (* Check that all type variables are closed *)
   List.iter
-    (fun ext ->
+    (fun (ext, _shape) ->
        match Ctype.closed_extension_constructor ext.ext_type with
          Some ty ->
            raise(Error(ext.ext_loc, Unbound_type_var_ext(ty, ext.ext_type)))
@@ -1197,7 +1244,7 @@ let transl_type_extension extend env loc styext =
     constructors;
   (* Check variances are correct *)
   List.iter
-    (fun ext->
+    (fun (ext, _shape) ->
        (* Note that [loc] here is distinct from [type_decl.type_loc], which
           makes the [loc] parameter to this function useful. [loc] is the
           location of the extension, while [type_decl] points to the original
@@ -1210,11 +1257,13 @@ let transl_type_extension extend env loc styext =
   (* Add extension constructors to the environment *)
   let newenv =
     List.fold_left
-      (fun env ext ->
+      (fun env (ext, shape) ->
          let rebind = is_rebind ext in
-         Env.add_extension ~check:true ~rebind ext.ext_id ext.ext_type env)
+         Env.add_extension ~check:true ~shape ~rebind
+          ext.ext_id ext.ext_type env)
       env constructors
   in
+  let constructors, shapes = List.split constructors in
   let tyext =
     { tyext_path = type_path;
       tyext_txt = styext.ptyext_path;
@@ -1224,7 +1273,7 @@ let transl_type_extension extend env loc styext =
       tyext_loc = styext.ptyext_loc;
       tyext_attributes = styext.ptyext_attributes; }
   in
-    (tyext, newenv)
+    (tyext, newenv, shapes)
 
 let transl_type_extension extend env loc styext =
   Builtin_attributes.warning_scope styext.ptyext_attributes
@@ -1234,7 +1283,7 @@ let transl_exception env sext =
   let scope = Ctype.create_scope () in
   reset_type_variables();
   Ctype.begin_def();
-  let ext =
+  let ext, shape =
     transl_extension_constructor ~scope env
       Predef.path_exn [] [] Asttypes.Public sext
   in
@@ -1250,13 +1299,13 @@ let transl_exception env sext =
   end;
   let rebind = is_rebind ext in
   let newenv =
-    Env.add_extension ~check:true ~rebind ext.ext_id ext.ext_type env
+    Env.add_extension ~check:true ~shape ~rebind ext.ext_id ext.ext_type env
   in
-  ext, newenv
+  ext, newenv, shape
 
 let transl_type_exception env t =
   Builtin_attributes.check_no_alert t.ptyexn_attributes;
-  let contructor, newenv =
+  let contructor, newenv, shape =
     Builtin_attributes.warning_scope t.ptyexn_attributes
       (fun () ->
          transl_exception env t.ptyexn_constructor
@@ -1264,7 +1313,7 @@ let transl_type_exception env t =
   in
   {tyexn_constructor = contructor;
    tyexn_loc = t.ptyexn_loc;
-   tyexn_attributes = t.ptyexn_attributes}, newenv
+   tyexn_attributes = t.ptyexn_attributes}, newenv, shape
 
 
 type native_repr_attribute =

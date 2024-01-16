@@ -28,7 +28,7 @@ module String = Misc.String
 
 let add_delayed_check_forward = ref (fun _ -> assert false)
 
-type 'a usage_tbl = ('a -> unit) Types.Uid.Tbl.t
+type 'a usage_tbl = (Uid.t, ('a -> unit)) Stamped_hashtable.t
 (** This table is used to track usage of value declarations.
     A declaration is identified by its uid.
     The callback attached to a declaration is called whenever the value (or
@@ -36,16 +36,30 @@ type 'a usage_tbl = ('a -> unit) Types.Uid.Tbl.t
     (inclusion test between signatures, cf Includemod.value_descriptions, ...).
 *)
 
-let value_declarations  : unit usage_tbl ref = s_table Types.Uid.Tbl.create 16
-let type_declarations   : unit usage_tbl ref = s_table Types.Uid.Tbl.create 16
-let module_declarations : unit usage_tbl ref = s_table Types.Uid.Tbl.create 16
+let local_stamped n : Stamped_hashtable.changelog * ('a usage_tbl) =
+  let changelog = Stamped_hashtable.create_changelog () in
+  changelog, Stamped_hashtable.create changelog n
 
-let uid_to_loc : Location.t Types.Uid.Tbl.t ref =
-  s_table Types.Uid.Tbl.create 16
+let stamped_value_declarations = s_table local_stamped 32
+let value_declarations_changelog, value_declarations = !stamped_value_declarations
 
-let register_uid uid loc = Types.Uid.Tbl.add !uid_to_loc uid loc
+let stamped_type_declarations = s_table local_stamped 32
+let type_declarations_changelog, type_declarations = !stamped_type_declarations
 
-let get_uid_to_loc_tbl () = !uid_to_loc
+let stamped_module_declarations = s_table local_stamped 32
+let module_declarations_changelog, module_declarations = !stamped_module_declarations
+
+(* let prune_usage_tables ~stamp =
+  (* We remove *)
+  let prune tbl =
+    Types.Uid.Tbl.filter_map_inplace
+      (fun uid value ->
+        if Shape.Uid.is_more_recent ~stamp uid then None else Some value)
+      tbl
+  in
+  prune !value_declarations;
+  prune !type_declarations;
+  prune !module_declarations *)
 
 type constructor_usage = Positive | Pattern | Exported_private | Exported
 type constructor_usages =
@@ -81,8 +95,8 @@ let constructor_usage_complaint ~rebind priv cu
       | false, false, true -> Some Only_exported_private
     end
 
-let used_constructors : constructor_usage usage_tbl ref =
-  s_table Types.Uid.Tbl.create 16
+let stamped_used_constructors = s_table local_stamped 32
+let used_constructors_changelog, used_constructors = !stamped_used_constructors
 
 type label_usage =
     Projection | Mutation | Construct | Exported_private | Exported
@@ -131,8 +145,8 @@ let label_usage_complaint priv mut lu
       | true, false, _ -> Some Not_mutated
     end
 
-let used_labels : label_usage usage_tbl ref =
-  s_table Types.Uid.Tbl.create 16
+let stamped_used_labels = s_table local_stamped 32
+let used_labels_changelog, used_labels = !stamped_used_labels
 
 (** Map indexed by the name of module components. *)
 module NameMap = String.Map
@@ -499,7 +513,7 @@ let in_signature_flag = 0x01
 let stamped_changelog =
   s_table Stamped_hashtable.create_changelog ()
 
-let stamped_add table path value =
+let stamped_path_add table path value =
   let rec path_stamp = function
     | Pident id -> Ident.stamp id
     | Pdot (t, _) -> path_stamp t
@@ -509,11 +523,15 @@ let stamped_add table path value =
   let stamp = if stamp = 0 then None else Some stamp in
   Stamped_hashtable.add table ?stamp path value
 
-let stamped_mem table path =
-  Stamped_hashtable.mem table path
+let stamped_uid_add table uid value =
+  let stamp = Types.Uid.stamp_of_uid uid in
+  Stamped_hashtable.add table ?stamp uid value
 
-let stamped_find table path =
-  Stamped_hashtable.find table path
+let stamped_mem table value =
+  Stamped_hashtable.mem table value
+
+let stamped_find table value =
+  Stamped_hashtable.find table value
 
 let stamped_create n =
   Stamped_hashtable.create !stamped_changelog n
@@ -990,12 +1008,11 @@ let register_import_as_opaque modname =
   Persistent_env.register_import_as_opaque !persistent_env modname
 
 let reset_declaration_caches () =
-  Types.Uid.Tbl.clear !value_declarations;
-  Types.Uid.Tbl.clear !type_declarations;
-  Types.Uid.Tbl.clear !module_declarations;
-  Types.Uid.Tbl.clear !used_constructors;
-  Types.Uid.Tbl.clear !used_labels;
-  Types.Uid.Tbl.clear !uid_to_loc;
+  Stamped_hashtable.clear value_declarations;
+  Stamped_hashtable.clear type_declarations;
+  Stamped_hashtable.clear module_declarations;
+  Stamped_hashtable.clear used_constructors;
+  Stamped_hashtable.clear used_labels;
   ()
 
 let reset_cache () =
@@ -1042,7 +1059,7 @@ let modtype_of_functor_appl fcomp p1 p2 =
           in
           Subst.modtype (Rescope scope) subst mty
         in
-        stamped_add fcomp.fcomp_subst_cache p2 mty;
+        stamped_path_add fcomp.fcomp_subst_cache p2 mty;
         mty
 
 let check_functor_appl
@@ -1312,6 +1329,10 @@ let find_shape env (ns : Shape.Sig_component_kind.t) id =
   match ns with
   | Type ->
       (IdTbl.find_same id env.types).tda_shape
+  | Constructor ->
+      Shape.leaf ((TycompTbl.find_same id env.constrs).cda_description.cstr_uid)
+  | Label ->
+      Shape.leaf ((TycompTbl.find_same id env.labels).lbl_uid)
   | Extension_constructor ->
       (TycompTbl.find_same id env.constrs).cda_shape
   | Value ->
@@ -1987,9 +2008,9 @@ and check_usage loc id uid warn tbl =
      Warnings.is_active (warn "")
   then begin
     let name = Ident.name id in
-    if Types.Uid.Tbl.mem tbl uid then ()
+    if stamped_mem tbl uid then ()
     else let used = ref false in
-    Types.Uid.Tbl.add tbl uid (fun () -> used := true);
+      stamped_uid_add tbl uid (fun () -> used := true);
     if not (name = "" || name.[0] = '_' || name.[0] = '#')
     then
       !add_delayed_check_forward
@@ -2009,7 +2030,7 @@ and check_value_name name loc =
 and store_value ?check id addr decl shape env =
   check_value_name (Ident.name id) decl.val_loc;
   Option.iter
-    (fun f -> check_usage decl.val_loc id decl.val_uid f !value_declarations)
+    (fun f -> check_usage decl.val_loc id decl.val_uid f value_declarations)
     check;
   let vda =
     { vda_description = decl;
@@ -2029,9 +2050,9 @@ and store_constructor ~check type_decl type_id cstr_id cstr env =
     let loc = cstr.cstr_loc in
     let k = cstr.cstr_uid in
     let priv = type_decl.type_private in
-    if not (Types.Uid.Tbl.mem !used_constructors k) then begin
+    if not (stamped_mem used_constructors k) then begin
       let used = constructor_usages () in
-      Types.Uid.Tbl.add !used_constructors k
+      stamped_uid_add used_constructors k
         (add_constructor_usage used);
       if not (ty_name = "" || ty_name.[0] = '_')
       then
@@ -2062,9 +2083,9 @@ and store_label ~check type_decl type_id lbl_id lbl env =
     let loc = lbl.lbl_loc in
     let mut = lbl.lbl_mut in
     let k = lbl.lbl_uid in
-    if not (Types.Uid.Tbl.mem !used_labels k) then
+    if not (stamped_mem used_labels k) then
       let used = label_usages () in
-      Types.Uid.Tbl.add !used_labels k
+      stamped_uid_add used_labels k
         (add_label_usage used);
       if not (ty_name = "" || ty_name.[0] = '_' || name.[0] = '_')
       then !add_delayed_check_forward
@@ -2085,7 +2106,7 @@ and store_type ~check ~long_path ~predef id info shape env =
   if check then
     check_usage loc id info.type_uid
       (fun s -> Warnings.Unused_type_declaration s)
-      !type_declarations;
+      type_declarations;
   let descrs, env =
     let path = Pident id in
     match info.type_kind with
@@ -2155,9 +2176,9 @@ and store_extension ~check ~rebind id addr ext shape env =
     let is_exception = Path.same ext.ext_type_path Predef.path_exn in
     let name = cstr.cstr_name in
     let k = cstr.cstr_uid in
-    if not (Types.Uid.Tbl.mem !used_constructors k) then begin
+    if not (stamped_mem used_constructors k) then begin
       let used = constructor_usages () in
-      Types.Uid.Tbl.add !used_constructors k
+      stamped_uid_add used_constructors k
         (add_constructor_usage used);
       !add_delayed_check_forward
          (fun () ->
@@ -2179,7 +2200,7 @@ and store_module ?(update_summary=true) ~check
   let open Subst.Lazy in
   let loc = md.mdl_loc in
   Option.iter
-    (fun f -> check_usage loc id md.mdl_uid f !module_declarations) check;
+    (fun f -> check_usage loc id md.mdl_uid f module_declarations) check;
   let alerts = Builtin_attributes.alerts_of_attrs md.mdl_attributes in
   let comps =
     components_of_module ~alerts ~uid:md.mdl_uid
@@ -2261,7 +2282,7 @@ let components_of_functor_appl ~loc ~f_path ~f_comp ~arg env =
         (*???*)
         env Subst.identity p addr (Subst.Lazy.of_modtype mty) shape
     in
-    stamped_add f_comp.fcomp_cache arg comps;
+    stamped_path_add f_comp.fcomp_cache arg comps;
     comps
 
 (* Define forward functions *)
@@ -2453,8 +2474,6 @@ let enter_signature_and_shape ~scope ~parent_shape mod_shape sg env =
   enter_signature_and_shape ~scope ~parent_shape (Some mod_shape) sg env
 
 let add_value = add_value ?shape:None
-let add_type = add_type ?shape:None
-let add_extension = add_extension ?shape:None
 let add_class = add_class ?shape:None
 let add_cltype = add_cltype ?shape:None
 let add_modtype = add_modtype ?shape:None
@@ -2709,28 +2728,28 @@ let (initial_safe_string, initial_unsafe_string) =
     (add_extension ~check:false ~rebind:false)
     empty
 
-let add_type_long_path ~check id info env =
-  add_type ~check ~predef:false ~long_path:true id info env
+let add_type_long_path ~check ?shape id info env =
+  add_type ~check ?shape ~predef:false ~long_path:true id info env
 
-let add_type ~check id info env =
-  add_type ~check ~predef:false ~long_path:false id info env
+let add_type ~check ?shape id info env =
+  add_type ~check ?shape ~predef:false ~long_path:false id info env
 
 (* Tracking usage *)
 
 let mark_module_used uid =
-  match Types.Uid.Tbl.find !module_declarations uid with
+  match Stamped_hashtable.find module_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
 let mark_modtype_used _uid = ()
 
 let mark_value_used uid =
-  match Types.Uid.Tbl.find !value_declarations uid with
+  match Stamped_hashtable.find value_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
 let mark_type_used uid =
-  match Types.Uid.Tbl.find !type_declarations uid with
+  match Stamped_hashtable.find type_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
@@ -2740,24 +2759,24 @@ let mark_type_path_used env path =
   | exception Not_found -> ()
 
 let mark_constructor_used usage cd =
-  match Types.Uid.Tbl.find !used_constructors cd.cd_uid with
+  match stamped_find used_constructors cd.cd_uid with
   | mark -> mark usage
   | exception Not_found -> ()
 
 let mark_extension_used usage ext =
-  match Types.Uid.Tbl.find !used_constructors ext.ext_uid with
+  match stamped_find used_constructors ext.ext_uid with
   | mark -> mark usage
   | exception Not_found -> ()
 
 let mark_label_used usage ld =
-  match Types.Uid.Tbl.find !used_labels ld.ld_uid with
+  match stamped_find used_labels ld.ld_uid with
   | mark -> mark usage
   | exception Not_found -> ()
 
 let mark_constructor_description_used usage env cstr =
   let ty_path = Btype.cstr_type_path cstr in
   mark_type_path_used env ty_path;
-  match Types.Uid.Tbl.find !used_constructors cstr.cstr_uid with
+  match stamped_find used_constructors cstr.cstr_uid with
   | mark -> mark usage
   | exception Not_found -> ()
 
@@ -2768,30 +2787,30 @@ let mark_label_description_used usage env lbl =
     | _ -> assert false
   in
   mark_type_path_used env ty_path;
-  match Types.Uid.Tbl.find !used_labels lbl.lbl_uid with
+  match stamped_find used_labels lbl.lbl_uid with
   | mark -> mark usage
   | exception Not_found -> ()
 
 let mark_class_used uid =
-  match Types.Uid.Tbl.find !type_declarations uid with
+  match stamped_find type_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
 let mark_cltype_used uid =
-  match Types.Uid.Tbl.find !type_declarations uid with
+  match stamped_find type_declarations uid with
   | mark -> mark ()
   | exception Not_found -> ()
 
 let set_value_used_callback vd callback =
-  Types.Uid.Tbl.add !value_declarations vd.val_uid callback
+  stamped_uid_add value_declarations vd.val_uid callback
 
 let set_type_used_callback td callback =
   if Uid.for_actual_declaration td.type_uid then
     let old =
-      try Types.Uid.Tbl.find !type_declarations td.type_uid
+      try stamped_find type_declarations td.type_uid
       with Not_found -> ignore
     in
-    Types.Uid.Tbl.replace !type_declarations td.type_uid
+    Stamped_hashtable.replace type_declarations td.type_uid
       (fun () -> callback old)
 
 (* Lookup by name *)
@@ -4014,7 +4033,7 @@ and short_paths_functor_components_desc env mpath comp path =
             Subst.modtype (Rescope (Path.scope (Papply (mpath, path))))
               subst f.fcomp_res
           in
-          stamped_add f.fcomp_subst_cache path mty;
+          stamped_path_add f.fcomp_subst_cache path mty;
           mty
       in
       let loc = Location.(in_file !input_name) in
@@ -4124,3 +4143,10 @@ let short_paths env =
 
 let cleanup_functor_caches ~stamp =
   Stamped_hashtable.backtrack !stamped_changelog ~stamp
+
+let cleanup_usage_tables ~stamp =
+  Stamped_hashtable.backtrack value_declarations_changelog ~stamp;
+  Stamped_hashtable.backtrack type_declarations_changelog ~stamp;
+  Stamped_hashtable.backtrack module_declarations_changelog ~stamp;
+  Stamped_hashtable.backtrack used_constructors_changelog ~stamp;
+  Stamped_hashtable.backtrack used_labels_changelog ~stamp

@@ -22,6 +22,7 @@
 *)
 
 open Asttypes
+module Uid = Shape.Uid
 
 (* Value expressions for the core language *)
 
@@ -75,10 +76,10 @@ and 'k pattern_desc =
   (* value patterns *)
   | Tpat_any : value pattern_desc
         (** _ *)
-  | Tpat_var : Ident.t * string loc -> value pattern_desc
+  | Tpat_var : Ident.t * string loc * Uid.t -> value pattern_desc
         (** x *)
   | Tpat_alias :
-      value general_pattern * Ident.t * string loc -> value pattern_desc
+      value general_pattern * Ident.t * string loc * Uid.t -> value pattern_desc
         (** P as a *)
   | Tpat_constant : constant -> value pattern_desc
         (** 1, 'a', "true", 1.0, 1l, 1L, 1n *)
@@ -437,6 +438,7 @@ and module_binding =
     {
      mb_id: Ident.t option;
      mb_name: string option loc;
+     mb_uid: Uid.t;
      mb_presence: Types.module_presence;
      mb_expr: module_expr;
      mb_attributes: attributes;
@@ -515,6 +517,7 @@ and module_declaration =
     {
      md_id: Ident.t option;
      md_name: string option loc;
+     md_uid: Uid.t;
      md_presence: Types.module_presence;
      md_type: module_type;
      md_attributes: attributes;
@@ -525,6 +528,7 @@ and module_substitution =
     {
      ms_id: Ident.t;
      ms_name: string loc;
+     ms_uid: Uid.t;
      ms_manifest: Path.t;
      ms_txt: Longident.t loc;
      ms_attributes: attributes;
@@ -535,6 +539,7 @@ and module_type_declaration =
     {
      mtd_id: Ident.t;
      mtd_name: string loc;
+     mtd_uid: Uid.t;
      mtd_type: module_type option;
      mtd_attributes: attributes;
      mtd_loc: Location.t;
@@ -659,6 +664,7 @@ and label_declaration =
     {
      ld_id: Ident.t;
      ld_name: string loc;
+     ld_uid: Uid.t;
      ld_mutable: mutable_flag;
      ld_type: core_type;
      ld_loc: Location.t;
@@ -669,6 +675,7 @@ and constructor_declaration =
     {
      cd_id: Ident.t;
      cd_name: string loc;
+     cd_uid: Uid.t;
      cd_vars: string loc list;
      cd_args: constructor_arguments;
      cd_res: core_type option;
@@ -786,6 +793,23 @@ type implementation = {
     structure.
 *)
 
+type item_declaration =
+| Value of value_description
+| Value_binding of value_binding
+| Type of type_declaration
+| Constructor of constructor_declaration
+| Extension_constructor of extension_constructor
+| Label of label_declaration
+| Module of module_declaration
+| Module_substitution of module_substitution
+| Module_binding of module_binding
+| Module_type of module_type_declaration
+| Class of class_declaration
+| Class_type of class_type_declaration
+(** [item_declaration] groups together items that correspond to the syntactic
+  category of "declarations" which include types, values, modules, etc.
+  declarations in signatures and their definitions in implementations. *)
+
 (* Auxiliary functions over the a.s.t. *)
 
 (** [as_computation_pattern p] is a computation pattern with description
@@ -816,7 +840,9 @@ val exists_pattern: (pattern -> bool) -> pattern -> bool
 
 val let_bound_idents: value_binding list -> Ident.t list
 val let_bound_idents_full:
-    value_binding list -> (Ident.t * string loc * Types.type_expr) list
+    value_binding list ->
+    (Ident.t * string loc * Types.type_expr * Types.Uid.t) list
+
 
 (** Alpha conversion of patterns *)
 val alpha_pat:
@@ -827,7 +853,8 @@ val mkloc: 'a -> Location.t -> 'a Asttypes.loc
 
 val pat_bound_idents: 'k general_pattern -> Ident.t list
 val pat_bound_idents_full:
-  'k general_pattern -> (Ident.t * string loc * Types.type_expr) list
+  'k general_pattern ->
+  (Ident.t * string loc * Types.type_expr * Types.Uid.t) list
 
 (** Splits an or pattern into its value (left) and exception (right) parts. *)
 val split_pattern:

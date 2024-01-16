@@ -17,7 +17,7 @@ Reproduction case:
       {
         "start": {
           "line": 4,
-          "col": 8
+          "col": 10
         },
         "end": {
           "line": 4,
@@ -35,7 +35,7 @@ Reproduction case:
       {
         "start": {
           "line": 2,
-          "col": 18
+          "col": 16
         },
         "end": {
           "line": 2,
@@ -76,7 +76,7 @@ work:
       {
         "start": {
           "line": 4,
-          "col": 8
+          "col": 10
         },
         "end": {
           "line": 4,

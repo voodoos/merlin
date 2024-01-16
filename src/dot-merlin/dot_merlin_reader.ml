@@ -90,6 +90,10 @@ module Cache = File_cache.Make (struct
             recurse := true
           else if String.is_prefixed ~by:". " line then
             includes := String.trim (String.drop 2 line) :: !includes
+          else if String.is_prefixed ~by:"INDEX_FILE " line then
+            tell (`INDEX_FILE (String.drop 11 line))
+          else if String.is_prefixed ~by:"UNIT_NAME " line then
+            tell (`UNIT_NAME (String.drop 10 line))
           else if String.is_prefixed ~by:"STDLIB " line then
             tell (`STDLIB (String.drop 7 line))
           else if String.is_prefixed ~by:"FINDLIB " line then
@@ -305,6 +309,8 @@ type config = {
   pass_forward : Merlin_dot_protocol.Directive.no_processing_required list;
   to_canonicalize : (string * Merlin_dot_protocol.Directive.include_path) list;
   stdlib : string option;
+  index_file : string option;
+  unit_name : string option;
   packages_to_load : string list;
   findlib : string option;
   findlib_path : string list;
@@ -315,6 +321,8 @@ let empty_config = {
   pass_forward      = [];
   to_canonicalize   = [];
   stdlib            = None;
+  index_file        = None;
+  unit_name         = None;
   packages_to_load  = [];
   findlib           = None;
   findlib_path      = [];
@@ -326,7 +334,7 @@ let prepend_config ~cwd ~cfg =
     match d with
     | `B _ | `S _ | `CMI _ | `CMT _  as directive ->
       { cfg with to_canonicalize = (cwd, directive) :: cfg.to_canonicalize }
-    | `EXT _ | `SUFFIX _ | `FLG _ | `READER _
+    | `EXT _ | `SUFFIX _ | `FLG _ | `READER _ | `UNIT_NAME _
     | (`EXCLUDE_QUERY_DIR | `USE_PPX_CACHE | `UNKNOWN_TAG _) as directive ->
       { cfg with pass_forward = directive :: cfg.pass_forward }
     | `PKG ps ->
@@ -339,6 +347,9 @@ let prepend_config ~cwd ~cfg =
         log ~title:"conflicting paths for stdlib" "%s\n%s" p canon_path
       end;
       { cfg with stdlib = Some canon_path }
+    | `INDEX_FILE path ->
+      let canon_path = canonicalize_filename ~cwd path in
+      { cfg with pass_forward = `INDEX_FILE canon_path :: cfg.pass_forward }
     | `FINDLIB path ->
       let canon_path = canonicalize_filename ~cwd path in
       begin match cfg.stdlib with

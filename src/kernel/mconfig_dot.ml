@@ -41,6 +41,8 @@ type config = {
   extensions   : string list;
   suffixes     : (string * string) list;
   stdlib       : string option;
+  index_file   : string option;
+  unit_name    : string option;
   reader       : string list;
   exclude_query_dir : bool;
   use_ppx_cache : bool;
@@ -55,6 +57,8 @@ let empty_config = {
   suffixes     = [];
   flags        = [];
   stdlib       = None;
+  index_file   = None;
+  unit_name    = None;
   reader       = [];
   exclude_query_dir = false;
   use_ppx_cache = false;
@@ -246,6 +250,10 @@ let prepend_config ~dir:cwd configurator (directives : directive list) config =
       {config with flags = flags :: config.flags}, errors
     | `STDLIB path ->
       {config with stdlib = Some path}, errors
+    | `INDEX_FILE path ->
+      {config with index_file = Some path}, errors
+    | `UNIT_NAME unit_name ->
+      {config with unit_name = Some unit_name}, errors
     | `READER reader ->
       {config with reader}, errors
     | `EXCLUDE_QUERY_DIR ->
@@ -273,8 +281,10 @@ let postprocess_config config =
     extensions   = clean config.extensions;
     suffixes     = clean config.suffixes;
     flags        = clean config.flags;
-    stdlib      = config.stdlib;
-    reader      = config.reader;
+    stdlib       = config.stdlib;
+    index_file   = config.index_file;
+    unit_name    = config.unit_name;
+    reader       = config.reader;
     exclude_query_dir = config.exclude_query_dir;
     use_ppx_cache = config.use_ppx_cache;
   }
