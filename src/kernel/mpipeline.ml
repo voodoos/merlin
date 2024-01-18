@@ -5,22 +5,21 @@ let { Logger.log } = Logger.for_section "Pipeline"
 let time_shift = ref 0.0
 
 let timed_lazy r x =
-  lazy
-    (let start = Misc.time_spent () in
-     let time_shift0 = !time_shift in
-     let update () =
-       let delta = Misc.time_spent () -. start in
-       let shift = !time_shift -. time_shift0 in
-       time_shift := time_shift0 +. delta;
-       r := !r +. delta -. shift
-     in
-     match Lazy.force x with
-     | x ->
-       update ();
-       x
-     | exception exn ->
-       update ();
-       Std.reraise exn)
+  let start = Misc.time_spent () in
+  let time_shift0 = !time_shift in
+  let update () =
+    let delta = Misc.time_spent () -. start in
+    let shift = !time_shift -. time_shift0 in
+    time_shift := time_shift0 +. delta;
+    r := !r +. delta -. shift
+  in
+  match Lazy.force x with
+  | x ->
+    update ();
+    x
+  | exception exn ->
+    update ();
+    Std.reraise exn
 
 module Cache = struct
   let cache = ref []
@@ -65,7 +64,7 @@ module Cache = struct
 end
 
 module Typer = struct
-  type t = { errors : exn list lazy_t; result : Mtyper.result }
+  type t = { errors : exn list; result : Mtyper.result }
 end
 
 module Ppx = struct
@@ -82,10 +81,10 @@ type t =
   { config : Mconfig.t;
     state : Mocaml.typer_state;
     raw_source : Msource.t;
-    source : (Msource.t * Mreader.parsetree option) lazy_t;
-    reader : Reader.t lazy_t;
-    ppx : Ppx.t lazy_t;
-    typer : Typer.t lazy_t;
+    source : Msource.t * Mreader.parsetree option;
+    reader : Reader.t;
+    ppx : Ppx.t;
+    typer : Typer.t;
     pp_time : float ref;
     reader_time : float ref;
     ppx_time : float ref;
@@ -99,21 +98,17 @@ type t =
 let raw_source t = t.raw_source
 
 let input_config t = t.config
-let input_source t = fst (Lazy.force t.source)
-
-let with_pipeline t f =
-  Mocaml.with_state t.state @@ fun () ->
-  Mreader.with_ambient_reader t.config (input_source t) f
+let input_source t = fst t.source
 
 let get_lexing_pos t pos =
   Msource.get_lexing_pos (input_source t)
     ~filename:(Mconfig.filename t.config)
     pos
 
-let reader t = Lazy.force t.reader
+let reader t = t.reader
 
-let ppx t = Lazy.force t.ppx
-let typer t = Lazy.force t.typer
+let ppx t = t.ppx
+let typer t = t.typer
 
 let reader_config t = (reader t).config
 let reader_parsetree t = (reader t).result.Mreader.parsetree
@@ -130,8 +125,8 @@ let ppx_errors t = (ppx t).Ppx.errors
 
 let final_config t = (ppx t).Ppx.config
 
-let typer_result t = (typer t).Typer.result
-let typer_errors t = Lazy.force (typer t).Typer.errors
+let typer_result t = t.typer.result
+let typer_errors t = t.typer.errors
 
 module Reader_phase = struct
   type t =
@@ -224,13 +219,14 @@ let process ?state ?(pp_time = ref 0.0) ?(reader_time = ref 0.0)
     ?(ppx_time = ref 0.0) ?(typer_time = ref 0.0) ?(error_time = ref 0.0)
     ?(ppx_cache_hit = ref false) ?(reader_cache_hit = ref false)
     ?(typer_cache_stats = ref Mtyper.Miss) ?for_completion config raw_source =
+  (* FIXME: Should state still be optional? *)
   let state =
     match state with
     | None -> Cache.get config
     | Some state -> state
   in
   let source =
-    timed_lazy pp_time
+    timed pp_time
       (lazy
         (match Mconfig.(config.ocaml.pp) with
         | None -> (raw_source, None)
@@ -245,9 +241,9 @@ let process ?state ?(pp_time = ref 0.0) ?(reader_time = ref 0.0)
           | (`Interface _ | `Implementation _) as ast -> (raw_source, Some ast))))
   in
   let reader =
-    timed_lazy reader_time
+    timed reader_time
       (lazy
-        (let (lazy ((_, pp_result) as source)) = source in
+        (let ((_, pp_result) as source) = source in
          let config = Mconfig.normalize config in
          Mocaml.setup_reader_config config;
          let cache_disabling =
@@ -273,13 +269,10 @@ let process ?state ?(pp_time = ref 0.0) ?(reader_time = ref 0.0)
          { Reader.result; config; cache_version }))
   in
   let ppx =
-    timed_lazy ppx_time
+    timed ppx_time
       (lazy
-        (let (lazy
-               { Reader.result = { Mreader.parsetree; _ };
-                 config;
-                 cache_version
-               }) =
+        (let { Reader.result = { Mreader.parsetree; _ }; config; cache_version }
+             =
            reader
          in
          let caught = ref [] in
@@ -301,9 +294,9 @@ let process ?state ?(pp_time = ref 0.0) ?(reader_time = ref 0.0)
          { Ppx.config; parsetree; errors = !caught }))
   in
   let typer =
-    timed_lazy typer_time
+    timed typer_time
       (lazy
-        (let (lazy { Ppx.config; parsetree; _ }) = ppx in
+        (let { Ppx.config; parsetree; _ } = ppx in
          Mocaml.setup_typer_config config;
          let result = Mtyper.run config parsetree in
          let errors = timed_lazy error_time (lazy (Mtyper.get_errors result)) in
@@ -327,7 +320,11 @@ let process ?state ?(pp_time = ref 0.0) ?(reader_time = ref 0.0)
     typer_cache_stats
   }
 
-let make config source = process (Mconfig.normalize config) source
+let make config source =
+  let state = Cache.get config in
+  Mocaml.with_state state @@ fun () ->
+  Mreader.with_ambient_reader config source @@ fun () ->
+  process (Mconfig.normalize config) source
 
 let for_completion position
     { config;
@@ -373,3 +370,75 @@ let cache_information t =
       ("cmt", cmt);
       ("cmi", cmi)
     ]
+
+module With_cache = struct
+  (* Info shared from background domain to main domain *)
+  type nonrec cache = { pipeline : t; file : string }
+
+  (* Info shared from main domain to background domain *)
+  type input = { config : Mconfig.t; source : Msource.t; file : string }
+
+  let cache : cache option Atomic.t = Atomic.make None
+  let input : input option Atomic.t = Atomic.make None
+  let shut_down : bool Atomic.t = Atomic.make false
+  let domain_is_up : bool Atomic.t = Atomic.make false
+
+  let trigger_pipeline file config source =
+    Atomic.set input (Some { config; source; file })
+
+  let check_and_invalidate filename =
+    match Atomic.get cache with
+    | None -> ()
+    | Some { file; _ } ->
+      if String.equal file filename then () else Atomic.set cache None
+
+  (* TODO: Suspend when accesing pipeline content, not here. *)
+  let get_pipeline file config source =
+    match file with
+    | Some file ->
+      check_and_invalidate file;
+      trigger_pipeline file config source;
+      let rec loop () =
+        match Atomic.get cache with
+        | Some { pipeline; file = _ } -> Some pipeline
+        | None ->
+          if not (Atomic.get domain_is_up) then None
+          else begin
+            Domain.cpu_relax ();
+            loop ()
+          end
+      in
+      loop ()
+    | None -> Some (make config source)
+
+  let bg_domain_main () =
+    let rec loop () =
+      if Atomic.get shut_down then ()
+      else
+        match Atomic.get input with
+        | None ->
+          Domain.cpu_relax ();
+          loop ()
+        | Some { config; source; file } ->
+          let new_pipeline = make config source in
+          Atomic.set cache (Some { pipeline = new_pipeline; file });
+          Atomic.set input None;
+          loop ()
+    in
+    loop ()
+
+  let init () =
+    let d = Domain.spawn bg_domain_main in
+    Atomic.set domain_is_up true;
+    d
+
+  let shutdown t =
+    Atomic.set shut_down true;
+    Domain.join t;
+    Atomic.set domain_is_up false
+end
+
+let make_with_cache loop =
+  let d = With_cache.init () in
+  loop ~get_pipeline:With_cache.get_pipeline;
+  With_cache.shutdown d

@@ -47,7 +47,7 @@ let commands_help () =
       print_endline doc)
     New_commands.all_commands
 
-let run =
+let run ~get_pipeline =
   let query_num = ref (-1) in
   function
   | [] ->
@@ -110,12 +110,18 @@ let run =
             ();
           File_id.with_cache @@ fun () ->
           let source = Msource.make (Misc.string_of_file stdin) in
-          let pipeline = Mpipeline.make config source in
+          let file = config.Mconfig.query.filename in
+          let pipeline =
+            match get_pipeline file config source with
+            | None -> failwith "Why on earth is the pipeline domain down?"
+            | Some p -> p
+          in
           let json =
             let class_, message =
               Printexc.record_backtrace true;
               match
-                Mpipeline.with_pipeline pipeline @@ fun () ->
+                (* No with_pipeline needed here anymore: with_pipeline makes sure the typer and reader states are locked. We do that now on Pipeline.make instead*)
+                (* Mpipeline.with_pipeline pipeline @@ fun () -> *)
                 command_action pipeline command_args
               with
               | result -> ("return", result)
@@ -186,7 +192,7 @@ let with_wd ~wd ~old_wd f args =
       old_wd;
     f args
 
-let run ~new_env wd args =
+let run ~get_pipeline ~new_env wd args =
   begin
     match new_env with
     | Some env ->
@@ -197,10 +203,10 @@ let run ~new_env wd args =
   let old_wd = Sys.getcwd () in
   let run args () =
     match wd with
-    | Some wd -> with_wd ~wd ~old_wd run args
+    | Some wd -> with_wd ~wd ~old_wd (run ~get_pipeline) args
     | None ->
       log ~title:"run" "No working directory specified (old wd: %S)" old_wd;
-      run args
+      run ~get_pipeline args
   in
   let `Log_file_path log_file, `Log_sections sections = Log_info.get () in
   Logger.with_log_file log_file ~sections @@ run args

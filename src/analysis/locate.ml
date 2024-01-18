@@ -252,7 +252,7 @@ module Utils = struct
 
   let find_file_with_path ~config ?(with_fallback = false) file path =
     if File.name file = Misc.unitname Mconfig.(config.query.filename) then
-      Some Mconfig.(config.query.filename)
+      Mconfig.(config.query.filename)
     else
       let attempt_search src_suffix_pair =
         let fallback =

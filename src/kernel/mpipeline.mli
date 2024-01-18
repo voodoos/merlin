@@ -1,6 +1,6 @@
 type t
 val make : Mconfig.t -> Msource.t -> t
-val with_pipeline : t -> (unit -> 'a) -> 'a
+
 val for_completion : Msource.position -> t -> t
 
 val raw_source : t -> Msource.t
@@ -27,3 +27,5 @@ val typer_errors : t -> exn list
 
 val timing_information : t -> (string * float) list
 val cache_information : t -> Std.json
+
+val make_with_cache : (get_pipeline: (string option -> Mconfig.t -> Msource.t -> t option) -> unit) -> unit

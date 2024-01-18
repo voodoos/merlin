@@ -72,11 +72,13 @@ module Verbosity : sig
 end
 
 type query =
-  { filename : string;
+  { filename : string option;
     directory : string;
     printer_width : int;
     verbosity : Verbosity.t
   }
+
+val query_filename : query -> string
 
 (** {1 Main configuration} *)
 
