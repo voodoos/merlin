@@ -79,7 +79,7 @@ let ext = "ocaml-index"
 let magic_number = "Merl2023I001"
 
 let write ~file index =
-  Merlin_utils.Misc.output_to_file_via_temporary ~mode:[ Open_binary ] file
+  Misc.output_to_file_via_temporary ~mode:[ Open_binary ] file
     (fun _temp_file_name oc ->
       output_string oc magic_number;
       output_value oc (index : index))
