@@ -1,5 +1,5 @@
 open Std
-module LidSet = Index_format.LidSet
+module Lid_set = Index_format.Lid_set
 
 let {Logger. log} = Logger.for_section "occurrences"
 
@@ -30,6 +30,12 @@ let decl_of_path_or_lid env namespace path lid =
 let index_buffer_ ~scope ~current_buffer_path ~local_defs () =
   let {Logger. log} = Logger.for_section "index" in
   let defs = Hashtbl.create 64 in
+  let add tbl uid locs =
+    try
+      let locations = Hashtbl.find tbl uid in
+      Hashtbl.replace tbl uid (Lid_set.union locs locations)
+    with Not_found -> Hashtbl.add tbl uid locs
+  in
   let module Shape_reduce =
     Shape_reduce.Make (struct
       let fuel = 10
@@ -56,7 +62,7 @@ let index_buffer_ ~scope ~current_buffer_path ~local_defs () =
       | Some decl ->
         log ~title:"index_buffer" "Found declaration: %a"
           Logger.fmt (Fun.flip Location.print_loc decl.loc);
-        Index_format.(add defs decl.uid (LidSet.singleton lid))
+        add defs decl.uid (Lid_set.singleton lid)
       end
     in
      if not_ghost lid then
@@ -72,7 +78,7 @@ let index_buffer_ ~scope ~current_buffer_path ~local_defs () =
             (Longident.head lid.txt)
             Logger.fmt (Fun.flip Location.print_loc lid.loc)
             Logger.fmt (Fun.flip Shape.Uid.print uid);
-            Index_format.(add defs uid (LidSet.singleton lid))
+            add defs uid (Lid_set.singleton lid)
           | Some uid, true ->
             log ~title:"index_buffer" "Shape is approximative, found uid: %a"
               Logger.fmt (Fun.flip Shape.Uid.print uid);
@@ -238,8 +244,8 @@ let locs_of ~config ~env ~typer_result ~pos ~scope path =
       try
         let locs = List.filter_map config.merlin.index_files ~f:(fun file ->
           let external_index = Index_cache.read file in
-          Hashtbl.find_opt external_index.defs def_uid
-          |> Option.map ~f:(fun locs -> LidSet.filter (fun {loc; _} ->
+          Index_format.Uid_map.find_opt def_uid external_index.defs
+          |> Option.map ~f:(fun locs -> Lid_set.filter (fun {loc; _} ->
             (* We ignore external results that concern the current buffer *)
             let fname = loc.Location.loc_start.Lexing.pos_fname in
             if String.equal fname current_buffer_path then false
@@ -264,11 +270,11 @@ let locs_of ~config ~env ~typer_result ~pos ~scope path =
         | Some buffer_locs -> buffer_locs :: external_locs
         | None -> external_locs
       in
-      List.fold_left ~init:LidSet.empty ~f:LidSet.union all_locs
+      List.fold_left ~init:Lid_set.empty ~f:Lid_set.union all_locs
     in
     let locs =
-      log ~title:"occurrences" "Found %i locs" (LidSet.cardinal locs);
-      LidSet.elements locs
+      log ~title:"occurrences" "Found %i locs" (Lid_set.cardinal locs);
+      Lid_set.elements locs
       |> List.filter_map ~f:(fun {Location.txt; loc} ->
         log ~title:"occurrences" "Found occ: %s %a"
           (Longident.head txt) Logger.fmt (Fun.flip Location.print_loc loc);
