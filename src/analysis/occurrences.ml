@@ -243,16 +243,23 @@ let locs_of ~config ~env ~typer_result ~pos ~scope path =
       let exception File_changed in
       try
         let locs = List.filter_map config.merlin.index_files ~f:(fun file ->
-          let external_index = Index_cache.read file in
-          Index_format.Uid_map.find_opt def_uid external_index.defs
-          |> Option.map ~f:(fun locs -> Lid_set.filter (fun {loc; _} ->
+          let external_locs = try
+              let external_index = Index_cache.read file in
+              Index_format.Uid_map.find_opt def_uid external_index.defs
+              |> Option.map ~f:(fun uid_locs -> external_index, uid_locs)
+            with
+            | Index_format.Not_an_index _ | Sys_error _ ->
+                log ~title:"external_index" "Could not load index %s" file;
+                None
+          in
+          Option.map external_locs ~f:(fun (file, locs) -> Lid_set.filter (fun {loc; _} ->
             (* We ignore external results that concern the current buffer *)
             let fname = loc.Location.loc_start.Lexing.pos_fname in
             if String.equal fname current_buffer_path then false
             else begin
               (* We ignore external results if the index is not up-to-date *)
               (* We could return partial results from up-to-date file *)
-              if not (check external_index fname) then begin
+              if not (check file fname) then begin
                 log ~title:"locs_of" "File %s might be out-of-sync." fname;
                 raise File_changed
               end;
