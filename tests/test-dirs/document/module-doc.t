@@ -40,7 +40,7 @@
   $ dune build ./main.exe
 
 The licence is correctly ignored when looking for the doc of Lib
-  $ $MERLIN single document -position 1:11 \
+  $ $MERLIN single document -log-file - -position 1:11 \
   > -filename main.ml <main.ml
   {
     "class": "return",
