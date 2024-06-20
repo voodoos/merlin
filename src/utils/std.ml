@@ -475,6 +475,29 @@ module String = struct
       let s0 = String.sub s 0 p in
       s0 :: loop (p + 1)
 
+  let rfindi =
+    let rec loop s ~f i =
+      if i < 0 then None
+      else if f (String.unsafe_get s i) then Some i
+      else loop s ~f (i - 1)
+    in
+    fun ?from s ~f ->
+      let from =
+        let len = String.length s in
+        match from with
+        | None -> len - 1
+        | Some i ->
+          if i > len - 1 then failwith "rfindi: invalid from"
+          else i
+      in
+      loop s ~f from
+
+  let lsplit2 s ~on =
+    match String.index_opt s on with
+    | None -> None
+    | Some i ->
+      Some (sub s ~pos:0 ~len:i, sub s ~pos:(i + 1) ~len:(length s - i - 1))
+
   let chop_prefix ~prefix text =
     let tlen = String.length text in
     let plen = String.length prefix in

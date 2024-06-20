@@ -155,39 +155,6 @@ let application_signature ~prefix = function
     Some { result with active_param }
   | _ -> None
 
-module String = struct
-    include String
-    let rfindi =
-      let rec loop s ~f i =
-        if i < 0 then None
-        else if f (String.unsafe_get s i) then Some i
-        else loop s ~f (i - 1)
-      in
-      fun ?from s ~f ->
-        let from =
-          let len = String.length s in
-          match from with
-          | None -> len - 1
-          | Some i ->
-            if i > len - 1 then failwith "rfindi: invalid from"
-            else i
-        in
-        loop s ~f from
-
-    let rec check_prefix s ~prefix len i =
-      i = len || (s.[i] = prefix.[i] && check_prefix s ~prefix len (i + 1))
-
-    let lsplit2 s ~on =
-      match String.index_opt s on with
-      | None -> None
-      | Some i ->
-        Some (sub s ~pos:0 ~len:i, sub s ~pos:(i + 1) ~len:(length s - i - 1))
-
-    let is_prefix s ~prefix =
-      let len = length s in
-      let prefix_len = length prefix in
-      len >= prefix_len && check_prefix s ~prefix prefix_len 0
-  end
 
 (** @see <https://ocaml.org/manual/lex.html> reference *)
 let prefix_of_position ~short_path source position =
@@ -250,8 +217,8 @@ let prefix_of_position ~short_path source position =
     (* if we reconstructed [~f:ignore] or [?f:ignore], we should take only
        [ignore], so: *)
     if
-      String.is_prefix reconstructed_prefix ~prefix:"~"
-      || String.is_prefix reconstructed_prefix ~prefix:"?"
+      String.is_prefixed ~by:"~" reconstructed_prefix
+      || String.is_prefixed ~by:"?" reconstructed_prefix
     then
       match String.lsplit2 reconstructed_prefix ~on:':' with
       | Some (_, s) -> s
