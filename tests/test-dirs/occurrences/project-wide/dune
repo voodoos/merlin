@@ -1,6 +1,8 @@
 (cram
+ (package ocaml-index)
  (applies_to :whole_subtree)
- (enabled_if %{bin-available:ocaml-index}))
+ (deps
+  %{bin:ocaml-index}))
 
 (cram
  (applies_to pwo-ml-gen)
