@@ -11,10 +11,9 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs] {with-test}
 ]
 depends: [
-  "ocaml" {>= "5.2" & < "5.3"}
   "dune" {>= "3.0.0"}
   "merlin-lib" {= version}
-  "dot-merlin-reader" {>= "5.0"}
+  "dot-merlin-reader" {>= "5.2"}
   "ocaml-index" {>= "1.0" & post}
   "yojson" {>= "2.0.0"}
   "conf-jq" {with-test}
@@ -22,7 +21,6 @@ depends: [
 ]
 conflicts: [
   "seq" {!= "base"}
-  "base-effects"
 ]
 synopsis:
   "Editor helper, provides completion, typing and source browsing in Vim and Emacs"
