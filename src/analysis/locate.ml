@@ -251,7 +251,7 @@ module Utils = struct
     List.dedup_adjacent files ~cmp:String.compare
 
   let find_file_with_path ~config ?(with_fallback = false) file path =
-    if File.name file = Misc.unitname Mconfig.(config.query.filename) then
+    if File.name file = Misc.unitname Mconfig.(query_filename config.query) then
       Mconfig.(config.query.filename)
     else
       let attempt_search src_suffix_pair =

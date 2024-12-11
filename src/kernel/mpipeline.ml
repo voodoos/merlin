@@ -4,7 +4,7 @@ let { Logger.log } = Logger.for_section "Pipeline"
 
 let time_shift = ref 0.0
 
-let timed_lazy r x =
+let timed r x =
   let start = Misc.time_spent () in
   let time_shift0 = !time_shift in
   let update () =
@@ -108,7 +108,6 @@ let get_lexing_pos t pos =
 let reader t = t.reader
 
 let ppx t = t.ppx
-let typer t = t.typer
 
 let reader_config t = (reader t).config
 let reader_parsetree t = (reader t).result.Mreader.parsetree
@@ -234,7 +233,7 @@ let process ?state ?(pp_time = ref 0.0) ?(reader_time = ref 0.0)
           let source = Msource.text raw_source in
           match
             Pparse.apply_pp ~workdir
-              ~filename:Mconfig.(config.query.filename)
+              ~filename:Mconfig.(query_filename config.query)
               ~source ~pp:workval
           with
           | `Source source -> (Msource.make source, None)
@@ -299,7 +298,7 @@ let process ?state ?(pp_time = ref 0.0) ?(reader_time = ref 0.0)
         (let { Ppx.config; parsetree; _ } = ppx in
          Mocaml.setup_typer_config config;
          let result = Mtyper.run config parsetree in
-         let errors = timed_lazy error_time (lazy (Mtyper.get_errors result)) in
+         let errors = timed error_time (lazy (Mtyper.get_errors result)) in
          typer_cache_stats := Mtyper.get_cache_stat result;
          { Typer.errors; result }))
   in

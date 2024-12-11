@@ -171,12 +171,13 @@ type query =
     verbosity : Verbosity.t
   }
 
-let query_filename q = match q.filename with
-| None -> "*buffer*"
-| Some filename -> filename
+let query_filename q =
+  match q.filename with
+  | None -> "*buffer*"
+  | Some filename -> filename
 let dump_query x =
   `Assoc
-    [ ("filename", `String (query_filename x);
+    [ ("filename", `String (query_filename x));
       ("directory", `String x.directory);
       ("printer_width", `Int x.printer_width);
       ("verbosity", Verbosity.to_json x.verbosity)
@@ -823,8 +824,7 @@ let global_modules ?(include_current = false) config =
 
 (** {1 Accessors for other information} *)
 
-let filename t =
-  query_filename t.query
+let filename t = query_filename t.query
 
 let unitname t =
   match t.merlin.unit_name with

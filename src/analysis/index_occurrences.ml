@@ -87,7 +87,7 @@ let items ~index ~stamp (config : Mconfig.t) items =
         None
   end) in
   let current_buffer_path =
-    Filename.concat config.query.directory config.query.filename
+    Filename.concat config.query.directory (Mconfig.query_filename config.query)
   in
   let reduce_for_uid = Shape_reduce.reduce_for_uid in
   let iterator = iterator ~current_buffer_path ~index ~stamp ~reduce_for_uid in
