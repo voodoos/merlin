@@ -18,7 +18,7 @@ type result =
 
 let normal_parse ?for_completion config source =
   let kind =
-    let filename = Mconfig.(config.query.filename) in
+    let filename = Mconfig.(query_filename config.query) in
     let extension =
       match String.rindex filename '.' with
       | exception Not_found -> ""
@@ -84,7 +84,7 @@ let get_reader config =
     match assocsuffixes with
     | [] -> []
     | (suffix, reader) :: t ->
-      if Filename.check_suffix Mconfig.(config.query.filename) suffix then
+      if Filename.check_suffix Mconfig.(query_filename config.query) suffix then
         [ reader ]
       else find_reader t
   in

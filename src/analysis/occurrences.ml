@@ -175,7 +175,7 @@ let locs_of ~config ~env ~typer_result ~pos ~scope path =
       (None, `Buffer)
   in
   let current_buffer_path =
-    Filename.concat config.query.directory config.query.filename
+    Filename.concat config.query.directory (Mconfig.query_filename config.query)
   in
   match def with
   | Some (def_uid, def_loc) ->
@@ -208,7 +208,7 @@ let locs_of ~config ~env ~typer_result ~pos ~scope path =
                         match config.merlin.source_root with
                         | Some root ->
                           (Filename.concat root file, current_buffer_path)
-                        | None -> (file, config.query.filename)
+                        | None -> (file, Mconfig.query_filename config.query)
                       in
                       let file = Misc.canonicalize_filename file in
                       let buf = Misc.canonicalize_filename buf in
