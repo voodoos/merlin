@@ -21,8 +21,9 @@
   $ ocaml-index aggregate *.cmti *.cmt
 
   $ ocaml-index dump project.ocaml-index
-  6 uids:
-  {uid: [intf]Lib.0; locs: "x": File "lib.mli", line 2, characters 6-7
+  7 uids:
+  {uid: Lib; locs: "Lib": File "main.ml", line 1, characters 11-14
+   uid: [intf]Lib.0; locs: "x": File "lib.mli", line 2, characters 6-7
    uid: Lib.0; locs: "x": File "lib.ml", line 2, characters 6-7
    uid: [intf]Lib.1; locs: "S": File "lib.mli", line 1, characters 12-13
    uid: Lib.1; locs:
@@ -31,8 +32,10 @@
    uid: Main.0; locs:
      "x": File "main.ml", line 2, characters 6-7;
      "M.x": File "main.ml", line 4, characters 9-12
-   uid: Main.1; locs: "M": File "main.ml", line 1, characters 7-8 },
-  0 approx shapes: {}, and shapes for CUS .
+   uid: Main.1; locs:
+     "M": File "main.ml", line 1, characters 7-8;
+     "M": File "main.ml", line 4, characters 9-10
+   }, 0 approx shapes: {}, and shapes for CUS .
   and related uids:{([intf]Lib.1 Lib.1); ([intf]Lib.0 Lib.0 Main.0)}
 
   $ $MERLIN single occurrences -scope renaming -identifier-at 4:11 \
