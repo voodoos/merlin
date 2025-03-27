@@ -244,8 +244,51 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a = function
       Type_enclosing.from_nodes ~path |> List.dedup_adjacent ~cmp
     in
 
+    (* Format.eprintf "Enclosing nodes:\n%!";
+    List.iter path ~f:(fun (_, node, _) -> Format.eprintf "%s\n%!" @@ Browse_raw.string_of_node node); *)
+
     (* Enclosings of cursor in given expression *)
+    let exprs_ =
+      let open Shape.Sig_component_kind in
+      let rec enumerate_longident ~cursor namespace acc
+        ({ Location.txt; loc } as lid) =
+        if Location_aux.compare_pos cursor loc > 0 then acc else
+        match txt with
+        | Longident.Lident _ ->
+            (lid, namespace) :: acc
+        | Ldot (lid', _) ->
+            enumerate_longident ~cursor Module ((lid, namespace)::acc) lid'
+        | Lapply (lid', _) ->
+            enumerate_longident ~cursor Module ((lid, namespace)::acc) lid'
+      in
+      let lookup ~env = function
+        | { Location.txt; loc }, Module ->
+          let _path, md = Env.lookup_module ~loc txt env in
+          (loc, Type_enclosing.Modtype (env, md.md_type), `No)
+        | { Location.txt; loc }, Value ->
+          let _path, vd = Env.lookup_value ~loc txt env in
+          (loc, Type_enclosing.Type (env, vd.val_type), `No)
+        | _ -> assert false
+    in
+      let small_enclosings ~cursor ~env node =
+        match node with
+        | Browse_raw.Expression { exp_desc = Texp_ident (_, lid, _); _ } ->
+          enumerate_longident ~cursor (Value (*todo*)) [] lid |> List.map ~f:(lookup ~env)
+        | Browse_raw.Pattern { pat_desc = Tpat_construct (lid, _, _, _); _ } ->
+          enumerate_longident ~cursor (Constructor (*todo*)) [] lid |> List.map ~f:(lookup ~env)
+        | _ -> Format.eprintf "HERE %s\n%!" (Browse_raw.string_of_node node);[]
+      in
+      let ret = match path  with
+        | [] -> []
+        | (env, hd, _) :: _ -> small_enclosings ~cursor:pos ~env hd
+      in
+      ret
+    in
+    (* Format.eprintf "expr_: %s\n%!" (String.concat ~sep:", "
+      (List.map ~f:(fun (_, ti, _) -> Type_enclosing.print_type ~verbosity:Smart ti
+        ) exprs_)); *)
     let exprs = Misc_utils.reconstruct_identifier pipeline pos expro in
+    (* Format.eprintf "expr: %s\n%!" (String.concat ~sep:", " (List.map ~f:(fun { Location.txt; _ } -> txt) exprs)); *)
     let () =
       Logger.log ~section:Type_enclosing.log_section
         ~title:"reconstruct identifier" "%a" Logger.json (fun () ->
@@ -269,7 +312,8 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a = function
           (Format.pp_print_list ~pp_sep:Format.pp_print_space
              (fun fmt (loc, _, _) -> Location.print_loc fmt loc))
           small_enclosings);
-    let all_results = List.concat [ small_enclosings; enclosing_nodes ] in
+    (* let all_results = List.concat [ small_enclosings; enclosing_nodes ] in *)
+    let all_results = List.concat [ exprs_; enclosing_nodes ] in
     let index =
       (* Clamp the index to [0; number_of_results[ *)
       let number_of_results = List.length all_results in
