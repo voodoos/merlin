@@ -1,22 +1,15 @@
 open Std
 
-module Type_tree = struct
-  type node_data =
-    | Arrow
-    | Tuple
-    | Poly_variant
-    | Object
-    | Type_ref of { path : Path.t; ty : Types.type_expr }
+module Type_tree = Query_protocol.Locate_types_result.Type_tree
 
-  type t = { data : node_data; children : t list }
-end
+type raw_type = { path : Path.t; ty : Types.type_expr }
 
 let rec flatten_arrow ret_ty =
   match Types.get_desc ret_ty with
   | Tarrow (_, ty1, ty2, _) -> ty1 :: flatten_arrow ty2
   | _ -> [ ret_ty ]
 
-let rec create_type_tree ty : Type_tree.t option =
+let rec create_type_tree ty : raw_type Type_tree.t option =
   match Types.get_desc ty with
   | Tarrow (_, ty1, ty2, _) ->
     let tys = ty1 :: flatten_arrow ty2 in

@@ -365,8 +365,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a = function
         | [] -> None
       in
       let* overall_ty =
-        Locate.log ~title:"query_commands Locate_types"
-          "inspecting node: %s"
+        Locate.log ~title:"query_commands Locate_types" "inspecting node: %s"
           (Browse_raw.string_of_node node);
         match node with
         | Expression { exp_type = ty; _ }
@@ -382,11 +381,12 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a = function
               ty);
         Format.flush_str_formatter ()
       in
-      let rec make_result ({ data; children } : Locate_types.Type_tree.t) :
-          Locate_types_result.type_tree =
-        let data : Locate_types_result.node_data =
+      let rec make_result
+          ({ data; children } : Locate_types.(raw_type Type_tree.t)) =
+        let open Query_protocol.Locate_types_result in
+        let data =
           match data with
-          | Arrow -> Arrow
+          | Arrow -> Locate_types.Type_tree.Arrow
           | Tuple -> Tuple
           | Object -> Object
           | Poly_variant -> Poly_variant
@@ -413,7 +413,7 @@ let dispatch pipeline (type a) : a Query_protocol.t -> a = function
             Type_ref { type_; result }
         in
         let children = List.map children ~f:make_result in
-        { data; children }
+        { Type_tree.data; children }
       in
       make_result type_tree
     in
