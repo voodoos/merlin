@@ -58,7 +58,7 @@ let get_lru () =
   match !lru_dbllist with
   | Some lru -> lru
   | None ->
-    let lru = Dbllist.create 1_000 in
+    let lru = Dbllist.create 1_000_000 in
     lru_dbllist := Some lru;
     lru
 

@@ -77,20 +77,14 @@ let () =
   try
     (match !command with
     | Some Aggregate ->
-      Gc.compact ();
-      let before = Gc.quick_stat () in
       let root = if String.equal "" !root then None else Some !root in
-      Granular_marshal.create_lru 10_000_000;
       Index.from_files ~store_shapes:!store_shapes ~root
         ~rewrite_root:!rewrite_root ~output_file:!output_file
         ~build_path:
           { visible = List.rev !build_path_rev.visible;
             hidden = List.rev !build_path_rev.hidden
           }
-        ~do_not_use_cmt_loadpath:!do_not_use_cmt_loadpath !input_files;
-      Gc.compact ();
-      let after = Gc.quick_stat () in
-      Printf.eprintf "Major words before: %.0f, after: %.0f\n" before.Gc.major_words after.Gc.major_words
+        ~do_not_use_cmt_loadpath:!do_not_use_cmt_loadpath !input_files
     | Some Dump ->
       List.iter
         (fun file ->
