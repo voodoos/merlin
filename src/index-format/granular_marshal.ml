@@ -36,6 +36,8 @@ exception
     { filename : string; reason : [ `Missing_file | `Index_ids_do_not_match ] }
 
 let lru_dbllist : cached Dbllist.t option ref = ref None
+let lru_size = ref 1_000_000
+let set_lru_size i = lru_size := i
 
 (* let fetch_count = Hashtbl.create 16
 
@@ -58,7 +60,7 @@ let get_lru () =
   match !lru_dbllist with
   | Some lru -> lru
   | None ->
-    let lru = Dbllist.create 1_000_000 in
+    let lru = Dbllist.create !lru_size in
     lru_dbllist := Some lru;
     lru
 

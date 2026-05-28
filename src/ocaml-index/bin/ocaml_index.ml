@@ -14,6 +14,7 @@ let root = ref ""
 let rewrite_root = ref false
 let store_shapes = ref false
 let do_not_use_cmt_loadpath = ref false
+let cache_size = ref 1_000_000
 
 type command = Aggregate | Dump | Stats
 
@@ -63,7 +64,10 @@ let speclist =
     ( "--no-cmt-load-path",
       Arg.Set do_not_use_cmt_loadpath,
       "Do not initialize the load path with the paths found in the first input \
-       cmt file" )
+       cmt file" );
+    ( "--cache-size",
+      Arg.Set_int cache_size,
+      "Set LRU cache size. Will bound memory usage in read-heavy scenarios." )
   ]
 
 let set_log_level debug verbose =
@@ -78,6 +82,7 @@ let () =
     (match !command with
     | Some Aggregate ->
       let root = if String.equal "" !root then None else Some !root in
+      Granular_marshal.set_lru_size !cache_size;
       Index.from_files ~store_shapes:!store_shapes ~root
         ~rewrite_root:!rewrite_root ~output_file:!output_file
         ~build_path:
