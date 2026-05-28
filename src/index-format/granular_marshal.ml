@@ -156,7 +156,7 @@ let read_loc store fd loc schema parent_link =
           | In_memory_reused _
           | On_disk _
           | Small_child _
-          | Duplicate _ -> ()
+          | Duplicate _ -> (* TODO when does this happen ? *) ()
           | On_disk_ptr { filename; loc; id } ->
             let store = { filename; id; cache = Cache_cache.read filename } in
             lnk := On_disk { store; loc; schema }

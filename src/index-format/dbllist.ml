@@ -85,6 +85,7 @@ let discard t =
       let discarded_weight = l.last.weight in
       t.stats.discarded_size <- t.stats.discarded_size + discarded_weight;
       let new_last = l.last.prev in
+      (* TODO Should we explicitely disconnect last's pointers ? *)
       new_last.next <- new_last;
       t.dbll <-
         List
@@ -96,6 +97,7 @@ let discard t =
       discarded_value
 
 let discard_size t s =
+  (* this is fold not iter *)
   let rec iter acc t =
     match t.dbll with
     | Nil _ -> acc
