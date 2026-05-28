@@ -183,7 +183,11 @@ let rec fetch : type a. a link -> a =
   | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ ->
     invalid_arg "Granular_marshal.fetch: serialized"
   | Placeholder -> invalid_arg "Granular_marshal.fetch: during a write"
-  | Duplicate original_lnk -> fetch original_lnk
+  | Duplicate original_lnk ->
+    (* Maybe we should look at [original_lnk] and propagate its in-cacheness *)
+    let v = fetch original_lnk in
+    lnk := In_memory v;
+    v
   | Small_child { parent; pos } -> (
     let (PLink parent) = parent in
     ignore (fetch parent);
@@ -207,12 +211,13 @@ let rec fetch : type a. a link -> a =
     lnk := In_cache (v, cell, small_poses);
     v
 
-let rec reuse lnk =
+let reuse lnk =
   match !lnk with
-  | In_memory v | In_cache (v, _, _) -> lnk := In_memory_reused v
+  | In_memory v | In_cache (v, _, _) ->
+    (* TODO where are the smalls going ? *)
+    lnk := In_memory_reused v
   | In_memory_reused _ -> ()
   | On_disk _ -> ()
-  | Duplicate original_lnk -> reuse original_lnk
   | _ -> invalid_arg "Granular_marshal.reuse: not in memory"
 
 let cache (type a) (module Key : Hashtbl.HashedType with type t = a) =
@@ -223,7 +228,6 @@ let cache (type a) (module Key : Hashtbl.HashedType with type t = a) =
     match H.find cache key with
     | original_lnk ->
       assert (original_lnk != lnk);
-      let original_lnk = normalize original_lnk in
       reuse original_lnk;
       lnk := Duplicate original_lnk
     | exception Not_found -> H.add cache key lnk
