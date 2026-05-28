@@ -1,46 +1,54 @@
 type 'a cell =
-  { content : 'a;
-    weight : int;
-    mutable prev : 'a cell;
-    mutable next : 'a cell
-  }
+  { content : 'a; weight : int; mutable prev : 'a cell; mutable next : 'a cell }
 
-type stats = {
-  mutable total_cap : int;
-  mutable promote_count : int;
-  mutable add_count : int;
-  mutable discard_count : int;
-  mutable add_size : int;
-  mutable discarded_size : int;
-}
+type stats =
+  { mutable total_cap : int;
+    mutable promote_count : int;
+    mutable add_count : int;
+    mutable discard_count : int;
+    mutable add_size : int;
+    mutable discarded_size : int
+  }
 
 type 'a dbll =
   | Nil of int
-  | List of
-      { first : 'a cell;
-        last : 'a cell;
-        size : int;
-        cap : int;
-      }
+  | List of { first : 'a cell; last : 'a cell; size : int; cap : int }
 
 type 'a t = { mutable dbll : 'a dbll; stats : stats }
 
 exception Action_on_empty_list of string
 
 let pp_stats t =
-  let size = match t.dbll with | Nil _ -> 0 | List l -> l.size in
-  Printf.eprintf "total_cap \t\t: %d\nsize \t\t: %d\npromote_count \t: %d\nadd_count \t\t: %d\ndiscard_count \t: %d\nadd_size \t\t: %d\ndiscard_size \t: %d\nvolume_conservation \t: %d = %d + %d : %b\n%!"
-  t.stats.total_cap
-  size
-  t.stats.promote_count
-  t.stats.add_count
-  t.stats.discard_count
-  t.stats.add_size
-  t.stats.discarded_size
-  t.stats.add_size t.stats.discarded_size size (t.stats.add_size = t.stats.discarded_size + size)
+  let size =
+    match t.dbll with
+    | Nil _ -> 0
+    | List l -> l.size
+  in
+  Printf.eprintf
+    "total_cap \t\t: %d\n\
+     size \t\t: %d\n\
+     promote_count \t: %d\n\
+     add_count \t\t: %d\n\
+     discard_count \t: %d\n\
+     add_size \t\t: %d\n\
+     discard_size \t: %d\n\
+     volume_conservation \t: %d = %d + %d : %b\n\
+     %!"
+    t.stats.total_cap size t.stats.promote_count t.stats.add_count
+    t.stats.discard_count t.stats.add_size t.stats.discarded_size
+    t.stats.add_size t.stats.discarded_size size
+    (t.stats.add_size = t.stats.discarded_size + size)
 
 let create cap =
-  let stats = { total_cap = cap; promote_count = 0; add_count = 0; discard_count = 0; add_size = 0; discarded_size = 0 } in
+  let stats =
+    { total_cap = cap;
+      promote_count = 0;
+      add_count = 0;
+      discard_count = 0;
+      add_size = 0;
+      discarded_size = 0
+    }
+  in
   { dbll = Nil cap; stats }
 
 let add_front t (v, w) =
@@ -56,7 +64,8 @@ let add_front t (v, w) =
       { content = v; weight = w; prev = new_first; next = l.first }
     in
     l.first.prev <- new_first;
-    t.dbll <- List { first = new_first; last = l.last; size = l.size + w; cap = l.cap };
+    t.dbll <-
+      List { first = new_first; last = l.last; size = l.size + w; cap = l.cap };
     new_first
 
 let discard t =
@@ -82,7 +91,7 @@ let discard t =
           { first = l.first;
             last = new_last;
             size = Int.max 0 (l.size - discarded_weight);
-            cap = l.cap;
+            cap = l.cap
           };
       discarded_value
 
@@ -90,8 +99,7 @@ let discard_size t s =
   let rec iter acc t =
     match t.dbll with
     | Nil _ -> acc
-    | List l -> if l.size + s <= l.cap then acc else (
-      iter (discard t :: acc) t)
+    | List l -> if l.size + s <= l.cap then acc else iter (discard t :: acc) t
   in
   iter [] t
 
@@ -122,6 +130,7 @@ let promote t c =
       new_first.prev <- new_first;
       new_first.next <- l.first;
       l.first.prev <- new_first;
-      t.dbll <- List { first = new_first; last = l.last; size = l.size; cap = l.cap }
+      t.dbll <-
+        List { first = new_first; last = l.last; size = l.size; cap = l.cap }
 
 let get c = c.content

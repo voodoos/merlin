@@ -135,7 +135,7 @@ let read_loc store fd loc schema parent_link =
           match !lnk with
           | Small v ->
             schema iter v;
-            child_smalls := (Value v) :: !child_smalls;
+            child_smalls := Value v :: !child_smalls;
             lnk := Small_child { parent = parent_link; pos = !child_pos };
             child_pos := !child_pos + 1
           | Serialized { loc } -> lnk := On_disk { store; loc; schema }
@@ -151,11 +151,16 @@ let read_loc store fd loc schema parent_link =
             | None ->
               lnk := On_disk { store; loc; schema };
               Cache.add store.cache loc (Link (lnk, type_id)))
-          | In_memory _ | In_cache _ | In_memory_reused _ | On_disk _ | Small_child _ | Duplicate _ -> ()
+          | In_memory _
+          | In_cache _
+          | In_memory_reused _
+          | On_disk _
+          | Small_child _
+          | Duplicate _ -> ()
           | On_disk_ptr { filename; loc; id } ->
             let store = { filename; id; cache = Cache_cache.read filename } in
             lnk := On_disk { store; loc; schema }
-          | Placeholder -> invalid_arg "Granular_marshal.read_loc: Placeholder");
+          | Placeholder -> invalid_arg "Granular_marshal.read_loc: Placeholder")
     }
   in
   schema iter v;
@@ -167,10 +172,11 @@ let fetch_loc store loc schema parent_link =
   let v, size, small_poses = read_loc store fd loc schema parent_link in
   (v, size, small_poses)
 
-let rec fetch : type a. a link -> a = fun lnk ->
+let rec fetch : type a. a link -> a =
+ fun lnk ->
   match !lnk with
   | In_cache (v, cell, _) ->
-    let Cached (_, _loc, _, _) = Dbllist.get cell in
+    let (Cached (_, _loc, _, _)) = Dbllist.get cell in
     Dbllist.promote (get_lru ()) cell;
     v
   | In_memory v | In_memory_reused v -> v
@@ -178,14 +184,14 @@ let rec fetch : type a. a link -> a = fun lnk ->
     invalid_arg "Granular_marshal.fetch: serialized"
   | Placeholder -> invalid_arg "Granular_marshal.fetch: during a write"
   | Duplicate original_lnk -> fetch original_lnk
-  | Small_child { parent; pos } ->
-    let PLink parent = parent in
-      ignore(fetch parent);
-      (match !parent with
-      | In_cache (_, _, small_poses) ->
-        let Value v = small_poses.(pos) in
-        Obj.magic v
-      | _ -> assert false)
+  | Small_child { parent; pos } -> (
+    let (PLink parent) = parent in
+    ignore (fetch parent);
+    match !parent with
+    | In_cache (_, _, small_poses) ->
+      let (Value v) = small_poses.(pos) in
+      Obj.magic v
+    | _ -> assert false)
   | On_disk { store; loc; schema } ->
     (* let count = try Hashtbl.find fetch_count (loc, store.filename) with Not_found -> 0 in
     Hashtbl.replace fetch_count (loc, store.filename) (count + 1); *)
@@ -245,7 +251,7 @@ let write ?(flags = []) fd ~id root_schema root_value =
             let v = fetch lnk in
             write_child lnk schema v size ~placeholders ~restore
           | In_cache (_v, t, _children) ->
-            let Cached (_, loc, {filename; id; _}, _) = t.content in
+            let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
             lnk := On_disk_ptr { filename; id; loc }
           | On_disk { store = { filename; id; _ }; loc; _ } ->
             lnk := On_disk_ptr { filename; id; loc })
@@ -262,8 +268,7 @@ let write ?(flags = []) fd ~id root_schema root_value =
               | Small v -> schema iter v
               | On_disk { store = { filename; id; _ }; loc; _ } ->
                 lnk := On_disk_ptr { filename; id; loc }
-              | _ -> ()
-            );
+              | _ -> ())
         }
       in
       schema iter v;
@@ -300,8 +305,7 @@ let write ?(flags = []) fd ~id root_schema root_value =
           | Small v -> schema iter v
           | On_disk { store = { filename; id; _ }; loc; _ } ->
             lnk := On_disk_ptr { filename; id; loc }
-          | _ -> ()
-        );
+          | _ -> ())
     }
   in
   root_schema iter root_value;
@@ -313,8 +317,12 @@ let read filename fd root_schema =
   let id = int_of_binstring (really_input_string fd 8) in
   let store = { filename; id; cache = Cache_cache.read filename } in
   let root_loc = int_of_binstring (really_input_string fd 8) in
-  let parent_link = ref (On_disk { loc = root_loc; store; schema = root_schema }) in
-  let root_value, _, _ = read_loc store fd root_loc root_schema (PLink parent_link) in
+  let parent_link =
+    ref (On_disk { loc = root_loc; store; schema = root_schema })
+  in
+  let root_value, _, _ =
+    read_loc store fd root_loc root_schema (PLink parent_link)
+  in
   root_value
 
 let () =
@@ -325,9 +333,7 @@ let () =
 
 let () =
   at_exit (fun () ->
-    (* debug fetch_count; *)
-    match !lru_dbllist with
-    | None -> ()
-    | Some lru ->
-      Dbllist.pp_stats lru;
-      )
+      (* debug fetch_count; *)
+      match !lru_dbllist with
+      | None -> ()
+      | Some lru -> Dbllist.pp_stats lru)
