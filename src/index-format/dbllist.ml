@@ -87,6 +87,11 @@ let discard t =
       let new_last = l.last.prev in
       (* TODO Should we explicitely disconnect last's pointers ? *)
       new_last.next <- new_last;
+      (* Unlinking the discaded cell is not strictly necessary but not doing it
+         could lead to memory leaks if the user of the cache keeps a reference
+         to the cell. *)
+      l.last.next <- l.last;
+      l.last.prev <- l.last;
       t.dbll <-
         List
           { first = l.first;
