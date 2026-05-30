@@ -24,12 +24,28 @@ and 'a repr =
   | In_memory of 'a
   | In_cache of 'a * cached Dbllist.cell * any_value array
   | In_memory_reused of 'a
+  | In_cache_reused of 'a * cached Dbllist.cell * any_value array
   | Duplicate of 'a link
   | Placeholder
 
 and 'a schema = iter -> 'a -> unit
 
 and iter = { yield : 'a. 'a link -> 'a link Type.Id.t -> 'a schema -> unit }
+
+let string_of_link link =
+  match !link with
+  | Small _ -> "Small\n"
+  | Small_child _ -> "Small_child\n"
+  | Serialized _ -> "Serialized\n"
+  | Serialized_reused _ -> "Serialized_reused\n"
+  | On_disk _ -> "On_disk\n"
+  | On_disk_ptr _ -> "On_disk_ptr\n"
+  | In_memory _ -> "In_memory\n"
+  | In_cache (_, _, _) -> "In_cache\n"
+  | In_memory_reused _ -> "In_memory_reused\n"
+  | In_cache_reused (_, _, _) -> "In_cache_reused\n"
+  | Duplicate _ -> "Duplicate\n"
+  | Placeholder -> "Placeholder\n"
 
 exception
   Outdated_store of
@@ -154,6 +170,7 @@ let read_loc store fd loc schema parent_link =
           | In_memory _
           | In_cache _
           | In_memory_reused _
+          | In_cache_reused _
           | On_disk _
           | Small_child _
           | Duplicate _ -> (* TODO when does this happen ? *) ()
@@ -175,7 +192,7 @@ let fetch_loc store loc schema parent_link =
 let rec fetch : type a. a link -> a =
  fun lnk ->
   match !lnk with
-  | In_cache (v, cell, _) ->
+  | In_cache (v, cell, _) | In_cache_reused (v, cell, _) ->
     let (Cached (_, _loc, _, _)) = Dbllist.get cell in
     Dbllist.promote (get_lru ()) cell;
     v
@@ -192,7 +209,7 @@ let rec fetch : type a. a link -> a =
     let (PLink parent) = parent in
     ignore (fetch parent);
     match !parent with
-    | In_cache (_, _, small_poses) ->
+    | In_cache (_, _, small_poses) | In_cache_reused (_, _, small_poses) ->
       let (Value v) = small_poses.(pos) in
       Obj.magic v
     | _ -> assert false)
@@ -211,14 +228,18 @@ let rec fetch : type a. a link -> a =
     lnk := In_cache (v, cell, small_poses);
     v
 
-let reuse lnk =
-  match !lnk with
-  | In_memory v | In_cache (v, _, _) ->
-    (* TODO where are the smalls going ? *)
-    lnk := In_memory_reused v
-  | In_memory_reused _ -> ()
+let rec reuse original_lnk =
+  match !original_lnk with
+  | In_memory v -> original_lnk := In_memory_reused v
+  | In_cache (v, cell, smalls) ->
+    original_lnk := In_cache_reused (v, cell, smalls)
+  | In_memory_reused _ | In_cache_reused _ -> ()
   | On_disk _ -> ()
-  | _ -> invalid_arg "Granular_marshal.reuse: not in memory"
+  | Duplicate link -> reuse link
+  | _ ->
+    invalid_arg
+    @@ Printf.sprintf "Granular_marshal.reuse: not in memory, got %s"
+         (string_of_link original_lnk)
 
 let cache (type a) (module Key : Hashtbl.HashedType with type t = a) =
   let module H = Hashtbl.Make (Key) in
@@ -244,17 +265,27 @@ let write ?(flags = []) fd ~id root_schema root_value =
           | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ -> ()
           | Placeholder -> failwith "big nono"
           | In_memory_reused v -> write_child_reused lnk schema v
-          | Duplicate original_lnk ->
-            (match !original_lnk with
-            | Serialized_reused _ | On_disk_ptr _ -> ()
-            | In_memory_reused v -> write_child_reused original_lnk schema v
-            | _ -> failwith "Granular_marshal.write: duplicate not reused");
-            lnk := !original_lnk
+          | Duplicate original_lnk -> (
+            match !original_lnk with
+            | Serialized_reused _ | On_disk_ptr _ -> lnk := !original_lnk
+            | In_memory_reused v ->
+              write_child_reused original_lnk schema v;
+              lnk := !original_lnk
+            | In_cache_reused (_v, t, _) ->
+              let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
+              lnk := On_disk_ptr { filename; id; loc }
+            | On_disk { store = { filename; id; _ }; loc; _ } ->
+              lnk := On_disk_ptr { filename; id; loc }
+            | _ ->
+              failwith
+                (Format.sprintf
+                   "Granular_marshal.write: duplicate not reused got %s"
+                   (string_of_link original_lnk)))
           | In_memory v -> write_child lnk schema v size ~placeholders ~restore
           | Small_child _ ->
             let v = fetch lnk in
             write_child lnk schema v size ~placeholders ~restore
-          | In_cache (_v, t, _children) ->
+          | In_cache (_v, t, _children) | In_cache_reused (_v, t, _children) ->
             let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
             lnk := On_disk_ptr { filename; id; loc }
           | On_disk { store = { filename; id; _ }; loc; _ } ->
