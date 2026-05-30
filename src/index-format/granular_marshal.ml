@@ -200,11 +200,7 @@ let rec fetch : type a. a link -> a =
   | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ ->
     invalid_arg "Granular_marshal.fetch: serialized"
   | Placeholder -> invalid_arg "Granular_marshal.fetch: during a write"
-  | Duplicate original_lnk ->
-    (* Maybe we should look at [original_lnk] and propagate its in-cacheness *)
-    let v = fetch original_lnk in
-    lnk := In_memory v;
-    v
+  | Duplicate original_lnk -> fetch original_lnk
   | Small_child { parent; pos } -> (
     let (PLink parent) = parent in
     ignore (fetch parent);
