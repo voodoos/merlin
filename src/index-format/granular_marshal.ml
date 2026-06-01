@@ -290,7 +290,7 @@ let write ?(flags = []) fd ~id root_schema root_value =
   and write_child : type a. a link -> a schema -> a -> _ =
    fun lnk schema v size ~placeholders ~restore ->
     let v_size = write_children schema v in
-    if v_size > 1 then (
+    if v_size > 1024 then (
       lnk := Serialized { loc = pos_out fd };
       let rec iter =
         { yield =
