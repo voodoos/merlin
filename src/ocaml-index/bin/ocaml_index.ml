@@ -78,11 +78,11 @@ let set_log_level debug verbose =
 let () =
   Arg.parse speclist anon_fun usage_msg;
   set_log_level !debug !verbose;
+  Granular_marshal.set_lru_size !cache_size;
   try
     (match !command with
     | Some Aggregate ->
       let root = if String.equal "" !root then None else Some !root in
-      Granular_marshal.set_lru_size !cache_size;
       Index.from_files ~store_shapes:!store_shapes ~root
         ~rewrite_root:!rewrite_root ~output_file:!output_file
         ~build_path:
