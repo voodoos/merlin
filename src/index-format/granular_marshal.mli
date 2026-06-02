@@ -3,7 +3,6 @@ type 'a link
 
 type cached
 
-(* val create_lru : int -> unit *)
 val set_lru_size : int -> unit
 val get_lru : unit -> cached Dbllist.t
 
@@ -28,7 +27,7 @@ val fetch : 'a link -> 'a
 
 (** For Merlin we can't depend on a PPX or external dependencies,
     so we require a user-defined {!schema} to describe where the links can be
-    found.  This is just an iter traversal over the values, recursively
+    found. This is just an iter traversal over the values, recursively
     yielding on any reachable link. Since links can point to values themselves
     containing links, recursion is delayed by asking for the schema of each
     child.
@@ -36,16 +35,17 @@ val fetch : 'a link -> 'a
     For example, the following type has the following schema:
 
     {[
-      type t = { first : string link ; second : int link list link }
+    type t = { first : string link; second : int link list link }
 
-      let type_first : string link Type.Id.t = Type.Id.make ()
-      let type_second : int link list link Type.Id.t = Type.Id.make ()
-      let type_v : int link Type.Id.t = Type.Id.make ()
+    let type_first : string link Type.Id.t = Type.Id.make ()
+    let type_second : int link list link Type.Id.t = Type.Id.make ()
+    let type_v : int link Type.Id.t = Type.Id.make ()
 
-      let schema : t schema = fun iter t ->
-        iter.yield t.first type_first schema_no_sublinks ;
-        iter.yield t.second type_second @@ fun iter lst ->
-          List.iter (fun v -> iter.yield v type_v schema_no_sublinks) lst
+    let schema : t schema =
+     fun iter t ->
+      iter.yield t.first type_first schema_no_sublinks;
+      iter.yield t.second type_second @@ fun iter lst ->
+      List.iter (fun v -> iter.yield v type_v schema_no_sublinks) lst
     ]}
 
     where {!schema_no_sublinks} indicates that the yielded value contains
@@ -55,7 +55,7 @@ val fetch : 'a link -> 'a
 type 'a schema = iter -> 'a -> unit
 
 (** A callback to signal the reachable links and the schema of their pointed
-    sub-value.  Since a value can contain multiple links each pointing to
+    sub-value. Since a value can contain multiple links each pointing to
     different types of values, the callback is polymorphic. *)
 and iter = { yield : 'a. 'a link -> 'a link Type.Id.t -> 'a schema -> unit }
 
@@ -67,7 +67,9 @@ exception
   Outdated_store of
     { filename : string; reason : [ `Missing_file | `Index_ids_do_not_match ] }
 
-(** [write oc ~id schema value] writes the [value] in the output channel [oc], creating unmarshalling boundaries on every link in [value] specified by the [schema]. [id] is used as index UID. *)
+(** [write oc ~id schema value] writes the [value] in the output channel [oc],
+    creating unmarshalling boundaries on every link in [value] specified by the
+    [schema]. [id] is used as index UID. *)
 val write :
   ?flags:Marshal.extern_flags list ->
   out_channel ->
@@ -78,5 +80,5 @@ val write :
 
 (** [read ic schema] reads the value marshalled in the input channel [ic],
     stopping the unmarshalling on every link boundary indicated by the [schema].
-    It returns the root [value] read.  *)
+    It returns the root [value] read. *)
 val read : string -> in_channel -> 'a schema -> 'a
