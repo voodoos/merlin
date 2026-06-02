@@ -16,17 +16,39 @@ and 'a link = 'a repr ref
 
 and 'a repr =
   | Small of 'a
+      (** A serialized small value. Used for optimisation to avoid a pointer
+          indirection. *)
   | Small_child of { parent : parent_link; pos : int }
+      (** A small read value identified as a children of the given parent link.
+          [loc] is the index of the link value in the parent childrens array. *)
   | Serialized of { loc : int }
+      (** An already serialized value. [loc] is its offset in the index file. *)
   | Serialized_reused of { loc : int }
+      (** An already serialized link stored in a store cache. [loc] is its
+          offset in the index file. *)
   | On_disk of { store : store; loc : int; schema : 'a schema }
+      (** A link pointing to a value stored in the given store at index [loc].
+      *)
   | On_disk_ptr of { filename : string; loc : int; id : int }
-  | In_memory of 'a
-  | In_cache of 'a * cached Dbllist.cell * any_value array
+      (** A link pointing to a value stored in another index file. [id] is the
+          identifier of the store where the value has been stored during its
+          serialisation (useful to avoid loading outdated store). *)
+  | In_memory of 'a  (** A link pointing to a value stored in memory. *)
   | In_memory_reused of 'a
+      (** A link pointing to a value used more than once stored in memory
+          (contained in a store cache). *)
+  | In_cache of 'a * cached Dbllist.cell * any_value array
+      (** [In_cache (v, cache_cell, childrens)] represents value stored in a
+          cell of the LRU cache. [childrens] are an array of its small child
+          links. *)
   | In_cache_reused of 'a * cached Dbllist.cell * any_value array
+      (** Same as [In_cache] but points to a value used more than once (stored
+          in a store cache). *)
   | Duplicate of 'a link
+      (** A duplicate value. Useful to perform compression and to avoid writing
+          multiple times the same value. *)
   | Placeholder
+      (** A intermediate state used for granulary writing small values. *)
 
 and 'a schema = iter -> 'a -> unit
 
