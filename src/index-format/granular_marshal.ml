@@ -199,7 +199,7 @@ let rec fetch : type a. a link -> a =
     v
   | In_memory v | In_memory_reused v -> v
   | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ ->
-    invalid_arg "Granular_marshal.fetch: serialized"
+    invalid_arg ("Granular_marshal.fetch: " ^ string_of_link lnk)
   | Placeholder -> invalid_arg "Granular_marshal.fetch: during a write"
   | Duplicate original_lnk -> fetch original_lnk
   | Small_child { parent; pos; type_id } -> (
