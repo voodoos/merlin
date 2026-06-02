@@ -8,7 +8,7 @@ and any_link = Link : 'a link * 'a link Type.Id.t -> any_link
 
 and parent_link = PLink : 'a link -> parent_link
 
-and any_value = Value : 'a -> any_value
+and any_value = Value : 'a * 'a link Type.Id.t -> any_value
 
 and cached = Cached : 'a link * int * store * 'a schema -> cached
 
@@ -16,7 +16,8 @@ and 'a link = 'a repr ref
 
 and 'a repr =
   | Small of 'a
-  | Small_child of { parent : parent_link; pos : int }
+  | Small_child of
+      { parent : parent_link; pos : int; type_id : 'a link Type.Id.t }
   | Serialized of { loc : int }
   | Serialized_reused of { loc : int }
   | On_disk of { store : store; loc : int; schema : 'a schema }
@@ -151,8 +152,9 @@ let read_loc store fd loc schema parent_link =
           match !lnk with
           | Small v ->
             schema iter v;
-            child_smalls := Value v :: !child_smalls;
-            lnk := Small_child { parent = parent_link; pos = !child_pos };
+            child_smalls := Value (v, type_id) :: !child_smalls;
+            lnk :=
+              Small_child { parent = parent_link; pos = !child_pos; type_id };
             child_pos := !child_pos + 1
           | Serialized { loc } -> lnk := On_disk { store; loc; schema }
           | Serialized_reused { loc } -> (
@@ -201,13 +203,15 @@ let rec fetch : type a. a link -> a =
     invalid_arg "Granular_marshal.fetch: serialized"
   | Placeholder -> invalid_arg "Granular_marshal.fetch: during a write"
   | Duplicate original_lnk -> fetch original_lnk
-  | Small_child { parent; pos } -> (
+  | Small_child { parent; pos; type_id } -> (
     let (PLink parent) = parent in
     ignore (fetch parent);
     match !parent with
-    | In_cache (_, _, small_poses) | In_cache_reused (_, _, small_poses) ->
-      let (Value v) = small_poses.(pos) in
-      Obj.magic v
+    | In_cache (_, _, small_poses) | In_cache_reused (_, _, small_poses) -> (
+      let (Value (type b) ((v, type_id') : b * _)) = small_poses.(pos) in
+      match Type.Id.provably_equal type_id type_id' with
+      | Some (Equal : (a link, b link) Type.eq) -> v
+      | None -> invalid_arg "Granular_marshal.read_loc: small has wrong type")
     | _ -> assert false)
   | On_disk { store; loc; schema } ->
     (* let count = try Hashtbl.find fetch_count (loc, store.filename) with Not_found -> 0 in
