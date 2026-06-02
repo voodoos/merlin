@@ -14,6 +14,7 @@ and cached = Cached : 'a link * int * store * 'a schema -> cached
 
 and 'a link = 'a repr ref
 
+(** Links descriptions. *)
 and 'a repr =
   | Small of 'a
   | Small_child of
@@ -227,6 +228,8 @@ let rec fetch : type a. a link -> a =
     lnk := In_cache (v, cell, small_poses);
     v
 
+(* TODO The compression is not so easy to do and has a minor impact. *)
+(* Or we could just do it "in memory" *)
 let rec reuse original_lnk =
   match !original_lnk with
   | In_memory v -> original_lnk := In_memory_reused v
