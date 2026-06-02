@@ -195,7 +195,6 @@ let rec fetch : type a. a link -> a =
  fun lnk ->
   match !lnk with
   | In_cache (v, cell, _) | In_cache_reused (v, cell, _) ->
-    let (Cached (_, _loc, _, _)) = Dbllist.get cell in
     Dbllist.promote (get_lru ()) cell;
     v
   | In_memory v | In_memory_reused v -> v
