@@ -36,10 +36,9 @@ and iter = { yield : 'a. 'a link -> 'a link Type.Id.t -> 'a schema -> unit }
 let string_of_link : type a. a link -> string =
  fun link ->
   match !link with
-  | Small i -> Printf.sprintf "Small(%d)" i
+  | Small _ -> Printf.sprintf "Small"
   | Small_child { pos; _ } -> Printf.sprintf "Small_child(pos=%d)" pos
-  | Serialized { loc; smalls } ->
-    Printf.sprintf "Serialized(loc=%d, %d smalls)" loc (Array.length smalls)
+  | Serialized { loc } -> Printf.sprintf "Serialized(loc=%d)" loc
   | Serialized_reused { loc } -> Printf.sprintf "Serialized_reused(loc=%d)" loc
   | On_disk { loc; _ } -> Printf.sprintf "On_disk(loc=%d)" loc
   | On_disk_ptr { loc; pos; _ } ->
@@ -365,25 +364,6 @@ let read filename fd root_schema =
     read_loc store fd root_loc root_schema (PLink parent_link)
   in
   root_value
-
-let pp_links : type a. Format.formatter -> a schema -> a -> unit =
- fun ppf schema root ->
-  let rec go : type b. int -> b schema -> b -> unit =
-   fun depth schema v ->
-    let iter =
-      { yield =
-          (fun (type c) (lnk : c link) _type_id (child_schema : c schema) ->
-            Format.fprintf ppf "%*s- %s@." (depth * 2) "" (string_of_link lnk);
-            match fetch lnk with
-            | child_value -> go (depth + 1) child_schema child_value
-            | exception exn ->
-              Format.fprintf ppf "%*s  <cannot fetch: %s>@." (depth * 2) ""
-                (Printexc.to_string exn))
-      }
-    in
-    schema iter v
-  in
-  go 0 schema root
 
 let () =
   at_exit (fun () ->
