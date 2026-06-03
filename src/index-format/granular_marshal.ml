@@ -133,10 +133,14 @@ let open_store store =
 let read_loc store fd loc schema parent_link =
   seek_in fd loc;
   let v, small_children = Marshal.from_channel fd in
-  Format.eprintf "Smalls size=%i\n%!" (Array.length small_children);
   let size_read = pos_in fd - loc in
-  (* let child_pos = ref 0 in
-  let child_smalls = ref [] in *)
+  (* Smalls are flattened into a single array per store location: every small
+     reachable from [v] (at any depth) is appended to [child_smalls] during the
+     recursive traversal below, and the link is rewritten to a [Small_child]
+     pointing at its index in that flat array. [fetch] then resolves a
+     [Small_child] by re-reading the parent location and indexing this array. *)
+  let child_pos = ref 0 in
+  let child_smalls = ref [] in
   let rec iter smalls =
     { yield =
         (fun (type a)
@@ -146,22 +150,21 @@ let read_loc store fd loc schema parent_link =
         ->
           match !lnk with
           | Small pos ->
-            Format.eprintf "Lookup Small %i size=%i\n%!" pos
-              (Array.length smalls);
+            (* [pos] indexes the *marshalled* nested array [smalls]; the value's
+               own sub-smalls live in [v_smalls]. We cannot check [type_id]
+               against the stored one: [Type.Id.provably_equal] relies on
+               physical identity, which marshalling does not preserve. *)
             let (Small_value (Value (type b) ((v, _type_id') : b * _), v_smalls))
                 =
               smalls.(pos)
             in
-            (* match Type.Id.provably_equal type_id type_id' with
-            | None ->
-              invalid_arg "Granular_marshal.read_loc: small has wrong type"
-            | Some (Equal : (a link, b link) Type.eq) -> *)
             schema (iter v_smalls) (Obj.magic v);
-            lnk := Small_child { parent = parent_link; pos; type_id }
-            (* child_smalls := Value (Obj.magic v, type_id) :: !child_smalls;
+            (* Flatten into [child_smalls] and address by the running flat index
+               [child_pos] rather than [pos] (which is local to [smalls]). *)
+            child_smalls := Value (Obj.magic v, type_id) :: !child_smalls;
             lnk :=
               Small_child { parent = parent_link; pos = !child_pos; type_id };
-            child_pos := !child_pos + 1 *)
+            child_pos := !child_pos + 1
           | Serialized { loc } -> lnk := On_disk { store; loc; schema }
           | Serialized_reused { loc } -> (
             match Cache.find_opt store.cache loc with
@@ -192,8 +195,7 @@ let read_loc store fd loc schema parent_link =
     }
   in
   schema (iter small_children) v;
-  (* let small_poses = Array.of_list (List.rev !child_smalls) in *)
-  let small_poses = small_children in
+  let small_poses = Array.of_list (List.rev !child_smalls) in
   (v, size_read, small_poses)
 
 let fetch_loc store loc schema parent_link =
@@ -212,7 +214,6 @@ let rec fetch : type a. a link -> a =
     invalid_arg ("Granular_marshal.fetch: " ^ string_of_link lnk)
   | Duplicate original_lnk -> fetch original_lnk
   | Small_child { parent; pos; type_id = _ } -> (
-    Format.eprintf "POUET 0\n%!";
     let (PLink parent) = parent in
     ignore (fetch parent);
     match !parent with
