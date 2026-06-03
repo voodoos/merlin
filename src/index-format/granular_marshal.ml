@@ -297,6 +297,8 @@ let write ?(flags = []) fd ~id root_schema root_value =
             let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
             lnk := On_disk_ptr { filename; id; loc; pos = None }
           | On_disk { store = { filename; id; _ }; loc; _ } ->
+            (* TODO we could have all the possible filenames wrote once
+               somewhere in the file. *)
             lnk := On_disk_ptr { filename; id; loc; pos = None })
     }
   and write_child : type a. a link -> a schema -> a -> _ =
