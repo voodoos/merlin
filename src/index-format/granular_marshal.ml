@@ -145,19 +145,23 @@ let read_loc store fd loc schema parent_link =
           (schema : a schema)
         ->
           match !lnk with
-          | Small pos -> (
+          | Small pos ->
             Format.eprintf "Lookup Small %i size=%i\n%!" pos
               (Array.length smalls);
-            let (Small_value (Value (type b) ((v, type_id') : b * _), v_smalls))
+            let (Small_value (Value (type b) ((v, _type_id') : b * _), v_smalls))
                 =
               smalls.(pos)
             in
-            match Type.Id.provably_equal type_id type_id' with
+            (* match Type.Id.provably_equal type_id type_id' with
             | None ->
               invalid_arg "Granular_marshal.read_loc: small has wrong type"
-            | Some (Equal : (a link, b link) Type.eq) ->
-              schema (iter v_smalls) v;
-              lnk := Small_child { parent = parent_link; pos; type_id })
+            | Some (Equal : (a link, b link) Type.eq) -> *)
+            schema (iter v_smalls) (Obj.magic v);
+            lnk := Small_child { parent = parent_link; pos; type_id }
+            (* child_smalls := Value (Obj.magic v, type_id) :: !child_smalls;
+            lnk :=
+              Small_child { parent = parent_link; pos = !child_pos; type_id };
+            child_pos := !child_pos + 1 *)
           | Serialized { loc } -> lnk := On_disk { store; loc; schema }
           | Serialized_reused { loc } -> (
             match Cache.find_opt store.cache loc with
@@ -188,7 +192,9 @@ let read_loc store fd loc schema parent_link =
     }
   in
   schema (iter small_children) v;
-  (v, size_read, small_children)
+  (* let small_poses = Array.of_list (List.rev !child_smalls) in *)
+  let small_poses = small_children in
+  (v, size_read, small_poses)
 
 let fetch_loc store loc schema parent_link =
   let fd = open_store store in
@@ -205,15 +211,18 @@ let rec fetch : type a. a link -> a =
   | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ ->
     invalid_arg ("Granular_marshal.fetch: " ^ string_of_link lnk)
   | Duplicate original_lnk -> fetch original_lnk
-  | Small_child { parent; pos; type_id } -> (
+  | Small_child { parent; pos; type_id = _ } -> (
+    Format.eprintf "POUET 0\n%!";
     let (PLink parent) = parent in
     ignore (fetch parent);
     match !parent with
-    | In_cache (_, _, small_poses) -> (
-      let (Value (type b) ((v, type_id') : b * _)) = small_poses.(pos) in
-      match Type.Id.provably_equal type_id type_id' with
-      | Some (Equal : (a link, b link) Type.eq) -> v
-      | None -> invalid_arg "Granular_marshal.read_loc: small has wrong type")
+    | In_cache (_, _, small_poses) ->
+      let (Value (type b) ((v, _type_id') : b * _)) = small_poses.(pos) in
+      (* match Type.Id.provably_equal type_id type_id' with
+      | None -> invalid_arg "Granular_marshal.read_loc: small has wrong type"
+      | Some (Equal : (a link, b link) Type.eq) ->
+        let () = assert false in *)
+      Obj.magic v
     | _ -> assert false)
   | On_disk_small_ptr (*{ store; loc; small_schema = schema; small_pos }*) _ ->
     assert false
