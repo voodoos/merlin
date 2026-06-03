@@ -60,23 +60,6 @@ let lru_dbllist : cached Dbllist.t option ref = ref None
 let lru_size = ref 1_000_000
 let set_lru_size i = lru_size := i
 
-(* let fetch_count = Hashtbl.create 16
-
-let debug h =
-  let r = Hashtbl.create 16 in
-  Hashtbl.iter (fun _k v ->
-    let count = try Hashtbl.find r v with Not_found -> 0 in
-    Hashtbl.replace r v (count + 1);
-  ) h;
-  let acc = ref 0 in
-  Hashtbl.iter (fun k v ->
-    acc := !acc + v;
-    Format.eprintf "fetché %d fois -> %d valeurs\n%!" k v
-  ) r;
-  Format.eprintf "en tout : %d valeurs\n%!" !acc *)
-
-(* let create_lru cap = lru_dbllist := Some (Dbllist.create cap) *)
-
 let get_lru () =
   match !lru_dbllist with
   | Some lru -> lru
@@ -233,8 +216,6 @@ let rec fetch : type a. a link -> a =
       | None -> invalid_arg "Granular_marshal.read_loc: small has wrong type")
     | _ -> assert false)
   | On_disk { store; loc; schema } ->
-    (* let count = try Hashtbl.find fetch_count (loc, store.filename) with Not_found -> 0 in
-    Hashtbl.replace fetch_count (loc, store.filename) (count + 1); *)
     let v, size, small_poses = fetch_loc store loc schema (PLink lnk) in
     let discarded = Dbllist.discard_size (get_lru ()) size in
     let cell =
