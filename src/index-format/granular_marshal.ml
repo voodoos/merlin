@@ -26,7 +26,6 @@ and 'a repr =
   | In_memory of 'a
   | In_cache of 'a * cached Dbllist.cell * any_value array
   | In_memory_reused of 'a
-  | In_cache_reused of 'a * cached Dbllist.cell * any_value array
   | Duplicate of 'a link
   | Placeholder
 
@@ -51,7 +50,6 @@ let string_of_link : type a. a link -> string =
   | In_memory _ -> "In_memory"
   | In_cache _ -> "In_cache"
   | In_memory_reused _ -> "In_memory_reused"
-  | In_cache_reused _ -> "In_cache_reused"
   | Duplicate _ -> "Duplicate"
   | Placeholder -> "Placeholder"
 
@@ -179,7 +177,6 @@ let read_loc store fd loc schema parent_link =
           | In_memory _
           | In_cache _
           | In_memory_reused _
-          | In_cache_reused _
           | On_disk _
           | Small_child _
           | Duplicate _ -> (* TODO when does this happen ? *) ()
@@ -218,7 +215,7 @@ let fetch_loc store loc schema parent_link =
 let rec fetch : type a. a link -> a =
  fun lnk ->
   match !lnk with
-  | In_cache (v, cell, _) | In_cache_reused (v, cell, _) ->
+  | In_cache (v, cell, _) ->
     Dbllist.promote (get_lru ()) cell;
     v
   | In_memory v | In_memory_reused v -> v
@@ -230,7 +227,7 @@ let rec fetch : type a. a link -> a =
     let (PLink parent) = parent in
     ignore (fetch parent);
     match !parent with
-    | In_cache (_, _, small_poses) | In_cache_reused (_, _, small_poses) -> (
+    | In_cache (_, _, small_poses) -> (
       let (Value (type b) ((v, type_id') : b * _)) = small_poses.(pos) in
       match Type.Id.provably_equal type_id type_id' with
       | Some (Equal : (a link, b link) Type.eq) -> v
@@ -256,9 +253,7 @@ let rec fetch : type a. a link -> a =
 let rec reuse original_lnk =
   match !original_lnk with
   | In_memory v -> original_lnk := In_memory_reused v
-  | In_cache (v, cell, smalls) ->
-    original_lnk := In_cache_reused (v, cell, smalls)
-  | In_memory_reused _ | In_cache_reused _ -> ()
+  | In_memory_reused _ -> ()
   | On_disk _ -> ()
   | Duplicate link -> reuse link
   | _ ->
@@ -296,9 +291,6 @@ let write ?(flags = []) fd ~id root_schema root_value =
             | In_memory_reused v ->
               write_child_reused original_lnk schema v;
               lnk := !original_lnk
-            | In_cache_reused (_v, t, _) ->
-              let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
-              lnk := On_disk_ptr { filename; id; loc; pos = None }
             | On_disk { store = { filename; id; _ }; loc; _ } ->
               lnk := On_disk_ptr { filename; id; loc; pos = None }
             | _ ->
@@ -321,7 +313,7 @@ let write ?(flags = []) fd ~id root_schema root_value =
               | _ -> failwith "todo explain"
             in
             lnk := On_disk_ptr { filename; id; loc; pos = Some pos }
-          | In_cache (_v, t, _children) | In_cache_reused (_v, t, _children) ->
+          | In_cache (_v, t, _children) ->
             let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
             lnk := On_disk_ptr { filename; id; loc; pos = None }
           | On_disk { store = { filename; id; _ }; loc; _ } ->
