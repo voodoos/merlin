@@ -33,9 +33,7 @@ and 'a repr =
       (** A link pointing to a value stored in another index file. [id] is the
           identifier of the store where the value has been stored during its
           serialisation (useful to avoid loading outdated store). *)
-  | In_memory of 'a
-      (** A link pointing to a value stored in memory. *)
-  | In_cache of 'a * cached Dbllist.cell * any_value array
+  | In_memory of 'a  (** A link pointing to a value stored in memory. *)
   | In_memory_reused of 'a
       (** A link pointing to a value used more than once stored in memory
           (contained in a store cache). *)
@@ -43,9 +41,6 @@ and 'a repr =
       (** [In_cache (v, cache_cell, childrens)] represents value stored in a
           cell of the LRU cache. [childrens] are an array of its small child
           links. *)
-  | In_cache_reused of 'a * cached Dbllist.cell * any_value array
-      (** Same as [In_cache] but points to a value used more than once (stored
-          in a store cache). *)
   | Duplicate of 'a link
       (** A duplicate value. Useful to perform compression and to avoid writing
           multiple times the same value. *)
@@ -56,20 +51,24 @@ and 'a schema = iter -> 'a -> unit
 
 and iter = { yield : 'a. 'a link -> 'a link Type.Id.t -> 'a schema -> unit }
 
-let string_of_link link =
+let string_of_link : type a. a link -> string =
+ fun link ->
   match !link with
-  | Small _ -> "Small\n"
-  | Small_child _ -> "Small_child\n"
-  | Serialized _ -> "Serialized\n"
-  | Serialized_reused _ -> "Serialized_reused\n"
-  | On_disk _ -> "On_disk\n"
-  | On_disk_ptr _ -> "On_disk_ptr\n"
-  | In_memory _ -> "In_memory\n"
-  | In_cache (_, _, _) -> "In_cache\n"
-  | In_memory_reused _ -> "In_memory_reused\n"
-  | In_cache_reused (_, _, _) -> "In_cache_reused\n"
-  | Duplicate _ -> "Duplicate\n"
-  | Placeholder -> "Placeholder\n"
+  | Small _ -> Printf.sprintf "Small"
+  | Small_child { pos; _ } -> Printf.sprintf "Small_child(pos=%d)" pos
+  | Serialized { loc } -> Printf.sprintf "Serialized(loc=%d)" loc
+  | Serialized_reused { loc } -> Printf.sprintf "Serialized_reused(loc=%d)" loc
+  | On_disk { loc; _ } -> Printf.sprintf "On_disk(loc=%d)" loc
+  | On_disk_ptr { loc; pos; _ } ->
+    Printf.sprintf "On_disk_ptr(loc=%d%s)" loc
+      (match pos with
+      | Some pos -> Printf.sprintf ", pos=%d" pos
+      | None -> "")
+  | In_memory _ -> "In_memory"
+  | In_cache _ -> "In_cache"
+  | In_memory_reused _ -> "In_memory_reused"
+  | Duplicate _ -> "Duplicate"
+  | Placeholder -> "Placeholder"
 
 exception
   Outdated_store of
@@ -79,23 +78,6 @@ let lru_size = ref 1_000_000
 let set_lru_size size = lru_size := size
 let lru_dbllist = lazy (Dbllist.create 1_000_000)
 let get_lru () = Lazy.force lru_dbllist
-
-(* let fetch_count = Hashtbl.create 16
-
-let debug h =
-  let r = Hashtbl.create 16 in
-  Hashtbl.iter (fun _k v ->
-    let count = try Hashtbl.find r v with Not_found -> 0 in
-    Hashtbl.replace r v (count + 1);
-  ) h;
-  let acc = ref 0 in
-  Hashtbl.iter (fun k v ->
-    acc := !acc + v;
-    Format.eprintf "fetché %d fois -> %d valeurs\n%!" k v
-  ) r;
-  Format.eprintf "en tout : %d valeurs\n%!" !acc *)
-
-(* let create_lru cap = lru_dbllist := Some (Dbllist.create cap) *)
 
 let schema_no_sublinks : _ schema = fun _ _ -> ()
 
@@ -194,7 +176,6 @@ let read_loc store fd loc schema parent_link =
           | In_memory _
           | In_cache _
           | In_memory_reused _
-          | In_cache_reused _
           | On_disk _
           | Small_child _
           | Duplicate _ -> (* TODO when does this happen ? *) ()
@@ -235,7 +216,7 @@ let fetch_loc store loc schema parent_link =
 let rec fetch : type a. a link -> a =
  fun lnk ->
   match !lnk with
-  | In_cache (v, cell, _) | In_cache_reused (v, cell, _) ->
+  | In_cache (v, cell, _) ->
     Dbllist.promote (get_lru ()) cell;
     v
   | In_memory v | In_memory_reused v -> v
@@ -248,15 +229,13 @@ let rec fetch : type a. a link -> a =
     let (PLink parent) = parent in
     ignore (fetch parent);
     match !parent with
-    | In_cache (_, _, small_poses) | In_cache_reused (_, _, small_poses) -> (
+    | In_cache (_, _, small_poses) -> (
       let (Value (type b) ((v, type_id') : b * _)) = small_poses.(pos) in
       match Type.Id.provably_equal type_id type_id' with
       | Some (Equal : (a link, b link) Type.eq) -> v
       | None -> invalid_arg "Granular_marshal.read_loc: small has wrong type")
     | _ -> assert false)
   | On_disk { store; loc; schema } ->
-    (* let count = try Hashtbl.find fetch_count (loc, store.filename) with Not_found -> 0 in
-       Hashtbl.replace fetch_count (loc, store.filename) (count + 1); *)
     (* Add the value stored on disk to the LRU cache. *)
     let v, size, small_poses = fetch_loc store loc schema (PLink lnk) in
     let discarded = Dbllist.discard_size (get_lru ()) size in
@@ -275,9 +254,7 @@ let rec fetch : type a. a link -> a =
 let rec reuse original_lnk =
   match !original_lnk with
   | In_memory v -> original_lnk := In_memory_reused v
-  | In_cache (v, cell, smalls) ->
-    original_lnk := In_cache_reused (v, cell, smalls)
-  | In_memory_reused _ | In_cache_reused _ -> ()
+  | In_memory_reused _ -> ()
   | On_disk _ -> ()
   | Duplicate link -> reuse link
   | _ ->
@@ -319,9 +296,6 @@ let write ?(flags = []) fd ~id root_schema root_value =
             | In_memory_reused v ->
               write_child_reused original_lnk schema v;
               lnk := !original_lnk
-            | In_cache_reused (_v, t, _) ->
-              let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
-              lnk := On_disk_ptr { filename; id; loc; pos = None }
             | On_disk { store = { filename; id; _ }; loc; _ } ->
               lnk := On_disk_ptr { filename; id; loc; pos = None }
             | _ ->
@@ -344,7 +318,7 @@ let write ?(flags = []) fd ~id root_schema root_value =
               | _ -> failwith "todo explain"
             in
             lnk := On_disk_ptr { filename; id; loc; pos = Some pos }
-          | In_cache (_v, t, _children) | In_cache_reused (_v, t, _children) ->
+          | In_cache (_v, t, _children) ->
             let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
             lnk := On_disk_ptr { filename; id; loc; pos = None }
           | On_disk { store = { filename; id; _ }; loc; _ } ->
