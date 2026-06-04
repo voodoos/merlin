@@ -71,6 +71,7 @@ exception
 val write :
   ?flags:Marshal.extern_flags list ->
   out_channel ->
+  filename:string ->
   id:int ->
   'a schema ->
   'a ->

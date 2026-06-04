@@ -7,25 +7,29 @@ and cache = any_link Cache.t
 and any_link = Link : 'a link * 'a link Type.Id.t -> any_link
 
 and parent_link = PLink : 'a link -> parent_link
-
 and any_value = Value : 'a * 'a link Type.Id.t -> any_value
-and small_value = Small_value of (any_value * small_value array)
+and any_val = V : 'a -> any_val
+and any_val_link = Vlink : 'a * 'a link -> any_val_link
 
 and cached = Cached : 'a link * int * store * 'a schema -> cached
 
 and 'a link = 'a repr ref
 
-(** Links descriptions. *)
+(** Links descriptions.
+  There are two different realms: on disk and in memory.
+  Things such as On_disk cannot live on disk since the contain a function, schema.
+  _ Type.Id.t cannot survive to marshalling either.
+
+  TODO: reorder the list by realm.
+*)
 and 'a repr =
   | Small of int
-  | Small_child of
-      { parent : parent_link; pos : int; type_id : 'a link Type.Id.t }
   | Serialized of { loc : int }
   | Serialized_reused of { loc : int }
   | On_disk of { store : store; loc : int; schema : 'a schema }
-  | On_disk_ptr of { filename : string; loc : int; id : int; pos : int option }
-  | On_disk_small_ptr of
+  | On_disk_small of
       { store : store; loc : int; small_pos : int; small_schema : 'a schema }
+  | On_disk_ptr of { filename : string; loc : int; id : int; pos : int option }
   | In_memory of 'a
   | In_cache of 'a * cached Dbllist.cell * any_value array
   | In_memory_reused of 'a
@@ -39,17 +43,16 @@ let string_of_link : type a. a link -> string =
  fun link ->
   match !link with
   | Small _ -> Printf.sprintf "Small"
-  | Small_child { pos; _ } -> Printf.sprintf "Small_child(pos=%d)" pos
   | Serialized { loc } -> Printf.sprintf "Serialized(loc=%d)" loc
   | Serialized_reused { loc } -> Printf.sprintf "Serialized_reused(loc=%d)" loc
   | On_disk { loc; _ } -> Printf.sprintf "On_disk(loc=%d)" loc
+  | On_disk_small { loc; small_pos; _ } ->
+    Printf.sprintf "On_disk(loc=%d;small_pos=%d)" loc small_pos
   | On_disk_ptr { loc; pos; _ } ->
     Printf.sprintf "On_disk_ptr(loc=%d%s)" loc
       (match pos with
       | Some pos -> Printf.sprintf ", pos=%d" pos
       | None -> "")
-  | On_disk_small_ptr { loc; small_pos; _ } ->
-    Printf.sprintf "On_disk(loc=%d;small_pos=%d)" loc small_pos
   | In_memory _ -> "In_memory"
   | In_cache _ -> "In_cache"
   | In_memory_reused _ -> "In_memory_reused"
@@ -130,78 +133,71 @@ let open_store store =
     force_open_store store
   | None -> force_open_store store
 
-let read_loc store fd loc schema parent_link =
+(** This iterator translate links from the Disk Realm tot he Memory Realm *)
+let disk_to_memory_iter store loc =
+  { yield =
+      (fun (type a)
+        (lnk : a link)
+        (type_id : a link Type.Id.t)
+        (schema : a schema)
+      ->
+        match !lnk with
+        | Small pos ->
+          let on_disk_small =
+            On_disk_small { store; loc; small_pos = pos; small_schema = schema }
+          in
+          lnk := on_disk_small
+        | Serialized { loc } -> lnk := On_disk { store; loc; schema }
+        | Serialized_reused { loc } -> (
+          match Cache.find_opt store.cache loc with
+          | Some (Link (type b) ((lnk', type_id') : b link * _)) -> (
+            match Type.Id.provably_equal type_id type_id' with
+            | Some (Equal : (a link, b link) Type.eq) ->
+              lnk := Duplicate (normalize lnk')
+            | None ->
+              invalid_arg "Granular_marshal.read_loc: reuse of a different type"
+            )
+          | None ->
+            lnk := On_disk { store; loc; schema };
+            Cache.add store.cache loc (Link (lnk, type_id)))
+        | In_memory _
+        | In_cache _
+        | In_memory_reused _
+        | On_disk_small _
+        | On_disk _
+        | Duplicate _ -> (* TODO when does this happen ? *) ()
+        | On_disk_ptr { filename; loc; id; pos = None } ->
+          let store = { filename; id; cache = Cache_cache.read filename } in
+          lnk := On_disk { store; loc; schema }
+        | On_disk_ptr { filename; loc; id; pos = Some small_pos } ->
+          let store = { filename; id; cache = Cache_cache.read filename } in
+          lnk := On_disk_small { store; loc; small_schema = schema; small_pos })
+  }
+
+let read_loc store fd loc schema _parent_link =
   seek_in fd loc;
   let v, small_children = Marshal.from_channel fd in
   let size_read = pos_in fd - loc in
-  (* Smalls are flattened into a single array per store location: every small
-     reachable from [v] (at any depth) is appended to [child_smalls] during the
-     recursive traversal below, and the link is rewritten to a [Small_child]
-     pointing at its index in that flat array. [fetch] then resolves a
-     [Small_child] by re-reading the parent location and indexing this array. *)
-  let child_pos = ref 0 in
-  let child_smalls = ref [] in
-  let rec iter smalls =
-    { yield =
-        (fun (type a)
-          (lnk : a link)
-          (type_id : a link Type.Id.t)
-          (schema : a schema)
-        ->
-          match !lnk with
-          | Small pos ->
-            (* [pos] indexes the *marshalled* nested array [smalls]; the value's
-               own sub-smalls live in [v_smalls]. We cannot check [type_id]
-               against the stored one: [Type.Id.provably_equal] relies on
-               physical identity, which marshalling does not preserve. *)
-            let (Small_value (Value (type b) ((v, _type_id') : b * _), v_smalls))
-                =
-              smalls.(pos)
-            in
-            schema (iter v_smalls) (Obj.magic v);
-            (* Flatten into [child_smalls] and address by the running flat index
-               [child_pos] rather than [pos] (which is local to [smalls]). *)
-            child_smalls := Value (Obj.magic v, type_id) :: !child_smalls;
-            lnk :=
-              Small_child { parent = parent_link; pos = !child_pos; type_id };
-            child_pos := !child_pos + 1
-          | Serialized { loc } -> lnk := On_disk { store; loc; schema }
-          | Serialized_reused { loc } -> (
-            match Cache.find_opt store.cache loc with
-            | Some (Link (type b) ((lnk', type_id') : b link * _)) -> (
-              match Type.Id.provably_equal type_id type_id' with
-              | Some (Equal : (a link, b link) Type.eq) ->
-                lnk := Duplicate (normalize lnk')
-              | None ->
-                invalid_arg
-                  "Granular_marshal.read_loc: reuse of a different type")
-            | None ->
-              lnk := On_disk { store; loc; schema };
-              Cache.add store.cache loc (Link (lnk, type_id)))
-          | In_memory _
-          | In_cache _
-          | In_memory_reused _
-          | On_disk_small_ptr _
-          | On_disk _
-          | Small_child _
-          | Duplicate _ -> (* TODO when does this happen ? *) ()
-          | On_disk_ptr { filename; loc; id; pos = None } ->
-            let store = { filename; id; cache = Cache_cache.read filename } in
-            lnk := On_disk { store; loc; schema }
-          | On_disk_ptr { filename; loc; id; pos = Some small_pos } ->
-            let store = { filename; id; cache = Cache_cache.read filename } in
-            lnk :=
-              On_disk_small_ptr { store; loc; small_schema = schema; small_pos })
-    }
-  in
-  schema (iter small_children) v;
-  let small_poses = Array.of_list (List.rev !child_smalls) in
-  (v, size_read, small_poses)
+  let iter = disk_to_memory_iter store loc in
+  schema iter v;
+  (v, size_read, small_children)
 
 let fetch_loc store loc schema parent_link =
   let fd = open_store store in
   let v, size, small_poses = read_loc store fd loc schema parent_link in
   (v, size, small_poses)
+
+let fetch_small_loc : type a.
+    store -> a schema -> int -> int -> parent_link -> a =
+ fun store small_schema loc small_pos _parent_link ->
+  let fd = open_store store in
+  seek_in fd loc;
+  let (_v, small_children) : _ * any_val array = Marshal.from_channel fd in
+  let (V v) = small_children.(small_pos) in
+  let iter = disk_to_memory_iter store loc in
+  (* TODO Use the cache and remember already itered on smalls *)
+  small_schema iter (Obj.magic v);
+  Obj.magic v
 
 let rec fetch : type a. a link -> a =
  fun lnk ->
@@ -213,7 +209,7 @@ let rec fetch : type a. a link -> a =
   | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ ->
     invalid_arg ("Granular_marshal.fetch: " ^ string_of_link lnk)
   | Duplicate original_lnk -> fetch original_lnk
-  | Small_child { parent; pos; type_id = _ } -> (
+  (* | Small_child { parent; pos; type_id = _ } -> (
     let (PLink parent) = parent in
     ignore (fetch parent);
     match !parent with
@@ -224,9 +220,10 @@ let rec fetch : type a. a link -> a =
       | Some (Equal : (a link, b link) Type.eq) ->
         let () = assert false in *)
       Obj.magic v
-    | _ -> assert false)
-  | On_disk_small_ptr (*{ store; loc; small_schema = schema; small_pos }*) _ ->
-    assert false
+    | _ -> assert false) *)
+  | On_disk_small { store; loc; small_pos; small_schema } ->
+    (* We should use the cache *)
+    fetch_small_loc store small_schema loc small_pos (PLink lnk)
   | On_disk { store; loc; schema } ->
     let v, size, small_poses = fetch_loc store loc schema (PLink lnk) in
     let discarded = Dbllist.discard_size (get_lru ()) size in
@@ -235,7 +232,7 @@ let rec fetch : type a. a link -> a =
     in
     List.iter
       (fun (Cached (link, loc, store, schema)) ->
-        link := On_disk { store; loc; schema })
+        link := On_disk { store; loc; schema } (* This also free the smalls *))
       discarded;
     lnk := In_cache (v, cell, small_poses);
     v
@@ -265,44 +262,34 @@ let cache (type a) (module Key : Hashtbl.HashedType with type t = a) =
       lnk := Duplicate original_lnk
     | exception Not_found -> H.add cache key lnk
 
-let write ?(flags = []) fd ~id root_schema root_value =
-  let output v (small_children : small_value array) =
-    Marshal.to_channel fd (v, small_children) flags
-  in
-  let id = binstring_of_int id in
-  output_string fd id;
+let write ?(flags = []) fd ~filename ~id root_schema root_value =
+  let id' = binstring_of_int id in
+  output_string fd id';
   let pt_root = pos_out fd in
   output_string fd (String.make ptr_size '\000');
-  let rec iter size ~small_children ~small_children_count =
+  let rec iter size ~small_children =
     { yield =
-        (fun (type a) (lnk : a link) type_id (schema : a schema) : unit ->
+        (fun (type a) (lnk : a link) _type_id (schema : a schema) : unit ->
           match !lnk with
-          | Serialized _
-          | Serialized_reused _
-          | Small _
-          | On_disk_ptr _
-          | On_disk_small_ptr _ -> ()
-          | In_memory_reused v ->
-            write_child_reused lnk schema v ~small_children
-              ~small_children_count
+          | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ -> ()
+          | In_memory_reused v -> write_child_reused lnk schema v
           | Duplicate original_lnk -> (
             match !original_lnk with
             | Serialized_reused _ | On_disk_ptr _ -> lnk := !original_lnk
             | In_memory_reused v ->
-              write_child_reused original_lnk schema v ~small_children
-                ~small_children_count;
+              write_child_reused original_lnk schema v;
               lnk := !original_lnk
-            | On_disk { store = { filename; id; _ }; loc; _ } ->
-              lnk := On_disk_ptr { filename; id; loc; pos = None }
+            | On_disk { store = { filename; id; _ }; loc; _ }
+            | In_cache
+                (_, { content = Cached (_, loc, { filename; id; _ }, _); _ }, _)
+              -> lnk := On_disk_ptr { filename; id; loc; pos = None }
             | _ ->
               failwith
                 (Format.sprintf
                    "Granular_marshal.write: duplicate not reused got %s"
                    (string_of_link original_lnk)))
-          | In_memory v ->
-            write_child lnk schema v type_id size ~small_children
-              ~small_children_count
-          | Small_child { parent = PLink parent; pos; _ } ->
+          | In_memory v -> write_child lnk schema v size ~small_children
+          (* | Small_child { parent = PLink parent; pos; _ } ->
             (* This only happens if this small child has no parent anymore.
                If it had it would have been processed along its parent. *)
             let filename, id, loc =
@@ -315,49 +302,71 @@ let write ?(flags = []) fd ~id root_schema root_value =
               | On_disk_ptr { filename; id; loc; _ } -> (filename, id, loc)
               | _ -> failwith "todo explain"
             in
-            lnk := On_disk_ptr { filename; id; loc; pos = Some pos }
+            lnk := On_disk_ptr { filename; id; loc; pos = Some pos } *)
           | In_cache (_v, t, _children) ->
             let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
             lnk := On_disk_ptr { filename; id; loc; pos = None }
           | On_disk { store = { filename; id; _ }; loc; _ } ->
             (* TODO we could have all the possible filenames wrote once
                somewhere in the file. *)
-            lnk := On_disk_ptr { filename; id; loc; pos = None })
+            lnk := On_disk_ptr { filename; id; loc; pos = None }
+          | On_disk_small { store = { filename; id; _ }; loc; small_pos; _ } ->
+            lnk := On_disk_ptr { filename; id; loc; pos = Some small_pos })
     }
-  and write_child : type a. a link -> a schema -> a -> a link Type.Id.t -> _ =
-   fun lnk schema v type_id size ~small_children ~small_children_count ->
+  and output_and_mark (V v) (small_children : any_val_link list) =
+    let new_smalls =
+      (* Some smalls might have been already serialized by another value *)
+      List.filter
+        (fun (Vlink (_v, lnk)) ->
+          match !lnk with
+          | On_disk_ptr { pos = Some _; _ } ->
+            (* This small has already been serialized by another owner *) false
+          | _ -> true)
+        small_children
+    in
+    let smalls =
+      (* We iter on the smalls to set their links with the position in the array and *)
+      List.mapi
+        (fun i (Vlink (v, lnk)) ->
+          lnk := Small i;
+          V v)
+        new_smalls
+      |> Array.of_list
+    in
+    let loc = pos_out fd in
+    Marshal.to_channel fd (v, smalls) flags;
+    (* Now we replace the links by an indirection in case they are reused *)
+    List.iteri
+      (fun i (Vlink (_v, lnk)) ->
+        lnk := On_disk_ptr { filename; loc; id; pos = Some i })
+      new_smalls
+  and write_child : type a. a link -> a schema -> a -> _ =
+   fun lnk schema v size ~small_children ->
     let v_size, v_smalls = write_children schema v in
-    let v_smalls = Array.of_list (List.rev v_smalls) in
     if v_size > 1024 then (
       lnk := Serialized { loc = pos_out fd };
-      output v v_smalls)
+      output_and_mark (V v) v_smalls)
     else (
       size := !size + v_size;
-      small_children :=
-        Small_value (Value (v, type_id), v_smalls) :: !small_children;
-      lnk := Small !small_children_count;
-      incr small_children_count)
-  and write_children : type a. a schema -> a -> int * small_value list =
+      (* Move v_smalls to small_children *)
+      let smalls = List.rev_append v_smalls !small_children in
+      small_children := Vlink (v, lnk) :: smalls)
+  and write_children : type a. a schema -> a -> _ =
    fun schema v ->
     let children_size = ref 0 in
     let small_children = ref [] in
-    let small_children_count = ref 0 in
-    schema (iter children_size ~small_children ~small_children_count) v;
+    schema (iter children_size ~small_children) v;
     let v_size = Obj.(reachable_words (repr v)) in
     (!children_size + v_size, !small_children)
-  and write_child_reused : type a. a link -> a schema -> a -> _ =
-   fun lnk schema v ~small_children ~small_children_count ->
-    let () = assert false in
-    let children_size = ref 0 in
-    schema (iter children_size ~small_children ~small_children_count) v;
+  and write_child_reused : type a. a link -> a schema -> a -> unit =
+   fun lnk schema v ->
+    let _v_size, v_smalls = write_children schema v in
     lnk := Serialized_reused { loc = pos_out fd };
-    let smalls = Array.of_list (List.rev !small_children) in
-    output v smalls
+    output_and_mark (V v) v_smalls
   in
   let _, root_value_smalls = write_children root_schema root_value in
   let root_loc = pos_out fd in
-  let root_value_smalls = Array.of_list (List.rev root_value_smalls) in
-  output root_value root_value_smalls;
+  output_and_mark (V root_value) root_value_smalls;
   seek_out fd pt_root;
   output_string fd (binstring_of_int root_loc)
 

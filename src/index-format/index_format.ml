@@ -135,7 +135,7 @@ let write ~file index =
     (fun _temp_file_name oc ->
       output_string oc magic_number;
       let id = Random.State.(full_int (make_self_init ()) max_int) in
-      Granular_marshal.write oc ~id index_schema (index : index))
+      Granular_marshal.write oc ~filename:file ~id index_schema (index : index))
 
 type file_content = Cmt of Cmt_format.cmt_infos | Index of index | Unknown
 
