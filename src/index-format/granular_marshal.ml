@@ -348,7 +348,8 @@ let write ?(flags = []) fd ~filename ~id root_schema root_value =
       output_and_mark (V v) v_smalls)
     else (
       size := !size + v_size;
-      (* Move v_smalls to small_children *)
+      (* We don't care about the order since smalls are numbered right before
+         writing to the disk. *)
       let smalls = List.rev_append v_smalls !small_children in
       small_children := Vlink (v, lnk) :: smalls)
   and write_children : type a. a schema -> a -> _ =
