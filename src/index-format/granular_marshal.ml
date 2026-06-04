@@ -17,17 +17,35 @@ and 'a link = 'a repr ref
 (** Links descriptions. *)
 and 'a repr =
   | Small of 'a
+      (** A serialized small value. Used for optimisation to avoid a pointer
+          indirection. *)
   | Small_child of
       { parent : parent_link; pos : int; type_id : 'a link Type.Id.t }
+      (** A small read value identified as a children of the given parent link.
+          [loc] is the index of the link value in the parent childrens array. *)
   | Serialized of { loc : int }
+      (** An already serialized value. [loc] is its offset in the index file. *)
   | Serialized_reused of { loc : int }
+      (** An already serialized link stored in a store cache. [loc] is its
+          offset in the index file. *)
   | On_disk of { store : store; loc : int; schema : 'a schema }
   | On_disk_ptr of { filename : string; loc : int; id : int; pos : int option }
-  | In_memory of 'a
-  | In_cache of 'a * cached Dbllist.cell * any_value array
+      (** A link pointing to a value stored in another index file. [id] is the
+          identifier of the store where the value has been stored during its
+          serialisation (useful to avoid loading outdated store). *)
+  | In_memory of 'a  (** A link pointing to a value stored in memory. *)
   | In_memory_reused of 'a
+      (** A link pointing to a value used more than once stored in memory
+          (contained in a store cache). *)
+  | In_cache of 'a * cached Dbllist.cell * any_value array
+      (** [In_cache (v, cache_cell, childrens)] represents value stored in a
+          cell of the LRU cache. [childrens] are an array of its small child
+          links. *)
   | Duplicate of 'a link
+      (** A duplicate value. Useful to perform compression and to avoid writing
+          multiple times the same value. *)
   | Placeholder
+      (** A intermediate state used for granulary writing small values. *)
 
 and 'a schema = iter -> 'a -> unit
 
@@ -56,17 +74,10 @@ exception
   Outdated_store of
     { filename : string; reason : [ `Missing_file | `Index_ids_do_not_match ] }
 
-let lru_dbllist : cached Dbllist.t option ref = ref None
 let lru_size = ref 1_000_000
-let set_lru_size i = lru_size := i
-
-let get_lru () =
-  match !lru_dbllist with
-  | Some lru -> lru
-  | None ->
-    let lru = Dbllist.create !lru_size in
-    lru_dbllist := Some lru;
-    lru
+let set_lru_size size = lru_size := size
+let lru_dbllist = lazy (Dbllist.create 1_000_000)
+let get_lru () = Lazy.force lru_dbllist
 
 let schema_no_sublinks : _ schema = fun _ _ -> ()
 
@@ -82,12 +93,16 @@ let rec normalize lnk =
   | Duplicate lnk -> normalize lnk
   | _ -> lnk
 
+(** A cache of store cache (yes) used to avoid creating separate caches for a
+    given store when recovering [On_disk_ptr] links. *)
 module Cache_cache = File_cache.Make (struct
   type t = cache
   let read _filename = Cache.create 0
 
   let cache_name = "Cache_cache"
 end)
+
+(* Serialization and deserialization functions for offset index. *)
 
 let ptr_size = 8
 
@@ -99,6 +114,8 @@ let int_of_binstring s =
     (fun v acc -> (acc lsl 8) + v)
     (Array.init ptr_size (fun i -> Char.code s.[i]))
     0
+
+(* Manage store opening to always have at most one file descriptor opened. *)
 
 let last_open_store = ref None
 
@@ -142,7 +159,7 @@ let read_loc store fd loc schema parent_link =
             child_smalls := Value (v, type_id) :: !child_smalls;
             lnk :=
               Small_child { parent = parent_link; pos = !child_pos; type_id };
-            child_pos := !child_pos + 1
+            incr child_pos
           | Serialized { loc } -> lnk := On_disk { store; loc; schema }
           | Serialized_reused { loc } -> (
             match Cache.find_opt store.cache loc with
@@ -163,6 +180,7 @@ let read_loc store fd loc schema parent_link =
           | Small_child _
           | Duplicate _ -> (* TODO when does this happen ? *) ()
           | On_disk_ptr { filename; loc; id; pos = None } ->
+            (* Recovering the correct store cache and transform it to a concrete link. *)
             let store = { filename; id; cache = Cache_cache.read filename } in
             lnk := On_disk { store; loc; schema }
           | On_disk_ptr { filename; loc; id; pos = Some pos } ->
@@ -194,6 +212,7 @@ let fetch_loc store loc schema parent_link =
   let v, size, small_poses = read_loc store fd loc schema parent_link in
   (v, size, small_poses)
 
+(* Follow a link to get the pointed value. *)
 let rec fetch : type a. a link -> a =
  fun lnk ->
   match !lnk with
@@ -202,6 +221,7 @@ let rec fetch : type a. a link -> a =
     v
   | In_memory v | In_memory_reused v -> v
   | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ ->
+    (* It makes no sense to fetch a serialized value. *)
     invalid_arg ("Granular_marshal.fetch: " ^ string_of_link lnk)
   | Placeholder -> invalid_arg "Granular_marshal.fetch: during a write"
   | Duplicate original_lnk -> fetch original_lnk
@@ -216,6 +236,7 @@ let rec fetch : type a. a link -> a =
       | None -> invalid_arg "Granular_marshal.read_loc: small has wrong type")
     | _ -> assert false)
   | On_disk { store; loc; schema } ->
+    (* Add the value stored on disk to the LRU cache. *)
     let v, size, small_poses = fetch_loc store loc schema (PLink lnk) in
     let discarded = Dbllist.discard_size (get_lru ()) size in
     let cell =
@@ -241,6 +262,7 @@ let rec reuse original_lnk =
     @@ Printf.sprintf "Granular_marshal.reuse: not in memory, got %s"
          (string_of_link original_lnk)
 
+(* A generic cache used to identify duplicate link and compress them. *)
 let cache (type a) (module Key : Hashtbl.HashedType with type t = a) =
   let module H = Hashtbl.Make (Key) in
   let cache = H.create 16 in
@@ -249,6 +271,7 @@ let cache (type a) (module Key : Hashtbl.HashedType with type t = a) =
     match H.find cache key with
     | original_lnk ->
       assert (original_lnk != lnk);
+      (* Mark the link as reused, since it's already contained in the cache. *)
       reuse original_lnk;
       lnk := Duplicate original_lnk
     | exception Not_found -> H.add cache key lnk
@@ -262,7 +285,9 @@ let write ?(flags = []) fd ~id root_schema root_value =
     { yield =
         (fun (type a) (lnk : a link) _type_id (schema : a schema) : unit ->
           match !lnk with
-          | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ -> ()
+          | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ ->
+            (* Already serialized *)
+            ()
           | Placeholder -> failwith "big nono"
           | In_memory_reused v -> write_child_reused lnk schema v
           | Duplicate original_lnk -> (
@@ -306,6 +331,7 @@ let write ?(flags = []) fd ~id root_schema root_value =
       lnk := Serialized { loc = pos_out fd (* TODO store smalls here ? *) };
       Marshal.to_channel fd v flags)
     else (
+      (* The value is considered small. *)
       size := !size + v_size;
       placeholders := (fun () -> lnk := Placeholder) :: !placeholders;
       restore := (fun () -> lnk := Small v) :: !restore)
@@ -355,6 +381,4 @@ let () =
 let () =
   at_exit (fun () ->
       (* debug fetch_count; *)
-      match !lru_dbllist with
-      | None -> ()
-      | Some lru -> Dbllist.pp_stats lru)
+      Dbllist.pp_stats (get_lru ()))
