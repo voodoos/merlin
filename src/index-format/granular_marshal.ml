@@ -159,7 +159,7 @@ let read_loc store fd loc schema parent_link =
             child_smalls := Value (v, type_id) :: !child_smalls;
             lnk :=
               Small_child { parent = parent_link; pos = !child_pos; type_id };
-            child_pos := !child_pos + 1
+            incr child_pos
           | Serialized { loc } -> lnk := On_disk { store; loc; schema }
           | Serialized_reused { loc } -> (
             match Cache.find_opt store.cache loc with
