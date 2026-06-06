@@ -254,9 +254,7 @@ let fetch_parent : parent_link -> any_value array =
     seek_in fd loc;
     let (v, small_children) : _ * any_val array = Marshal.from_channel fd in
     let size = pos_in fd - loc in
-    let small_children =
-      Array.map (fun (V v) -> Unknown (v, filename, id, loc)) small_children
-    in
+    let small_children = Array.map (fun (V v) -> Unknown v) small_children in
     let discarded = Dbllist.discard_size (get_lru ()) size in
     let cell =
       Dbllist.add_front (get_lru ())
