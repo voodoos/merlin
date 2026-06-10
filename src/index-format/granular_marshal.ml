@@ -445,7 +445,7 @@ let write ?(flags = []) fd ~filename ~id root_schema root_value =
   and write_child : type a. a link -> a schema -> a -> _ =
    fun lnk schema v size ~small_children ->
     let v_size, v_smalls = write_children schema v in
-    if v_size > 1024 then (
+    if v_size > 4096 then (
       lnk := Serialized { loc = pos_out fd };
       output_and_mark (V v) v_smalls)
     else (
