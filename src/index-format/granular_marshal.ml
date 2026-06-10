@@ -64,7 +64,13 @@ let string_of_link : type a. a link -> string =
       | Some pos -> Printf.sprintf ", pos=%d" pos
       | None -> "")
   | In_memory _ -> "In_memory"
-  | In_cache _ -> "In_cache"
+  | In_cache (_, status, { content = Cached (_, loc, _, _); _ }, _) ->
+    let clean_dirty =
+      match status with
+      | Clean -> "Clean"
+      | Dirty_unknown_schema -> "Dirty"
+    in
+    Printf.sprintf "In_cache(%s; loc=%i)" clean_dirty loc
   | In_memory_reused _ -> "In_memory_reused"
   | Duplicate _ -> "Duplicate"
 
