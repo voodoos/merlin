@@ -150,7 +150,7 @@ let open_store store =
   | None -> force_open_store store
 
 (** This iterator translate links from the Disk Realm to the Memory Realm *)
-let disk_to_memory_iter store loc parent_link =
+let rec disk_to_memory_iter store loc parent_link =
   { yield =
       (fun (type a)
         (lnk : a link)
@@ -189,20 +189,54 @@ let disk_to_memory_iter store loc parent_link =
         | On_disk_small _
         | On_disk _
         | Duplicate _ -> (* TODO when does this happen ? *) ()
-        | On_disk_ptr { filename; loc; id; pos = None } ->
+        | On_disk_ptr { filename; loc; id; pos = None } -> (
           let store = { filename; id; cache = Cache_cache.read filename } in
-          (* TODO we should look at the store to see if we didn't already create a link
 
+          match Cache.find_opt store.cache loc with
+          | Some (Link (type b) ((lnk', Some type_id') : b link * _)) -> (
+            match Type.Id.provably_equal type_id type_id' with
+            | Some (Equal : (a link, b link) Type.eq) ->
               lnk := Duplicate (normalize lnk')
-
-              if lnk' is incomplete now we can make it complete.
-            *)
-          lnk := On_disk { store; loc; schema }
+            | None ->
+              invalid_arg "Granular_marshal.read_loc: reuse of a different type"
+            )
+          | Some (Link (lnk', None)) ->
+            let lnk' = Obj.magic lnk' in
+            let () =
+              (* We might have reused a parent whose schema was initially unknown.
+                   Let's update it. *)
+              match !lnk' with
+              | On_disk_ptr { loc; pos = None; _ } ->
+                (* This case only happens if the previous read was an
+                    [On_disc_ptr { pos = Some_; _}] with a parent of unknown
+                    schema. *)
+                lnk' := On_disk { store; loc; schema }
+              | In_cache (v, Dirty_unknown_schema, cell, smalls) ->
+                (* If we already have the value in cache we must clean it. *)
+                schema (disk_to_memory_iter store loc (PLink lnk')) v;
+                lnk' := In_cache (v, Clean, cell, smalls)
+              | Small _
+              | Serialized _
+              | Serialized_reused _
+              | On_disk _
+              | On_disk_small _
+              | On_disk_ptr _
+              | In_memory _
+              | In_cache (_, _, _, _)
+              | In_memory_reused _ | Duplicate _ -> assert false
+            in
+            Cache.replace store.cache loc (Link (lnk', Some type_id));
+            lnk := Duplicate (normalize lnk')
+          | _ -> lnk := On_disk { store; loc; schema })
         | On_disk_ptr { filename; loc; id; pos = Some small_pos } ->
           let store = { filename; id; cache = Cache_cache.read filename } in
-          (* TODO we should share these links with the store cache *)
           let parent =
-            PLink (ref (On_disk_ptr { filename; loc; id; pos = None }))
+            match Cache.find_opt store.cache loc with
+            | Some (Link (lnk, _)) -> PLink (normalize lnk)
+            | None ->
+              let lnk = ref (On_disk_ptr { filename; loc; id; pos = None }) in
+              Cache.add store.cache loc (Link (lnk, None));
+              PLink lnk
           in
           lnk :=
             On_disk_small
@@ -290,7 +324,6 @@ let rec fetch : type a. a link -> a =
   | Duplicate original_lnk -> fetch original_lnk
   | On_disk_small { store; loc; parent; small_pos; small_type_id; small_schema }
     -> (
-    (* Format.eprintf "Before fetch parent is %s\n" (string_of_link parent'); *)
     let smalls = fetch_parent parent in
     match smalls.(small_pos) with
     | Value (type b) ((v, type_id') : b * _) -> (
