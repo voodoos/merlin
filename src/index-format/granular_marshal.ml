@@ -354,13 +354,14 @@ let cache (type a) (module Key : Hashtbl.HashedType with type t = a) =
   let module H = Hashtbl.Make (Key) in
   let cache = H.create 16 in
   fun (lnk : a link) ->
-    let key = fetch lnk in
-    match H.find cache key with
-    | original_lnk ->
-      assert (original_lnk != lnk);
-      reuse original_lnk;
-      lnk := Duplicate original_lnk
-    | exception Not_found -> H.add cache key lnk
+    if not (is_on_disk lnk) then
+      let key = fetch lnk in
+      match H.find cache key with
+      | original_lnk ->
+        assert (original_lnk != lnk);
+        reuse original_lnk;
+        lnk := Duplicate original_lnk
+      | exception Not_found -> H.add cache key lnk
 
 let write ?(flags = []) fd ~filename ~id root_schema root_value =
   let id' = binstring_of_int id in

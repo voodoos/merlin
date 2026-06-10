@@ -66,13 +66,13 @@ let compress index =
   compress_map_set index.defs;
   compress_map_set index.approximated;
   let related_uids =
-    Uid_map.map
+    (* Uid_map.map
       (fun set ->
         let uid = Uid_set.min_elt (Union_find.get set) in
         let reference_set = Uid_map.find uid index.related_uids in
         Granular_marshal.reuse reference_set;
-        reference_set)
-      index.related_uids
+        reference_set) *)
+    index.related_uids
   in
   { index with related_uids }
 
