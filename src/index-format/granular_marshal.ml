@@ -271,18 +271,19 @@ let on_cache_discard (Cached (link, loc, store, schema)) =
     link :=
       On_disk_ptr { filename = store.filename; id = store.id; loc; pos = None }
 
-let fetch_on_disk lnk store loc schema =
-  (* TODO this could have already be loaded "without a schema" we should just
-     update the existing record in that case. *)
-  let v, size, small_poses = fetch_loc store loc schema (PLink lnk) in
+let add_to_cache v lnk ~loc store ~size small_values schema =
   let discarded = Dbllist.discard_size (get_lru ()) size in
+  let status = if Option.is_none schema then Dirty_unknown_schema else Clean in
   let cell =
-    Dbllist.add_front (get_lru ())
-      (Cached (lnk, loc, store, ref (Some schema)), size)
+    Dbllist.add_front (get_lru ()) (Cached (lnk, loc, store, ref schema), size)
   in
   List.iter on_cache_discard discarded;
-  lnk := In_cache (v, Clean, cell, small_poses);
-  (v, small_poses)
+  lnk := In_cache (v, status, cell, small_values)
+
+let fetch_on_disk lnk store loc schema =
+  let v, size, small_values = fetch_loc store loc schema (PLink lnk) in
+  add_to_cache v lnk ~loc store ~size small_values (Some schema);
+  (v, small_values)
 
 let fetch_parent : parent_link -> any_value array =
  fun (PLink parent_link) ->
@@ -295,13 +296,7 @@ let fetch_parent : parent_link -> any_value array =
     let (v, small_children) : _ * any_val array = Marshal.from_channel fd in
     let size = pos_in fd - loc in
     let small_children = Array.map (fun (V v) -> Unknown v) small_children in
-    let discarded = Dbllist.discard_size (get_lru ()) size in
-    let cell =
-      Dbllist.add_front (get_lru ())
-        (Cached (parent_link, loc, store, ref None), size)
-    in
-    List.iter on_cache_discard discarded;
-    parent_link := In_cache (v, Dirty_unknown_schema, cell, small_children);
+    add_to_cache v parent_link ~loc store ~size small_children None;
     small_children
   | On_disk { store; loc; schema } ->
     snd (fetch_on_disk parent_link store loc schema)
