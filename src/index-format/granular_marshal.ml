@@ -94,15 +94,15 @@ let schema_no_sublinks : _ schema = fun _ _ -> ()
 
 let link v = ref (In_memory v)
 
-let is_on_disk lnk =
-  match !lnk with
-  | On_disk _ | On_disk_ptr _ | In_cache _ -> true
-  | _ -> false
-
 let rec normalize lnk =
   match !lnk with
   | Duplicate lnk -> normalize lnk
   | _ -> lnk
+
+let is_on_disk lnk =
+  match !(normalize lnk) with
+  | On_disk _ | On_disk_ptr _ | On_disk_small _ | In_cache _ -> true
+  | _ -> false
 
 module Cache_cache = File_cache.Make (struct
   type t = cache
