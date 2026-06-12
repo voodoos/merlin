@@ -12,3 +12,4 @@ val get : 'a store -> 'a elt_handle -> 'a
 val union : f:('a -> 'a -> 'a) -> 'a store -> 'a elt_handle -> 'a elt_handle -> 'a store * 'a elt_handle
 
 val merge : f:('a  -> 'a -> 'a) -> 'a store -> 'a store -> 'a store
+(** [f] must be idempotent, commutative and associative. *)

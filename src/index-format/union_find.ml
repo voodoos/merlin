@@ -68,20 +68,21 @@ let union ~f store x y =
     | Link _, Root _ | Root _, Link _ | Link _, Link _ -> assert false
 
 let merge ~f (s1 : 'a store) (s2 : 'a store) =
-  Uid_map.union
-    (fun _ c1 c2 ->
-      let r1 =
-        match c1 with
-        | Root _ -> c1
-        | Link l -> Uid_map.find (find s1 l) s1
-      in
-      let r2 =
-        match c2 with
-        | Root _ -> c2
-        | Link l -> Uid_map.find (find s2 l) s2
-      in
-      match (r1, r2) with
-      | Root { value = v1; rank = r1 }, Root { value = v2; rank = r2 } ->
-        Some (Root { value = f v1 v2; rank = (if r1 > r2 then r1 else r2) })
-      | _ -> assert false)
-    s1 s2
+  (* TODO there is similar logic in [index.ml] *)
+  let ensure store uid =
+    if Uid_map.mem uid store then store
+    else
+      match Uid_map.find (find s2 uid) s2 with
+      | Root { value; _ } -> fst (new_root store uid value)
+      | Link _ -> assert false
+  in
+  Uid_map.fold
+    (fun uid content store ->
+      match content with
+      | Root _ -> ensure store uid
+      | Link parent ->
+        let store = ensure store uid in
+        let store = ensure store parent in
+        let store, _ = union ~f store uid parent in
+        store)
+    s2 s1
