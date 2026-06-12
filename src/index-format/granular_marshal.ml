@@ -149,7 +149,7 @@ let open_store store =
     force_open_store store
   | None -> force_open_store store
 
-(** This iterator translate links from the Disk Realm to the Memory Realm *)
+(** This iterator translates links from the Disk Realm to the Memory Realm *)
 let rec disk_to_memory_iter store loc parent_link =
   { yield =
       (fun (type a)
@@ -254,7 +254,6 @@ let read_loc store fd loc schema parent_link =
   let size_read = pos_in fd - loc in
   let iter = disk_to_memory_iter store loc parent_link in
   schema iter v;
-  (* Map on small children to make them Unknown *)
   let small_children = Array.map (fun (V v) -> Unknown v) small_children in
   (v, size_read, small_children)
 
@@ -331,8 +330,6 @@ let rec fetch : type a. a link -> a =
       v)
   | On_disk { store; loc; schema } -> fst (fetch_on_disk lnk store loc schema)
 
-(* TODO The compression is not so easy to do and has a minor impact. *)
-(* Or we could just do it "in memory" *)
 let rec reuse original_lnk =
   match !original_lnk with
   | In_memory v -> original_lnk := In_memory_reused v
@@ -386,20 +383,6 @@ let write ?(flags = []) fd ~filename ~id root_schema root_value =
                    "Granular_marshal.write: duplicate not reused got %s"
                    (string_of_link original_lnk)))
           | In_memory v -> write_child lnk schema v size ~small_children
-          (* | Small_child { parent = PLink parent; pos; _ } ->
-            (* This only happens if this small child has no parent anymore.
-               If it had it would have been processed along its parent. *)
-            let filename, id, loc =
-              match !parent with
-              | In_cache
-                  ( _,
-                    { content = Cached (_, loc, { filename; id; _ }, _); _ },
-                    _ )
-              | On_disk { store = { filename; id; _ }; loc; _ }
-              | On_disk_ptr { filename; id; loc; _ } -> (filename, id, loc)
-              | _ -> failwith "todo explain"
-            in
-            lnk := On_disk_ptr { filename; id; loc; pos = Some pos } *)
           | In_cache (_v, _, t, _children) ->
             let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
             lnk := On_disk_ptr { filename; id; loc; pos = None }
