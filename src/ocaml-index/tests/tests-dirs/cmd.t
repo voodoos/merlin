@@ -13,5 +13,6 @@
     -I An extra directory to add to the load path
     -H An extra hidden directory to add to the load path
     --no-cmt-load-path Do not initialize the load path with the paths found in the first input cmt file
+    --cache-size Set LRU cache size. Will bound memory usage in read-heavy scenarios.
     -help  Display this list of options
     --help  Display this list of options
