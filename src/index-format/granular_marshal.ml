@@ -28,6 +28,7 @@ and 'a repr =
   | Small of int
   | Serialized of { loc : int }
   | Serialized_reused of { loc : int }
+  | Serialized_small of { loc : int; pos : int }
   | On_disk of { store : store; loc : int; schema : 'a schema }
   | On_disk_small of
       { store : store;
@@ -58,6 +59,8 @@ let string_of_link : type a. a link -> string =
   | On_disk { loc; _ } -> Printf.sprintf "On_disk(loc=%d)" loc
   | On_disk_small { small_pos; _ } ->
     Printf.sprintf "On_disk_small(small_pos=%d)" small_pos
+  | Serialized_small { loc; pos } ->
+    Printf.sprintf "Serialized_small(loc=%d;small_pos=%d)" loc pos
   | On_disk_ptr { loc; pos; _ } ->
     Printf.sprintf "On_disk_ptr(loc=%d%s)" loc
       (match pos with
@@ -168,6 +171,32 @@ let rec disk_to_memory_iter store loc parent_link =
                 small_type_id = type_id;
                 small_schema = schema
               }
+        | Serialized_small { loc; pos } ->
+          let parent =
+            match Cache.find_opt store.cache loc with
+            | Some (Link (lnk, _)) -> PLink (normalize lnk)
+            | None ->
+              let lnk =
+                ref
+                  (On_disk_ptr
+                     { filename = store.filename;
+                       loc;
+                       id = store.id;
+                       pos = None
+                     })
+              in
+              Cache.add store.cache loc (Link (lnk, None));
+              PLink lnk
+          in
+          lnk :=
+            On_disk_small
+              { store;
+                loc;
+                parent;
+                small_type_id = type_id;
+                small_schema = schema;
+                small_pos = pos
+              }
         | Serialized { loc } -> lnk := On_disk { store; loc; schema }
         | Serialized_reused { loc } -> (
           match Cache.find_opt store.cache loc with
@@ -217,6 +246,7 @@ let rec disk_to_memory_iter store loc parent_link =
               | Small _
               | Serialized _
               | Serialized_reused _
+              | Serialized_small _
               | On_disk _
               | On_disk_small _
               | On_disk_ptr _
@@ -312,7 +342,11 @@ let rec fetch : type a. a link -> a =
   | In_cache (_v, Dirty_unknown_schema, _, _) ->
     invalid_arg "Granular_marshal.fetch: accessing dirty cached value"
   | In_memory v | In_memory_reused v -> v
-  | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ ->
+  | Serialized _
+  | Serialized_reused _
+  | Serialized_small _
+  | Small _
+  | On_disk_ptr _ ->
     invalid_arg ("Granular_marshal.fetch: " ^ string_of_link lnk)
   | Duplicate original_lnk -> fetch original_lnk
   | On_disk_small { store; loc; parent; small_pos; small_type_id; small_schema }
@@ -363,11 +397,16 @@ let write ?(flags = []) fd ~filename ~id root_schema root_value =
     { yield =
         (fun (type a) (lnk : a link) _type_id (schema : a schema) : unit ->
           match !lnk with
-          | Serialized _ | Serialized_reused _ | Small _ | On_disk_ptr _ -> ()
+          | Serialized _
+          | Serialized_reused _
+          | Serialized_small _
+          | Small _
+          | On_disk_ptr _ -> ()
           | In_memory_reused v -> write_child_reused lnk schema v
           | Duplicate original_lnk -> (
             match !original_lnk with
-            | Serialized_reused _ | On_disk_ptr _ -> lnk := !original_lnk
+            | Serialized_reused _ | Serialized_small _ | On_disk_ptr _ ->
+              lnk := !original_lnk
             | In_memory_reused v ->
               write_child_reused original_lnk schema v;
               lnk := !original_lnk
@@ -417,8 +456,7 @@ let write ?(flags = []) fd ~filename ~id root_schema root_value =
     Marshal.to_channel fd (v, smalls) flags;
     (* Now we replace the links by an indirection in case they are reused *)
     List.iteri
-      (fun i (Vlink (_v, lnk)) ->
-        lnk := On_disk_ptr { filename; loc; id; pos = Some i })
+      (fun i (Vlink (_v, lnk)) -> lnk := Serialized_small { loc; pos = i })
       new_smalls
   and write_child : type a. a link -> a schema -> a -> _ =
    fun lnk schema v size ~small_children ->
