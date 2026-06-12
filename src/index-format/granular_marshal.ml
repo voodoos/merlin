@@ -76,9 +76,7 @@ let string_of_link : type a. a link -> string =
 
 exception
   Outdated_store of
-    { filename : string;
-      reason : [ `Missing_file | `Index_ids_do_not_match of int * int ]
-    }
+    { filename : string; reason : [ `Missing_file | `Index_ids_do_not_match ] }
 
 let lru_dbllist : cached Dbllist.t option ref = ref None
 let lru_size = ref 1_000_000
@@ -137,9 +135,7 @@ let force_open_store store =
     else
       raise
         (Outdated_store
-           { filename = store.filename;
-             reason = `Index_ids_do_not_match (required_id, store.id)
-           })
+           { filename = store.filename; reason = `Index_ids_do_not_match })
   with Sys_error _ ->
     raise (Outdated_store { filename = store.filename; reason = `Missing_file })
 
