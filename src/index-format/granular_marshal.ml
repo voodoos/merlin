@@ -191,7 +191,6 @@ let rec disk_to_memory_iter store loc parent_link =
         | Duplicate _ -> (* TODO when does this happen ? *) ()
         | On_disk_ptr { filename; loc; id; pos = None } -> (
           let store = { filename; id; cache = Cache_cache.read filename } in
-
           match Cache.find_opt store.cache loc with
           | Some (Link (type b) ((lnk', Some type_id') : b link * _)) -> (
             match Type.Id.provably_equal type_id type_id' with
