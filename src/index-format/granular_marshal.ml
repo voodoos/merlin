@@ -152,6 +152,11 @@ let open_store store =
     force_open_store store
   | None -> force_open_store store
 
+let resolve_filename store ~filename =
+  if Filename.is_relative filename then
+    Filename.concat (Filename.dirname store.filename) filename
+  else filename
+
 (** This iterator translates links from the Disk Realm to the Memory Realm *)
 let rec disk_to_memory_iter store loc parent_link =
   { yield =
@@ -219,6 +224,7 @@ let rec disk_to_memory_iter store loc parent_link =
         | On_disk _
         | Duplicate _ -> (* TODO when does this happen ? *) ()
         | On_disk_ptr { filename; loc; id; pos = None } -> (
+          let filename = resolve_filename store ~filename in
           let store = { filename; id; cache = Cache_cache.read filename } in
           match Cache.find_opt store.cache loc with
           | Some (Link (type b) ((lnk', Some type_id') : b link * _)) -> (
@@ -258,6 +264,7 @@ let rec disk_to_memory_iter store loc parent_link =
             lnk := Duplicate (normalize lnk')
           | _ -> lnk := On_disk { store; loc; schema })
         | On_disk_ptr { filename; loc; id; pos = Some small_pos } ->
+          let filename = resolve_filename store ~filename in
           let store = { filename; id; cache = Cache_cache.read filename } in
           let parent =
             match Cache.find_opt store.cache loc with
@@ -388,7 +395,23 @@ let cache (type a) (module Key : Hashtbl.HashedType with type t = a) =
         lnk := Duplicate original_lnk
       | exception Not_found -> H.add cache key lnk
 
+let relativize ~wrt:path =
+  let path_segments = Misc.split_path path in
+  let rec aux path target =
+    match (path, target) with
+    | p :: tl, t :: tl_target when p = t -> aux tl tl_target
+    | [], target -> target
+    | _ :: _, [] -> List.map (Fun.const "..") path
+    | _ :: _, _ :: _ -> List.map (Fun.const "..") path @ target
+  in
+  fun target ->
+    let target_segments = Misc.split_path target in
+    List.fold_left Filename.concat "" (aux path_segments target_segments)
+
 let write ?(flags = []) fd ~filename ~id root_schema root_value =
+  let relativize =
+    relativize ~wrt:Filename.(dirname (concat (Unix.getcwd ()) filename))
+  in
   let id' = binstring_of_int id in
   output_string fd id';
   let pt_root = pos_out fd in
@@ -424,12 +447,15 @@ let write ?(flags = []) fd ~filename ~id root_schema root_value =
           | In_memory v -> write_child lnk schema v size ~small_children
           | In_cache (_v, _, t, _children) ->
             let (Cached (_, loc, { filename; id; _ }, _)) = t.content in
+            let filename = relativize filename in
             lnk := On_disk_ptr { filename; id; loc; pos = None }
           | On_disk { store = { filename; id; _ }; loc; _ } ->
             (* TODO we could have all the possible filenames wrote once
                somewhere in the file. *)
+            let filename = relativize filename in
             lnk := On_disk_ptr { filename; id; loc; pos = None }
           | On_disk_small { store = { filename; id; _ }; loc; small_pos; _ } ->
+            let filename = relativize filename in
             lnk := On_disk_ptr { filename; id; loc; pos = Some small_pos })
     }
   and output_and_mark (V v) (small_children : any_val_link list) =
@@ -491,6 +517,11 @@ let write ?(flags = []) fd ~filename ~id root_schema root_value =
 
 let read filename fd root_schema =
   let id = int_of_binstring (really_input_string fd 8) in
+  let filename =
+    if Filename.is_relative filename then
+      Filename.concat (Unix.getcwd ()) filename
+    else filename
+  in
   let store = { filename; id; cache = Cache_cache.read filename } in
   let root_loc = int_of_binstring (really_input_string fd 8) in
   let parent_link =

@@ -39,7 +39,10 @@ let anon_fun arg =
 let speclist =
   [ ("--verbose", Arg.Set verbose, "Output more information");
     ("--debug", Arg.Set debug, "Output debugging information");
-    ("-o", Arg.Set_string output_file, "Set output file name");
+    ( "-o",
+      Arg.Set_string output_file,
+      "Set output file name. Note that sub-indexes paths remains relative to \
+       the current directory." );
     ( "--root",
       Arg.Set_string root,
       "Set the root path for all relative locations" );
