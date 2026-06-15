@@ -122,6 +122,7 @@ let () =
             (Option.value ~default:"none" root_directory))
         !input_files
     | _ -> Printf.printf "Nothing to do.\n%!");
+    if !debug then Granular_marshal.get_lru () |> Dbllist.pp_stats;
     exit 0
   with Granular_marshal.Outdated_store { filename; reason } ->
     let msg =
