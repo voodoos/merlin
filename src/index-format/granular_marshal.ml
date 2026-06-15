@@ -10,10 +10,18 @@ and parent_link = PLink : 'a link -> parent_link
 and any_value =
   | Value : 'a * 'a link Type.Id.t -> any_value
   | Unknown : 'a -> any_value
+      (** Marks a small that has not been cleaned yet. Usually because its
+          schema was unknown when it was read from the disk. *)
 and any_val = V : 'a -> any_val
 and any_val_link = Vlink : 'a * 'a link -> any_val_link
 
 and cached = Cached : 'a link * int * store * 'a schema option ref -> cached
+
+and value_status =
+  | Dirty_unknown_schema
+      (** Marks a value that has not been cleaned yet. Usually because its
+          schema was unknown when it was read from the disk for its smalls. *)
+  | Clean
 
 and 'a link = 'a repr ref
 
@@ -22,14 +30,41 @@ and 'a link = 'a repr ref
   Things such as On_disk cannot live on disk since the contain a function, schema.
   _ Type.Id.t cannot survive to marshalling either.
 
-  TODO: reorder the list by realm.
+  We call "cleaning a value" the process of translates links from the Disk Realm
+  to the Memory Realm.
+
+  A lot of the complexity stems from the "small values" optimization. It can be
+  seen as an inlining of small-enough values with their parent value. This is
+  important both for speed and file size. It removes the overhead of having many
+  links which is not worth for small values.
+
+  When reading a small value, its parent value might have an unknown schema,
+  resulting in a dirty cache entry. This is marked by [Dirty_unknown_schema].
+  Silimarly, small values are dirty until they are explicitely needed, and thus
+  their schema known.
 *)
 and 'a repr =
-  | Small of int
+  (*
+   * On-disk realm
+   *)
   | Serialized of { loc : int }
+      (** {i on-disk} A pointer to a serialized value in the file. *)
   | Serialized_reused of { loc : int }
+      (** {i on-disk} A pointer to serialized value that is used multiple times.
+          Allow for better file compression and perofrmance. *)
+  | Small of int
+      (** {i on-disk} A "small value" placeholder. Contains the index of this
+          small's actual value in the array stored by its parent value. *)
   | Serialized_small of { loc : int; pos : int }
+      (** {i on-disk} A pointer to an already serialized small value. *)
+  | On_disk_ptr of { filename : string; loc : int; id : int; pos : int option }
+      (** {i on-disk} A pointer to a serialized value in another file. The
+          optional `pos` field is used to target small values. *)
+  (*
+   * In-memory realm
+   *)
   | On_disk of { store : store; loc : int; schema : 'a schema }
+      (** {i in-memory} A value that can be read from the disk. *)
   | On_disk_small of
       { store : store;
         loc : int;
@@ -38,13 +73,17 @@ and 'a repr =
         small_pos : int;
         small_schema : 'a schema
       }
-  | On_disk_ptr of { filename : string; loc : int; id : int; pos : int option }
+      (** {i in-memory} A small value whose parent can be read from the disk. *)
   | In_memory of 'a
-  | In_cache of 'a * value_status * cached Dbllist.cell * any_value array
+      (** {i in-memory} A value that has been created in memory. *)
   | In_memory_reused of 'a
+      (** {i in-memory} A value that has been created in memory and is used
+          multiple times. *)
+  | In_cache of 'a * value_status * cached Dbllist.cell * any_value array
+      (** {i in-memory} A value and its small that has been already read from
+          the disk. Both the values and the smalls might be "unclean". They will
+          be promoted to clean if read with their expected schema. *)
   | Duplicate of 'a link
-
-and value_status = Dirty_unknown_schema | Clean
 
 and 'a schema = iter -> 'a -> unit
 
@@ -157,7 +196,8 @@ let resolve_filename store ~filename =
     Filename.concat (Filename.dirname store.filename) filename
   else filename
 
-(** This iterator translates links from the Disk Realm to the Memory Realm *)
+(** This iterator translates links from the Disk Realm to the Memory Realm.
+    This is the process we refer too as "cleaning a value". *)
 let rec disk_to_memory_iter store loc parent_link =
   { yield =
       (fun (type a)
@@ -217,12 +257,6 @@ let rec disk_to_memory_iter store loc parent_link =
           | None ->
             lnk := On_disk { store; loc; schema };
             Cache.add store.cache loc (Link (lnk, Some type_id)))
-        | In_memory _
-        | In_cache _
-        | In_memory_reused _
-        | On_disk_small _
-        | On_disk _
-        | Duplicate _ -> (* TODO when does this happen ? *) ()
         | On_disk_ptr { filename; loc; id; pos = None } -> (
           let filename = resolve_filename store ~filename in
           let store = { filename; id; cache = Cache_cache.read filename } in
@@ -282,21 +316,14 @@ let rec disk_to_memory_iter store loc parent_link =
                 small_type_id = type_id;
                 small_schema = schema;
                 small_pos
-              })
+              }
+        | In_memory _
+        | In_cache _
+        | In_memory_reused _
+        | On_disk_small _
+        | On_disk _
+        | Duplicate _ -> (* These are already "clean" *) ())
   }
-
-let read_loc store fd loc schema parent_link =
-  seek_in fd loc;
-  let v, small_children = Marshal.from_channel fd in
-  let size_read = pos_in fd - loc in
-  let iter = disk_to_memory_iter store loc parent_link in
-  schema iter v;
-  let small_children = Array.map (fun (V v) -> Unknown v) small_children in
-  (v, size_read, small_children)
-
-let fetch_loc store loc schema parent_link =
-  let fd = open_store store in
-  read_loc store fd loc schema parent_link
 
 let on_cache_discard (Cached (link, loc, store, schema)) =
   (* This also free the smalls that are stored in the link *)
@@ -315,24 +342,46 @@ let add_to_cache v lnk ~loc store ~size small_values schema =
   List.iter on_cache_discard discarded;
   lnk := In_cache (v, status, cell, small_values)
 
+(** Read one value and its smalls from the disk.  *)
+let read_loc_dirty fd loc =
+  seek_in fd loc;
+  let v, small_children = Marshal.from_channel fd in
+  let size_read = pos_in fd - loc in
+  let small_children = Array.map (fun (V v) -> Unknown v) small_children in
+  (v, size_read, small_children)
+
+(** Read one value and its smalls from the disk. Clean it. The smalls are not
+    cleaned yet because their schema is unknown at that point.  *)
+let read_loc store fd loc schema parent_link =
+  let v, size_read, small_children = read_loc_dirty fd loc in
+  let iter = disk_to_memory_iter store loc parent_link in
+  schema iter v;
+  (v, size_read, small_children)
+
+(** Reads a value with its smalls, clean it and add it to the cache *)
 let fetch_on_disk lnk store loc schema =
-  let v, size, small_values = fetch_loc store loc schema (PLink lnk) in
+  let fd = open_store store in
+  let parent_link = PLink lnk in
+  let v, size, small_values = read_loc store fd loc schema parent_link in
   add_to_cache v lnk ~loc store ~size small_values (Some schema);
   (v, small_values)
 
+let fetch_on_disk_dirty lnk store loc =
+  let fd = open_store store in
+  let v, size, small_children = read_loc_dirty fd loc in
+  add_to_cache v lnk ~loc store ~size small_children None;
+  small_children
+
+(** Fetch the parent of a small value in order to read its smalls. If the parent
+  has not yet been loaded in memory it will be read from the disk and kept dirty
+  because its schema is unknown.*)
 let fetch_parent : parent_link -> any_value array =
  fun (PLink parent_link) ->
   match !parent_link with
   | In_cache (_, _, _, smalls) -> smalls
   | On_disk_ptr { filename; loc; id; pos = None } ->
     let store = { filename; id; cache = Cache_cache.read filename } in
-    let fd = open_store store in
-    seek_in fd loc;
-    let (v, small_children) : _ * any_val array = Marshal.from_channel fd in
-    let size = pos_in fd - loc in
-    let small_children = Array.map (fun (V v) -> Unknown v) small_children in
-    add_to_cache v parent_link ~loc store ~size small_children None;
-    small_children
+    fetch_on_disk_dirty parent_link store loc
   | On_disk { store; loc; schema } ->
     snd (fetch_on_disk parent_link store loc schema)
   | _ ->
@@ -348,14 +397,8 @@ let rec fetch : type a. a link -> a =
     v
   | In_cache (_v, Dirty_unknown_schema, _, _) ->
     invalid_arg "Granular_marshal.fetch: accessing dirty cached value"
-  | In_memory v | In_memory_reused v -> v
-  | Serialized _
-  | Serialized_reused _
-  | Serialized_small _
-  | Small _
-  | On_disk_ptr _ ->
-    invalid_arg ("Granular_marshal.fetch: " ^ string_of_link lnk)
   | Duplicate original_lnk -> fetch original_lnk
+  | On_disk { store; loc; schema } -> fst (fetch_on_disk lnk store loc schema)
   | On_disk_small { store; loc; parent; small_pos; small_type_id; small_schema }
     -> (
     let smalls = fetch_parent parent in
@@ -369,7 +412,14 @@ let rec fetch : type a. a link -> a =
       small_schema (disk_to_memory_iter store loc parent) v;
       smalls.(small_pos) <- Value (v, small_type_id);
       v)
-  | On_disk { store; loc; schema } -> fst (fetch_on_disk lnk store loc schema)
+  | In_memory v | In_memory_reused v -> v
+  | Serialized _
+  | Serialized_reused _
+  | Serialized_small _
+  | Small _
+  | On_disk_ptr _ ->
+    invalid_arg
+      ("Granular_marshal.fetch: accesssing dirty link " ^ string_of_link lnk)
 
 let rec reuse original_lnk =
   match !original_lnk with
@@ -537,10 +587,3 @@ let () =
       match !last_open_store with
       | None -> ()
       | Some (_, fd) -> close_in fd)
-
-let () =
-  at_exit (fun () ->
-      (* debug fetch_count; *)
-      match !lru_dbllist with
-      | None -> ()
-      | Some lru -> Dbllist.pp_stats lru)
