@@ -852,7 +852,9 @@ let shorten_module_path =
 
 let md md_type =
   {md_type; md_attributes=[]; md_loc=Location.none
-  ;md_uid = Uid.internal_not_actually_unique}
+  ;md_uid = Uid.internal_not_actually_unique
+  ; md_discourse = Discourse_types.empty
+  ; md_discourse_alias = None}
 
 (* Print addresses *)
 
@@ -986,6 +988,8 @@ let sign_of_cmi ~freshen { Persistent_env.Persistent_signature.cmi; _ } =
       md_loc = Location.none;
       md_attributes = [];
       md_uid = Uid.of_compilation_unit_id id;
+      md_discourse = Discourse_types.empty;
+      md_discourse_alias = None;
     }
   in
   let mda_address = Lazy_backtrack.create_forced (Aident id) in
@@ -1815,12 +1819,15 @@ let prefix_idents root prefixing_sub sg =
 
 (* Short path additions *)
 
+let no_short_paths_additions () =
+  !Clflags.real_paths || not !Clflags.legacy_short_path
+
 let short_paths_type ~long_path predef id decl old =
-  if long_path || (not predef && !Clflags.real_paths) then old
+  if long_path || (not predef && no_short_paths_additions ()) then old
   else Type(id, decl) :: old
 
 let short_paths_type_open path decls old =
-  if !Clflags.real_paths then old
+  if no_short_paths_additions () then old
   else Type_open(path, decls) :: old
 
 let unbound_class = Path.Pident (Ident.create_local "*undef*")
@@ -1829,29 +1836,29 @@ let is_dummy_class decl =
   Path.same decl.clty_path unbound_class
 
 let short_paths_class_type id decl old =
-  if !Clflags.real_paths || is_dummy_class decl then old
+  if no_short_paths_additions () || is_dummy_class decl then old
   else Class_type(id, decl) :: old
 
 let short_paths_class_type_open path decls old =
+  if no_short_paths_additions () then old else
   let decls = NameMap.map (fun cltda -> cltda.cltda_declaration) decls in
-  if !Clflags.real_paths then old
-  else Class_type_open(path, decls) :: old
+  Class_type_open(path, decls) :: old
 
 let short_paths_module_type id decl old =
-  if !Clflags.real_paths then old
+  if no_short_paths_additions () then old
   else Module_type(id, decl) :: old
 
 let short_paths_module_type_open path decls old =
+  if no_short_paths_additions () then old else
   let decls = NameMap.map (fun mtda -> mtda.mtda_declaration) decls in
-  if !Clflags.real_paths then old
-  else Module_type_open(path, decls) :: old
+  Module_type_open(path, decls) :: old
 
 let short_paths_module id decl comps old =
-  if !Clflags.real_paths then old
+  if no_short_paths_additions () then old
   else Module(id, decl, comps) :: old
 
 let short_paths_module_open path comps old =
-  if !Clflags.real_paths then old
+  if no_short_paths_additions () then old
   else Module_open(path, comps) :: old
 
 (* Compute structure descriptions *)
@@ -2450,7 +2457,9 @@ let add_module_lazy ~update_summary id presence mty env =
   let md = Subst.Lazy.{mdl_type = mty;
                        mdl_attributes = [];
                        mdl_loc = Location.none;
-                       mdl_uid = Uid.internal_not_actually_unique}
+                       mdl_uid = Uid.internal_not_actually_unique;
+                       mdl_discourse = Discourse_types.empty;
+                       mdl_discourse_alias = None}
   in
   add_module_declaration_lazy ~update_summary id presence md env
 
@@ -2470,9 +2479,9 @@ let enter_value ?check name desc env =
   let env = store_value ?check id addr desc (Shape.leaf desc.val_uid) env in
   (id, env)
 
-let enter_type ?(long_path = false) ~scope name info env =
+let enter_type ~scope name info env =
   let id = Ident.create_scoped ~scope name in
-  let env = store_type ~check:true ~predef:false ~long_path
+  let env = store_type ~check:true ~predef:false ~long_path:false
     id info (Shape.leaf info.type_uid) env
   in
   (id, env)
@@ -2816,9 +2825,6 @@ let initial =
     (add_type ~check:false ~predef:true ~long_path:false)
     (add_extension ~check:false ~rebind:false)
     empty
-
-let add_type_long_path ~check ?shape id info env =
-  add_type ~check ?shape ~predef:false ~long_path:true id info env
 
 let add_type ~check ?shape id info env =
   add_type ~check ?shape ~predef:false ~long_path:false id info env
@@ -3413,6 +3419,13 @@ let find_module_by_name lid env =
   let loc = Location.(in_file !input_name) in
   lookup_module ~errors:false ~use:false ~loc lid env
 
+let find_module_by_name_lazy lid env =
+  let loc = Location.(in_file !input_name) in
+  let path =
+    lookup_module_path ~errors:false ~use:false ~loc ~load:true lid env
+  in
+  path, find_module_lazy path env
+
 let find_value_by_name lid env =
   let loc = Location.(in_file !input_name) in
   lookup_value ~errors:false ~use:false ~loc lid env
@@ -3424,6 +3437,10 @@ let find_type_by_name lid env =
 let find_modtype_by_name lid env =
   let loc = Location.(in_file !input_name) in
   lookup_modtype ~errors:false ~use:false ~loc lid env
+
+let find_modtype_by_name_lazy lid env =
+  let loc = Location.(in_file !input_name) in
+  lookup_modtype_lazy ~errors:false ~use:false ~loc lid env
 
 let find_class_by_name lid env =
   let loc = Location.(in_file !input_name) in
@@ -4303,6 +4320,7 @@ let () =
   short_paths_module_components_desc' := short_paths_module_components_desc
 
 let update_short_paths env =
+  if not !Clflags.legacy_short_path then env else
   let env, short_paths =
     match env.short_paths with
     | None ->
