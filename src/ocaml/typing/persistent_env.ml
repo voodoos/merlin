@@ -235,7 +235,9 @@ let acknowledge_pers_struct penv short_path_comps check modname pers_sig pm =
   if check then check_consistency penv ps;
   let {persistent_structures; _} = penv in
   Hashtbl.add persistent_structures modname (Found (ps, pm));
-  register_pers_for_short_paths penv ps (short_path_comps ps.ps_name pm);
+  (* Only the legacy implementation of short-paths uses the basis *)
+  if !Clflags.legacy_short_path then
+    register_pers_for_short_paths penv ps (short_path_comps ps.ps_name pm);
   ps
 
 let read_pers_struct penv val_of_pers_sig short_path_comps check cmi =
