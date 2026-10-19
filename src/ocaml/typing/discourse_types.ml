@@ -204,18 +204,41 @@ module Path_trie = struct
 
   (* The path of a node is its position in the trie: [Root] segments start a
      path, the other ones extend the path of their parent. *)
+  let root : Segment.t -> Path.t = function
+    | Root id -> Pident id
+    | Dot _ | Apply _ | Extra _ ->
+      Misc.fatal_error "Discourse_types: path trie root is not an ident"
+
+  let extend path : Segment.t -> Path.t = function
+    | Dot name -> Pdot (path, name)
+    | Apply arg -> Papply (path, arg)
+    | Extra extra -> Pextra_ty (path, extra)
+    | Root _ -> Misc.fatal_error "Discourse_types: nested path trie root"
+
+  (* Folds over every node but the root *)
+  let fold_nodes f (Trie (_, roots)) acc =
+    let rec aux path (Trie (_, children) as t) acc =
+      let acc = f path t acc in
+      Segment_map.fold
+        (fun segment child acc -> aux (extend path segment) child acc)
+        children acc
+    in
+    Segment_map.fold
+      (fun segment child acc -> aux (root segment) child acc)
+      roots acc
+
+  (* [diff t t'] takes time proportional to [t] *)
+  let rec diff (Trie (kinds, children)) (Trie (kinds', children')) =
+    Trie
+      ( Paths.diff kinds kinds',
+        Segment_map.mapi
+          (fun segment child ->
+            match Segment_map.find_opt segment children' with
+            | None -> child
+            | Some child' -> diff child child')
+          children )
+
   let to_seq (Trie (_root_kinds, roots)) =
-    let root : Segment.t -> Path.t = function
-      | Root id -> Pident id
-      | Dot _ | Apply _ | Extra _ ->
-        Misc.fatal_error "Discourse_types: path trie root is not an ident"
-    in
-    let extend path : Segment.t -> Path.t = function
-      | Dot name -> Pdot (path, name)
-      | Apply arg -> Papply (path, arg)
-      | Extra extra -> Pextra_ty (path, extra)
-      | Root _ -> Misc.fatal_error "Discourse_types: nested path trie root"
-    in
     let rec aux path (Trie (kinds, tries)) seq =
       let seq () =
         Segment_map.fold
