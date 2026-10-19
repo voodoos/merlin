@@ -614,6 +614,7 @@ module D = struct
         | SigL_type (id, _, _, _) -> (add Type id, substs)
         | SigL_typext (id, _, _, _) -> (add Extension_constructor id, substs)
         | SigL_module (id, _, _, _, _) ->
+          (* TODO CR Ulysse this is an unwanted module loading *)
           let md = Env.find_module_lazy (pdot id) env in
           let paths = add Module id in
           let substs =
