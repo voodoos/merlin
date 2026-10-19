@@ -140,12 +140,42 @@ module Path_trie = struct
         ( Paths.union k k',
           Segment_map.union (fun _seg t t' -> Some (union t t')) m m' )
 
+  (* The segments of a path starting with the root *)
+  let segments_of_path path =
+    let rec aux (path : Path.t) acc : Segment.t list =
+      match path with
+      | Pident id -> Root id :: acc
+      | Pdot (p, name) -> aux p (Dot name :: acc)
+      | Papply (p, arg) -> aux p (Apply arg :: acc)
+      | Pextra_ty (p, extra) -> aux p (Extra extra :: acc)
+    in
+    aux path []
+
   (* [full_path] defaults to [path]: a name that denotes itself. *)
   let singleton ?full_path path kind =
     let full_path = Option.value ~default:path full_path in
     trie_of_path path (Paths.singleton (kind, full_path))
 
-  let add ?full_path path kind t = union t (singleton ?full_path path kind)
+  let add ?full_path path kind t =
+    let full_path = Option.value ~default:path full_path in
+    let item = (kind, full_path) in
+    let rec insert (Trie (paths, children) as t) = function
+      | [] ->
+        let paths' = Paths.add item paths in
+        if paths' == paths then t else Trie (paths', children)
+      | seg :: rest ->
+        let children' =
+          Segment_map.update seg
+            (function
+              | None -> Some (insert empty rest)
+              | Some child ->
+                let child' = insert child rest in
+                if child' == child then Some child else Some child')
+            children
+        in
+        if children' == children then t else Trie (paths, children')
+    in
+    insert t (segments_of_path path)
 
   (* Takes the paths rooted at [id] out of [t]. TODO: callers used to take by
      name, they now have to provide the ident itself. *)
