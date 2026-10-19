@@ -130,10 +130,15 @@ module Path_trie = struct
     in
     aux (node ?children paths) path
 
-  let rec union (Trie (k, m)) (Trie (k', m')) =
-    Trie
-      ( Paths.union k k',
-        Segment_map.union (fun _seg t t' -> Some (union t t')) m m' )
+  let is_empty_node (Trie (k, m)) = Paths.is_empty k && Segment_map.is_empty m
+
+  let rec union (Trie (k, m) as t) (Trie (k', m') as t') =
+    if t == t' || is_empty_node t' then t
+    else if is_empty_node t then t'
+    else
+      Trie
+        ( Paths.union k k',
+          Segment_map.union (fun _seg t t' -> Some (union t t')) m m' )
 
   (* [full_path] defaults to [path]: a name that denotes itself. *)
   let singleton ?full_path path kind =
