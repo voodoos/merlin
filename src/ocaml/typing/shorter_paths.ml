@@ -122,12 +122,11 @@ let path_size path =
   in
   size path
 
-let compare_paths_weight p1 p2 =
-  let l1, s1 = path_size p1 in
-  let l2, s2 = path_size p2 in
+let compare_weight (l1, s1) (l2, s2) =
   let c = l1 - l2 in
   if c <> 0 then c else s1 - s2
 
+let compare_paths_weight p1 p2 = compare_weight (path_size p1) (path_size p2)
 type kind = Type | Module | Module_type
 let kind_of_kind = function
   | Type -> Shape.Sig_component_kind.Type
