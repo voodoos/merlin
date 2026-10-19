@@ -403,7 +403,8 @@ let pp fmt t = pp_items fmt (merge_sorted t.local t.extern)
 (* A substitution maps a path to the paths it can be replaced with. *)
 type substs = Path.Set.t Path.Map.t
 
-type discourse = { paths : Path_trie.t; substs : substs }
+type discourse =
+  { paths : Path_trie.t; substs : substs; unexpanded : Path.Set.t }
 
 let pp_path = Format_doc.compat Path.print
 

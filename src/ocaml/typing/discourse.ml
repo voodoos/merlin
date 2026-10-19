@@ -630,13 +630,13 @@ module D = struct
       (paths, substs)
       (Subst.Lazy.force_signature_once sig_)
 
-  let module_consequences { paths; substs } env path =
+  let module_consequences d env path =
     let md = Env.find_module_lazy path env in
-    let { paths; substs }, more =
+    let { paths; substs; unexpanded }, more =
       match md.mdl_discourse_alias with
-      | None -> ({ paths; substs }, [])
+      | None -> (d, [])
       | Some (alias_lid, (_Module, alias_path)) ->
-        special_rule_for_aliases env { paths; substs } path alias_lid alias_path
+        special_rule_for_aliases env d path alias_lid alias_path
     in
 
     (* D5. If a module path is in U and its module description was written then
@@ -667,13 +667,14 @@ module D = struct
       let path' = Env.normalize_module_path None env path' in
       (* TODO: Check, this might not be the same as the code before the
            rebase. *)
-      ({ paths; substs }, ((Module, path'), env) :: more)
-    | MtyL_signature sig_ ->
+      ({ paths; substs; unexpanded }, ((Module, path'), env) :: more)
+    | MtyL_signature _ ->
       (* D3. If a module path is in U then all the paths of its subcomponents
-           are in D *)
-      let paths, substs = d3_rule env path paths substs sig_ in
-      ({ paths; substs }, more)
-    | _ -> ({ paths; substs }, more)
+           are in D. We only expand on demand. *)
+      log ~title:"D3" "D3: components of module %a are in D" Logger.fmt
+        (Fun.flip (Format_doc.compat Path.print) path);
+      ({ paths; substs; unexpanded = Path.Set.add path unexpanded }, more)
+    | _ -> ({ paths; substs; unexpanded }, more)
 
   (* The consequences of an item are its contribution to D, together with the
      additional items found to be in U while computing it (alias targets). *)
@@ -776,7 +777,13 @@ module D = struct
           loop (Paths.add item seen) d
         end
     in
-    let d = loop Paths.empty { paths = u.U.discourse; substs = u.U.substs } in
+    let d =
+      loop Paths.empty
+        { paths = u.U.discourse;
+          substs = u.U.substs;
+          unexpanded = Path.Set.empty
+        }
+    in
     log_recap ~title:"D" "Final D:\n%a" Logger.fmt (Fun.flip pp_d d);
     d
 
