@@ -593,6 +593,24 @@ module D = struct
 
   let d3_rule env path paths substs sig_ =
     let pdot id = Path.Pdot (path, Ident.name id) in
+    let items = Subst.Lazy.force_signature_once sig_ in
+    (* This function is used to recreate aliases' target paths without looking
+       them up from the environment. (which would open unneeded cmis) *)
+    let rec prefix (path : Path.t) : Path.t =
+      let siblings =
+        List.filter_map
+          (function
+            | Subst.Lazy.SigL_module (id, _, _, _, _) -> Some id
+            | _ -> None)
+          items
+      in
+      match path with
+      | Pident id ->
+        if List.exists (Ident.same id) siblings then pdot id else path
+      | Pdot (p, name) -> Pdot (prefix p, name)
+      | Papply (p, arg) -> Papply (prefix p, prefix arg)
+      | Pextra_ty (p, extra) -> Pextra_ty (prefix p, extra)
+    in
     List.fold_left
       (fun (paths, substs) item ->
         let add kind id =
@@ -613,23 +631,20 @@ module D = struct
         | Subst.Lazy.SigL_value (id, _, _) -> (add Value id, substs)
         | SigL_type (id, _, _, _) -> (add Type id, substs)
         | SigL_typext (id, _, _, _) -> (add Extension_constructor id, substs)
-        | SigL_module (id, _, _, _, _) ->
-          (* TODO CR Ulysse this is an unwanted module loading *)
-          let md = Env.find_module_lazy (pdot id) env in
+        | SigL_module (id, _, mdl, _, _) ->
           let paths = add Module id in
           let substs =
-            match md.mdl_type with
+            match mdl.mdl_type with
             | MtyL_alias path' ->
               follow_aliases_adding_subst "sub-component is a module alias" env
-                substs path' ~subst_by:(pdot id)
+                substs (prefix path') ~subst_by:(pdot id)
             | _ -> substs
           in
           (paths, substs)
         | SigL_modtype (id, _, _) -> (add Module_type id, substs)
         | SigL_class (id, _, _, _) -> (add Class id, substs)
         | SigL_class_type (id, _, _, _) -> (add Class_type id, substs))
-      (paths, substs)
-      (Subst.Lazy.force_signature_once sig_)
+      (paths, substs) items
 
   let module_consequences d env path =
     let md = Env.find_module_lazy path env in
