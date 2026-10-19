@@ -555,7 +555,7 @@ module D = struct
     in
     List.fold_left add_to_substs substs (alias_chain env path)
 
-  let special_rule_for_aliases env { paths; substs } path alias_lid alias_path =
+  let special_rule_for_aliases env d path alias_lid alias_path =
     (* TODO CR Ulysse Working on the longident here does not feel right. *)
     try
       let recorded_path = alias_path in
@@ -578,7 +578,7 @@ module D = struct
           (Fun.flip (Format_doc.compat Path.print) alias_path)
           Logger.fmt
           (Fun.flip Location.print_loc alias_lid.loc);
-        U.add_subst substs alias_path ~by:path
+        U.add_subst d.substs alias_path ~by:path
       in
       (* TODO: This is an unwritten rule (yet): If a module in U is an alias
          then this alias is also in U. The alias path and its module prefixes
@@ -588,8 +588,8 @@ module D = struct
           ~f:(fun acc kind path -> ((kind, path), env) :: acc)
           alias_path
       in
-      ({ paths; substs }, more)
-    with Not_found -> ({ paths; substs }, [])
+      ({ d with substs }, more)
+    with Not_found -> (d, [])
 
   let d3_rule env path paths substs sig_ =
     let pdot id = Path.Pdot (path, Ident.name id) in
