@@ -91,8 +91,14 @@ let pp_d fmt d =
         (Path.Map.bindings map)
   in
   fprintf fmt
-    "@[<v 2>Discourse {@;size = %i;@;paths =@ %a;@;substs =@ %a@;<-2>}@]"
+    "@[<v 2>Discourse {@;\
+     size = %i;@;\
+     paths =@ %a;@;\
+     substs =@ %a;@;\
+     unexpanded =@ %a@;\
+     <-2>}@]"
     (Path_trie.size d.paths) Path_trie.pp_seq d.paths pp_substs d.substs
+    pp_path_set d.unexpanded
 
 (* A more verbose section which logs every addition to U or D, along with the
    reason the element is added (U1, U2, U3, D2, …, D12) *)
@@ -527,8 +533,19 @@ module D = struct
   (* TODO: this is not really a chain, just increasingly large jumps. This
      reduces the number of combinations when unrolling substitutions but we might
      need the missing internal aliases. *)
+  let alias_chain env path =
+    let rec loop (path : Path.t) =
+      match path with
+      | Pident id when Ident.global id -> [ path ]
+      | _ -> (
+        match Env.find_module_lazy path env with
+        | { mdl_type = MtyL_alias path1; _ } -> path1 :: loop path1
+        | _ -> [ path ])
+    in
+    loop path
+
   let follow_aliases_adding_subst log_detail env substs path ~subst_by:path' =
-    let add_to_substs substs path path' =
+    let add_to_substs substs path =
       log ~title:"D12" "D12: subst %a -> %a (%s)" Logger.fmt
         (Fun.flip (Format_doc.compat Path.print) path)
         Logger.fmt
@@ -536,17 +553,7 @@ module D = struct
         log_detail;
       U.add_subst substs path ~by:path'
     in
-    let rec loop substs path =
-      match path with
-      | Path.Pident id when Ident.global id -> add_to_substs substs path path'
-      | _ -> (
-        match Env.find_module_lazy path env with
-        | { mdl_type = MtyL_alias path1; _ } ->
-          let substs = add_to_substs substs path1 path' in
-          loop substs path1
-        | _ -> add_to_substs substs path path')
-    in
-    loop substs path
+    List.fold_left add_to_substs substs (alias_chain env path)
 
   let special_rule_for_aliases env { paths; substs } path alias_lid alias_path =
     (* TODO CR Ulysse Working on the longident here does not feel right. *)
