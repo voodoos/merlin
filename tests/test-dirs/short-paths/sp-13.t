@@ -149,6 +149,8 @@ Dump the discourse so regressions show up as a diff in this test:
   # discourse-verbose - D5
   D5: merging discourse of module Async!
   # discourse-verbose - D3
+  D3: components of module Async! are in D
+  # discourse-verbose - D3
   D3: signature component module Deferred/17 (Async!.Deferred) under module Async!
   # discourse-verbose - D12
   D12: subst Async_kernel__Deferred! -> Async!.Deferred (sub-component is a module alias)
@@ -184,6 +186,8 @@ Dump the discourse so regressions show up as a diff in this test:
   D2: Async_kernel__Deferred!.Let_syntax.Let_syntax in U so in D (kind: module)
   # discourse-verbose - D5
   D5: merging discourse of module Async_kernel__Deferred!.Let_syntax.Let_syntax
+  # discourse-verbose - D3
+  D3: components of module Async_kernel__Deferred!.Let_syntax.Let_syntax are in D
   # discourse-verbose - D2
   D2: Async!.Deferred in U so in D (kind: module)
   # discourse-verbose - D12S
@@ -221,6 +225,8 @@ Dump the discourse so regressions show up as a diff in this test:
   # discourse-verbose - D5
   D5: merging discourse of module Async_kernel__Deferred!
   # discourse-verbose - D3
+  D3: components of module Async_kernel__Deferred! are in D
+  # discourse-verbose - D3
   D3: signature component type t/21 (Async_kernel__Deferred!.t) under module Async_kernel__Deferred!
   # discourse-verbose - D3
   D3: signature component module Let_syntax/22 (Async_kernel__Deferred!.Let_syntax) under module Async_kernel__Deferred!
@@ -228,6 +234,8 @@ Dump the discourse so regressions show up as a diff in this test:
   D2: Async_kernel__! in U so in D (kind: module)
   # discourse-verbose - D5
   D5: merging discourse of module Async_kernel__!
+  # discourse-verbose - D3
+  D3: components of module Async_kernel__! are in D
   # discourse-verbose - D3
   D3: signature component module Deferred/24 (Async_kernel__!.Deferred) under module Async_kernel__!
   # discourse-verbose - D12
@@ -256,6 +264,8 @@ Dump the discourse so regressions show up as a diff in this test:
   D2: Async_kernel__Deferred!.Let_syntax in U so in D (kind: module)
   # discourse-verbose - D5
   D5: merging discourse of module Async_kernel__Deferred!.Let_syntax
+  # discourse-verbose - D3
+  D3: components of module Async_kernel__Deferred!.Let_syntax are in D
   # discourse-verbose - D3
   D3: signature component module Let_syntax/23 (Async_kernel__Deferred!.Let_syntax.Let_syntax) under module Async_kernel__Deferred!.Let_syntax
   {

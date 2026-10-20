@@ -148,7 +148,9 @@ This mocks the Async --include--> Async_kernel --exports--> Deferred
       [Let_syntax/25; Async!.Let_syntax; Async_kernel!.Let_syntax;
        Async_kernel!.Deferred.Let_syntax.Let_syntax];
     Async_kernel!.Deferred.Let_syntax.Let_syntax ->
-      [Async!.Let_syntax; Async_kernel!.Let_syntax]]
+      [Async!.Let_syntax; Async_kernel!.Let_syntax]];
+    unexpanded =
+    []
     }
   # discourse-recap - U
   U at start of D.of_U:
@@ -189,7 +191,9 @@ This mocks the Async --include--> Async_kernel --exports--> Deferred
       [Let_syntax/25; Async!.Let_syntax; Async_kernel!.Let_syntax;
        Async_kernel!.Deferred.Let_syntax.Let_syntax];
     Async_kernel!.Deferred.Let_syntax.Let_syntax ->
-      [Async!.Let_syntax; Async_kernel!.Let_syntax]]
+      [Async!.Let_syntax; Async_kernel!.Let_syntax]];
+    unexpanded =
+    []
     }
   {
     "class": "return",
@@ -287,7 +291,9 @@ Dump the discourse so regressions show up as a diff in this test:
       [Let_syntax/25; Async!.Let_syntax; Async_kernel!.Let_syntax;
        Async_kernel!.Deferred.Let_syntax.Let_syntax];
     Async_kernel!.Deferred.Let_syntax.Let_syntax ->
-      [Async!.Let_syntax; Async_kernel!.Let_syntax]]
+      [Async!.Let_syntax; Async_kernel!.Let_syntax]];
+    unexpanded =
+    []
     }
   # discourse-recap - U
   U at start of D.of_U:
@@ -328,7 +334,9 @@ Dump the discourse so regressions show up as a diff in this test:
       [Let_syntax/25; Async!.Let_syntax; Async_kernel!.Let_syntax;
        Async_kernel!.Deferred.Let_syntax.Let_syntax];
     Async_kernel!.Deferred.Let_syntax.Let_syntax ->
-      [Async!.Let_syntax; Async_kernel!.Let_syntax]]
+      [Async!.Let_syntax; Async_kernel!.Let_syntax]];
+    unexpanded =
+    []
     }
   {
     "class": "return",

@@ -684,12 +684,14 @@ module D = struct
       (* TODO: Check, this might not be the same as the code before the
            rebase. *)
       ({ paths; substs; unexpanded }, ((Module, path'), env) :: more)
-    | MtyL_signature _ ->
+    | MtyL_signature sig_ ->
       (* D3. If a module path is in U then all the paths of its subcomponents
            are in D. We only expand on demand. *)
       log ~title:"D3" "D3: components of module %a are in D" Logger.fmt
         (Fun.flip (Format_doc.compat Path.print) path);
-      ({ paths; substs; unexpanded = Path.Set.add path unexpanded }, more)
+      (* ({ paths; substs; unexpanded = Path.Set.add path unexpanded }, more) *)
+      let paths, substs = d3_rule env path paths substs sig_ in
+      ({ paths; substs; unexpanded }, more)
     | _ -> ({ paths; substs; unexpanded }, more)
 
   (* The consequences of an item are its contribution to D, together with the
