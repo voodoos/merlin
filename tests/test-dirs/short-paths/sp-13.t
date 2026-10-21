@@ -146,8 +146,6 @@ Dump the discourse so regressions show up as a diff in this test:
   U1: path module used in file: Async! (File "test.ml", line 3, characters 10-27)
   # discourse-verbose - D2
   D2: Async! in U so in D (kind: module)
-  # discourse-verbose - D5
-  D5: merging discourse of module Async!
   # discourse-verbose - D3
   D3: components of module Async! are in D
   # discourse-verbose - D3
@@ -166,74 +164,52 @@ Dump the discourse so regressions show up as a diff in this test:
   D12: subst Async_kernel__Deferred!.Let_syntax.Let_syntax -> Async!.Let_syntax (sub-component is a module alias)
   # discourse-verbose - subst
   subst: Async_kernel__Deferred!.Let_syntax.Let_syntax -> Async!.Let_syntax (open/alias defined in file)
+  # discourse-verbose - D5
+  D5: merging discourse of module Async!
   # discourse-verbose - D2
   D2: Async!.Let_syntax in U so in D (kind: module)
   # discourse-verbose - D12S
   D12S: subst Async!.Let_syntax -> Deferred.Let_syntax.Let_syntax[Async!.Deferred.Let_syntax.Let_syntax] (alias at File "async_kernel.ml", line 2, characters 8-27)
   # discourse-verbose - subst
   subst: Async!.Deferred.Let_syntax.Let_syntax -> Async!.Let_syntax (open/alias defined in file)
+  # discourse-verbose - D3
+  D3: components of module Async!.Let_syntax are in D
   # discourse-verbose - D5
   D5: merging discourse of module Async!.Let_syntax
-  # discourse-verbose - D12
-  D12: subst Async_kernel__Deferred!.Let_syntax.Let_syntax -> Async!.Let_syntax (Mty_alias target)
-  # discourse-verbose - subst
-  subst: Async_kernel__Deferred!.Let_syntax.Let_syntax -> Async!.Let_syntax (open/alias defined in file)
   # discourse-verbose - D2
   D2: Async!.Let_syntax.return in U so in D (kind: value)
   # discourse-verbose - D4
   D4: merging discourse of value Async!.Let_syntax.return
-  # discourse-verbose - D2
-  D2: Async_kernel__Deferred!.Let_syntax.Let_syntax in U so in D (kind: module)
-  # discourse-verbose - D5
-  D5: merging discourse of module Async_kernel__Deferred!.Let_syntax.Let_syntax
-  # discourse-verbose - D3
-  D3: components of module Async_kernel__Deferred!.Let_syntax.Let_syntax are in D
   # discourse-verbose - D2
   D2: Async!.Deferred in U so in D (kind: module)
   # discourse-verbose - D12S
   D12S: subst Async!.Deferred -> Deferred[Async_kernel__!.Deferred] (alias at File "async_kernel.ml", line 1, characters 18-26)
   # discourse-verbose - subst
   subst: Async_kernel__!.Deferred -> Async!.Deferred (open/alias defined in file)
+  # discourse-verbose - D3
+  D3: components of module Async!.Deferred are in D
+  # discourse-verbose - D3
+  D3: signature component type t/21 (Async!.Deferred.t) under module Async!.Deferred
+  # discourse-verbose - D3
+  D3: signature component module Let_syntax/22 (Async!.Deferred.Let_syntax) under module Async!.Deferred
   # discourse-verbose - D5
   D5: merging discourse of module Async!.Deferred
-  # discourse-verbose - D12
-  D12: subst Async_kernel__Deferred! -> Async!.Deferred (Mty_alias target)
-  # discourse-verbose - subst
-  subst: Async_kernel__Deferred! -> Async!.Deferred (open/alias defined in file)
-  # discourse-verbose - D12
-  D12: subst Async_kernel__Deferred! -> Async!.Deferred (Mty_alias target)
-  # discourse-verbose - subst
-  subst: Async_kernel__Deferred! -> Async!.Deferred (open/alias defined in file)
   # discourse-verbose - D2
   D2: Async!.Deferred.Let_syntax in U so in D (kind: module)
+  # discourse-verbose - D3
+  D3: components of module Async!.Deferred.Let_syntax are in D
+  # discourse-verbose - D3
+  D3: signature component module Let_syntax/23 (Async!.Deferred.Let_syntax.Let_syntax) under module Async!.Deferred.Let_syntax
   # discourse-verbose - D5
   D5: merging discourse of module Async!.Deferred.Let_syntax
-  # discourse-verbose - D12
-  D12: subst Async_kernel__Deferred!.Let_syntax -> Async!.Deferred.Let_syntax (Mty_alias target)
-  # discourse-verbose - subst
-  subst: Async_kernel__Deferred!.Let_syntax -> Async!.Deferred.Let_syntax (open/alias defined in file)
   # discourse-verbose - D2
   D2: Async!.Deferred.Let_syntax.Let_syntax in U so in D (kind: module)
+  # discourse-verbose - D3
+  D3: components of module Async!.Deferred.Let_syntax.Let_syntax are in D
   # discourse-verbose - D5
   D5: merging discourse of module Async!.Deferred.Let_syntax.Let_syntax
-  # discourse-verbose - D12
-  D12: subst Async_kernel__Deferred!.Let_syntax.Let_syntax -> Async!.Deferred.Let_syntax.Let_syntax (Mty_alias target)
-  # discourse-verbose - subst
-  subst: Async_kernel__Deferred!.Let_syntax.Let_syntax -> Async!.Deferred.Let_syntax.Let_syntax (open/alias defined in file)
-  # discourse-verbose - D2
-  D2: Async_kernel__Deferred! in U so in D (kind: module)
-  # discourse-verbose - D5
-  D5: merging discourse of module Async_kernel__Deferred!
-  # discourse-verbose - D3
-  D3: components of module Async_kernel__Deferred! are in D
-  # discourse-verbose - D3
-  D3: signature component type t/21 (Async_kernel__Deferred!.t) under module Async_kernel__Deferred!
-  # discourse-verbose - D3
-  D3: signature component module Let_syntax/22 (Async_kernel__Deferred!.Let_syntax) under module Async_kernel__Deferred!
   # discourse-verbose - D2
   D2: Async_kernel__! in U so in D (kind: module)
-  # discourse-verbose - D5
-  D5: merging discourse of module Async_kernel__!
   # discourse-verbose - D3
   D3: components of module Async_kernel__! are in D
   # discourse-verbose - D3
@@ -248,26 +224,32 @@ Dump the discourse so regressions show up as a diff in this test:
   D12: subst Async_kernel__Deferred0! -> Async_kernel__!.Deferred0 (sub-component is a module alias)
   # discourse-verbose - subst
   subst: Async_kernel__Deferred0! -> Async_kernel__!.Deferred0 (open/alias defined in file)
+  # discourse-verbose - D5
+  D5: merging discourse of module Async_kernel__!
   # discourse-verbose - D2
   D2: Async_kernel__!.Deferred in U so in D (kind: module)
   # discourse-verbose - D12S
   D12S: subst Async_kernel__!.Deferred -> Async_kernel__Deferred[Async_kernel__Deferred!] (alias at File "async_kernel__.ml", line 1, characters 18-40)
   # discourse-verbose - subst
   subst: Async_kernel__Deferred! -> Async_kernel__!.Deferred (open/alias defined in file)
+  # discourse-verbose - D3
+  D3: components of module Async_kernel__!.Deferred are in D
+  # discourse-verbose - D3
+  D3: signature component type t/21 (Async_kernel__!.Deferred.t) under module Async_kernel__!.Deferred
+  # discourse-verbose - D3
+  D3: signature component module Let_syntax/22 (Async_kernel__!.Deferred.Let_syntax) under module Async_kernel__!.Deferred
   # discourse-verbose - D5
   D5: merging discourse of module Async_kernel__!.Deferred
-  # discourse-verbose - D12
-  D12: subst Async_kernel__Deferred! -> Async_kernel__!.Deferred (Mty_alias target)
-  # discourse-verbose - subst
-  subst: Async_kernel__Deferred! -> Async_kernel__!.Deferred (open/alias defined in file)
   # discourse-verbose - D2
-  D2: Async_kernel__Deferred!.Let_syntax in U so in D (kind: module)
+  D2: Async_kernel__Deferred! in U so in D (kind: module)
+  # discourse-verbose - D3
+  D3: components of module Async_kernel__Deferred! are in D
+  # discourse-verbose - D3
+  D3: signature component type t/21 (Async_kernel__Deferred!.t) under module Async_kernel__Deferred!
+  # discourse-verbose - D3
+  D3: signature component module Let_syntax/22 (Async_kernel__Deferred!.Let_syntax) under module Async_kernel__Deferred!
   # discourse-verbose - D5
-  D5: merging discourse of module Async_kernel__Deferred!.Let_syntax
-  # discourse-verbose - D3
-  D3: components of module Async_kernel__Deferred!.Let_syntax are in D
-  # discourse-verbose - D3
-  D3: signature component module Let_syntax/23 (Async_kernel__Deferred!.Let_syntax.Let_syntax) under module Async_kernel__Deferred!.Let_syntax
+  D5: merging discourse of module Async_kernel__Deferred!
   {
     "class": "return",
     "value": [

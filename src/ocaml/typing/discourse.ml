@@ -648,11 +648,26 @@ module D = struct
 
   let module_consequences d env path =
     let md = Env.find_module_lazy path env in
+
+    (* D12S If a module in U is an alias then this alias is also in U. *)
     let { paths; substs; unexpanded }, more =
       match md.mdl_discourse_alias with
       | None -> (d, [])
       | Some (alias_lid, (_Module, alias_path)) ->
         special_rule_for_aliases env d path alias_lid alias_path
+    in
+
+    (* D3. If a module path is in U then all the paths of its subcomponents
+           are in D. We only expand on demand. *)
+    let path' = Env.normalize_module_path None env path in
+    let paths, substs =
+      let md' = Env.find_module_lazy path' env in
+      match md'.mdl_type with
+      | MtyL_signature sig_ ->
+        log ~title:"D3" "D3: components of module %a are in D" Logger.fmt
+          (Fun.flip (Format_doc.compat Path.print) path);
+        d3_rule env path paths substs sig_
+      | _ -> (paths, substs)
     in
 
     (* D5. If a module path is in U and its module description was written then
@@ -663,36 +678,8 @@ module D = struct
       (Fun.flip (Format_doc.compat Path.print) path);
     let md_discourse = trie_of_paths md.mdl_discourse in
     let paths = Path_trie.union paths md_discourse in
-    match md.mdl_type with
-    | MtyL_alias path' ->
-      (* D12. If a module path m in D - note D not U - is a module alias
-           with target n and another path p in D includes n within it, then
-           the path obtained by substituting the m for n in p is also in D.
 
-           We accumulate such substitution and will apply them when shortening
-           a path. *)
-      let substs =
-        follow_aliases_adding_subst "Mty_alias target" env substs path'
-          ~subst_by:path
-      in
-      (* We have to follow aliases to be able to add module components to
-           the discourse.
-
-           TODO now that we have md_discourse_aliases, this might be redundant
-           ? *)
-      let path' = Env.normalize_module_path None env path' in
-      (* TODO: Check, this might not be the same as the code before the
-           rebase. *)
-      ({ paths; substs; unexpanded }, ((Module, path'), env) :: more)
-    | MtyL_signature sig_ ->
-      (* D3. If a module path is in U then all the paths of its subcomponents
-           are in D. We only expand on demand. *)
-      log ~title:"D3" "D3: components of module %a are in D" Logger.fmt
-        (Fun.flip (Format_doc.compat Path.print) path);
-      (* ({ paths; substs; unexpanded = Path.Set.add path unexpanded }, more) *)
-      let paths, substs = d3_rule env path paths substs sig_ in
-      ({ paths; substs; unexpanded }, more)
-    | _ -> ({ paths; substs; unexpanded }, more)
+    ({ paths; substs; unexpanded }, more)
 
   (* The consequences of an item are its contribution to D, together with the
      additional items found to be in U while computing it (alias targets). *)
