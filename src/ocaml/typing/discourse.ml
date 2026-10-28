@@ -570,7 +570,7 @@ module D = struct
                (Env.normalize_module_path None env recorded_path))
       then raise Not_found;
       let substs =
-        log ~title:"D12S" "D12S: subst %a -> %a[%a] (alias at %a)" Logger.fmt
+        log ~title:"D13" "D13: subst %a -> %a[%a] (alias at %a)" Logger.fmt
           (Fun.flip (Format_doc.compat Path.print) path)
           Logger.fmt
           (Fun.flip Pprintast.longident alias_lid.Location.txt)
@@ -649,7 +649,7 @@ module D = struct
   let module_consequences d env path =
     let md = Env.find_module_lazy path env in
 
-    (* D12S If a module in U is an alias then this alias is also in U. *)
+    (* D13 If a module in U is an alias then this alias is also in U. *)
     let { paths; substs; unexpanded }, more =
       match md.mdl_discourse_alias with
       | None -> (d, [])
