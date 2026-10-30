@@ -59,6 +59,14 @@ module Out_type = struct
         (Fun.flip path_print p);
       (Env.normalize_type_path None env p, Id)
 
+  let normalize_type_path ?cache env p =
+    log ~title:"normalize_type_path" "Normalizing %a " Logger.fmt
+      (Fun.flip path_print p);
+    let p, subst = normalize_type_path ?cache env p in
+    log ~title:"normalize_type_path" "Normalizing %a " Logger.fmt
+      (Fun.flip path_print p);
+    (p, subst)
+
   let find_double_underscore s =
     let len = String.length s in
     let rec loop i =

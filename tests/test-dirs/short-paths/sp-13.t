@@ -168,8 +168,8 @@ Dump the discourse so regressions show up as a diff in this test:
   D5: merging discourse of module Async!
   # discourse-verbose - D2
   D2: Async!.Let_syntax in U so in D (kind: module)
-  # discourse-verbose - D12S
-  D12S: subst Async!.Let_syntax -> Deferred.Let_syntax.Let_syntax[Async!.Deferred.Let_syntax.Let_syntax] (alias at File "async_kernel.ml", line 2, characters 8-27)
+  # discourse-verbose - D13
+  D13: subst Async!.Let_syntax -> Deferred.Let_syntax.Let_syntax[Async!.Deferred.Let_syntax.Let_syntax] (alias at File "async_kernel.ml", line 2, characters 8-27)
   # discourse-verbose - subst
   subst: Async!.Deferred.Let_syntax.Let_syntax -> Async!.Let_syntax (open/alias defined in file)
   # discourse-verbose - D3
@@ -182,8 +182,8 @@ Dump the discourse so regressions show up as a diff in this test:
   D4: merging discourse of value Async!.Let_syntax.return
   # discourse-verbose - D2
   D2: Async!.Deferred in U so in D (kind: module)
-  # discourse-verbose - D12S
-  D12S: subst Async!.Deferred -> Deferred[Async_kernel__!.Deferred] (alias at File "async_kernel.ml", line 1, characters 18-26)
+  # discourse-verbose - D13
+  D13: subst Async!.Deferred -> Deferred[Async_kernel__!.Deferred] (alias at File "async_kernel.ml", line 1, characters 18-26)
   # discourse-verbose - subst
   subst: Async_kernel__!.Deferred -> Async!.Deferred (open/alias defined in file)
   # discourse-verbose - D3
@@ -228,8 +228,8 @@ Dump the discourse so regressions show up as a diff in this test:
   D5: merging discourse of module Async_kernel__!
   # discourse-verbose - D2
   D2: Async_kernel__!.Deferred in U so in D (kind: module)
-  # discourse-verbose - D12S
-  D12S: subst Async_kernel__!.Deferred -> Async_kernel__Deferred[Async_kernel__Deferred!] (alias at File "async_kernel__.ml", line 1, characters 18-40)
+  # discourse-verbose - D13
+  D13: subst Async_kernel__!.Deferred -> Async_kernel__Deferred[Async_kernel__Deferred!] (alias at File "async_kernel__.ml", line 1, characters 18-40)
   # discourse-verbose - subst
   subst: Async_kernel__Deferred! -> Async_kernel__!.Deferred (open/alias defined in file)
   # discourse-verbose - D3
