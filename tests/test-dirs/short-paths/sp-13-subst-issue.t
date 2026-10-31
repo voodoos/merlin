@@ -90,7 +90,7 @@ This mocks the Async --include--> Async_kernel --exports--> Deferred
   # discourse-recap - D
   Final D:
   Discourse {
-    size = 80;
+    size = 74;
     paths =
     Let_syntax/25 [module: Async!.Let_syntax];
     Deferred/24 [module: Async!.Deferred];
@@ -101,13 +101,9 @@ This mocks the Async --include--> Async_kernel --exports--> Deferred
     Async_kernel__! [module: Async_kernel__!];
     Async_kernel__!.Deferred0 [module: Async_kernel__!.Deferred0];
     Async_kernel__!.Deferred [module: Async_kernel__!.Deferred];
-    Async_kernel__!.Deferred.t [type: Async_kernel__!.Deferred.t];
-    Async_kernel__!.Deferred.Let_syntax
-      [module: Async_kernel__!.Deferred.Let_syntax];
     Async_kernel! [module: Async_kernel!];
     Async_kernel!.Let_syntax [module: Async_kernel!.Let_syntax];
     Async_kernel!.Deferred [module: Async_kernel!.Deferred];
-    Async_kernel!.Deferred.t [type: Async_kernel!.Deferred.t];
     Async_kernel!.Deferred.Let_syntax
       [module: Async_kernel!.Deferred.Let_syntax];
     Async_kernel!.Deferred.Let_syntax.Let_syntax
@@ -229,7 +225,7 @@ Dump the discourse so regressions show up as a diff in this test:
   # discourse-recap - D
   Final D:
   Discourse {
-    size = 80;
+    size = 74;
     paths =
     Let_syntax/25 [module: Async!.Let_syntax];
     Deferred/24 [module: Async!.Deferred];
@@ -240,13 +236,9 @@ Dump the discourse so regressions show up as a diff in this test:
     Async_kernel__! [module: Async_kernel__!];
     Async_kernel__!.Deferred0 [module: Async_kernel__!.Deferred0];
     Async_kernel__!.Deferred [module: Async_kernel__!.Deferred];
-    Async_kernel__!.Deferred.t [type: Async_kernel__!.Deferred.t];
-    Async_kernel__!.Deferred.Let_syntax
-      [module: Async_kernel__!.Deferred.Let_syntax];
     Async_kernel! [module: Async_kernel!];
     Async_kernel!.Let_syntax [module: Async_kernel!.Let_syntax];
     Async_kernel!.Deferred [module: Async_kernel!.Deferred];
-    Async_kernel!.Deferred.t [type: Async_kernel!.Deferred.t];
     Async_kernel!.Deferred.Let_syntax
       [module: Async_kernel!.Deferred.Let_syntax];
     Async_kernel!.Deferred.Let_syntax.Let_syntax

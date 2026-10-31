@@ -659,10 +659,8 @@ module D = struct
 
     (* D3. If a module path is in U then all the paths of its subcomponents
            are in D. We only expand on demand. *)
-    let path' = Env.normalize_module_path None env path in
     let paths, substs =
-      let md' = Env.find_module_lazy path' env in
-      match md'.mdl_type with
+      match md.mdl_type with
       | MtyL_signature sig_ ->
         log ~title:"D3" "D3: components of module %a are in D" Logger.fmt
           (Fun.flip (Format_doc.compat Path.print) path);

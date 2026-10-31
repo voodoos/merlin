@@ -172,8 +172,6 @@ Dump the discourse so regressions show up as a diff in this test:
   D13: subst Async!.Let_syntax -> Deferred.Let_syntax.Let_syntax[Async!.Deferred.Let_syntax.Let_syntax] (alias at File "async_kernel.ml", line 2, characters 8-27)
   # discourse-verbose - subst
   subst: Async!.Deferred.Let_syntax.Let_syntax -> Async!.Let_syntax (open/alias defined in file)
-  # discourse-verbose - D3
-  D3: components of module Async!.Let_syntax are in D
   # discourse-verbose - D5
   D5: merging discourse of module Async!.Let_syntax
   # discourse-verbose - D2
@@ -186,26 +184,14 @@ Dump the discourse so regressions show up as a diff in this test:
   D13: subst Async!.Deferred -> Deferred[Async_kernel__!.Deferred] (alias at File "async_kernel.ml", line 1, characters 18-26)
   # discourse-verbose - subst
   subst: Async_kernel__!.Deferred -> Async!.Deferred (open/alias defined in file)
-  # discourse-verbose - D3
-  D3: components of module Async!.Deferred are in D
-  # discourse-verbose - D3
-  D3: signature component type t/21 (Async!.Deferred.t) under module Async!.Deferred
-  # discourse-verbose - D3
-  D3: signature component module Let_syntax/22 (Async!.Deferred.Let_syntax) under module Async!.Deferred
   # discourse-verbose - D5
   D5: merging discourse of module Async!.Deferred
   # discourse-verbose - D2
   D2: Async!.Deferred.Let_syntax in U so in D (kind: module)
-  # discourse-verbose - D3
-  D3: components of module Async!.Deferred.Let_syntax are in D
-  # discourse-verbose - D3
-  D3: signature component module Let_syntax/23 (Async!.Deferred.Let_syntax.Let_syntax) under module Async!.Deferred.Let_syntax
   # discourse-verbose - D5
   D5: merging discourse of module Async!.Deferred.Let_syntax
   # discourse-verbose - D2
   D2: Async!.Deferred.Let_syntax.Let_syntax in U so in D (kind: module)
-  # discourse-verbose - D3
-  D3: components of module Async!.Deferred.Let_syntax.Let_syntax are in D
   # discourse-verbose - D5
   D5: merging discourse of module Async!.Deferred.Let_syntax.Let_syntax
   # discourse-verbose - D2
@@ -232,12 +218,6 @@ Dump the discourse so regressions show up as a diff in this test:
   D13: subst Async_kernel__!.Deferred -> Async_kernel__Deferred[Async_kernel__Deferred!] (alias at File "async_kernel__.ml", line 1, characters 18-40)
   # discourse-verbose - subst
   subst: Async_kernel__Deferred! -> Async_kernel__!.Deferred (open/alias defined in file)
-  # discourse-verbose - D3
-  D3: components of module Async_kernel__!.Deferred are in D
-  # discourse-verbose - D3
-  D3: signature component type t/21 (Async_kernel__!.Deferred.t) under module Async_kernel__!.Deferred
-  # discourse-verbose - D3
-  D3: signature component module Let_syntax/22 (Async_kernel__!.Deferred.Let_syntax) under module Async_kernel__!.Deferred
   # discourse-verbose - D5
   D5: merging discourse of module Async_kernel__!.Deferred
   # discourse-verbose - D2
