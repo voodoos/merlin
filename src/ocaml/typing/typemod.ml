@@ -1676,11 +1676,12 @@ and transl_signature ?(keep_warnings = false) env sg =
             in
             List.iter (fun td ->
               Signature_names.check_type names td.typ_loc td.typ_id;
-              Discourse.define_type td.typ_id;
             ) decls;
             res
           with
           | (decls, newenv, _) ->
+            List.iter (fun decl ->
+              Discourse.define_type newenv decl.typ_name decl.typ_id) decls;
             let newenv = Env.update_short_paths newenv in
             let (trem, rem, final_env) = transl_sig newenv srem in
             let sg =
@@ -1809,7 +1810,7 @@ and transl_signature ?(keep_warnings = false) env sg =
                 Env.enter_module_declaration ~scope name pres md env
               in
               let newenv = Env.update_short_paths newenv in
-              Discourse.define_module md id;
+              Discourse.define_module newenv { pmd.pmd_name with txt = name } id;
               Signature_names.check_module names pmd.pmd_name.loc id;
               let sig_item = Sig_module(id, pres, md, Trec_not, Exported) in
               Some id, pres, newenv, Some sig_item, tmty, md
@@ -1883,16 +1884,11 @@ and transl_signature ?(keep_warnings = false) env sg =
                 | Some id -> Some (id, md, uid)
               ) tdecls
             in
-            List.iter (fun (id, md, uid) ->
+            List.iter (fun (id, md, _uid) ->
               Signature_names.check_module names md.md_loc id;
-              Discourse.define_module
-                {Types.md_type = md.md_type.mty_type;
-                 md_attributes = md.md_attributes;
-                 md_loc = md.md_loc;
-                 md_uid = uid;
-                 md_discourse = Discourse_types.empty;
-                 md_discourse_alias = None;
-                } id
+              Option.iter (fun txt ->
+                  Discourse.define_module newenv { md.md_name with txt } id)
+                md.md_name.txt
             ) decls;
             (tdecls, decls, newenv)
           with
@@ -1971,7 +1967,7 @@ and transl_signature ?(keep_warnings = false) env sg =
             let scope = Ctype.create_scope () in
             let sg, newenv = Env.enter_signature ~scope
                        (extract_sig env smty.pmty_loc mty) env in
-            let () = Discourse.define_signature sg in
+            let () = Discourse.define_signature newenv sg in
             Signature_group.iter
               (Signature_names.check_sig_item names item.psig_loc)
               sg;
@@ -2102,7 +2098,7 @@ and transl_modtype_decl_aux env
   in
   let scope = Ctype.create_scope () in
   let (id, newenv) = Env.enter_modtype ~scope pmtd_name.txt decl env in
-  Discourse.define_modtype id;
+  Discourse.define_modtype newenv pmtd_name id;
   let mtd =
     {
      mtd_id=id;
@@ -2953,7 +2949,7 @@ and type_open_decl_aux ?used_slot ?toplevel ~funct_body names env od =
       Env.enter_signature ~scope ~mod_shape
         (extract_sig_open env md.mod_loc md.mod_type) env
     in
-    let () = Discourse.define_signature sg in
+    let () = Discourse.define_signature newenv sg in
     let info, visibility =
       match toplevel with
       | Some false | None -> Some `From_open, Hidden
@@ -3069,8 +3065,8 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
           decls []
         in
         let shape_map = List.fold_left2
-          (fun map { typ_id; _} shape ->
-            Discourse.define_type typ_id;
+          (fun map { typ_id; typ_name; _} shape ->
+            Discourse.define_type newenv typ_name typ_id;
             Shape.Map.add_type map typ_id shape)
           shape_map
           decls
@@ -3143,12 +3139,12 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         let id, newenv, sg =
           match name.txt with
           | None -> None, env, []
-          | Some name ->
+          | Some name' ->
             let id, e = Env.enter_module_declaration
-              ~scope ~shape:md_shape name pres md env
+              ~scope ~shape:md_shape name' pres md env
             in
             let e = Env.update_short_paths e in
-            Discourse.define_module md id;
+            Discourse.define_module e { name with txt = name' } id;
             Signature_names.check_module names pmb_loc id;
             Some id, e,
             [Sig_module(id, pres,
@@ -3218,7 +3214,7 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
             decls sbind in
         let newenv = (* allow aliasing recursive modules from outside *)
           List.fold_left
-            (fun env (id_opt, _, mty, _, _, attrs, loc, shape, uid,
+            (fun env (id_opt, name, mty, _, _, attrs, loc, shape, uid,
                       discourse) ->
                match id_opt with
                | None -> env
@@ -3233,9 +3229,13 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
                        md_discourse_alias = discourse.alias;
                      }
                    in
-                   Discourse.define_module mdecl id;
-                   Env.add_module_declaration ~check:true ~shape
-                     id Mp_present mdecl env
+                   let env =
+                     Env.add_module_declaration ~check:true ~shape
+                       id Mp_present mdecl env
+                   in
+                   Option.iter (fun txt ->
+                     Discourse.define_module env { name with txt} id) name.txt;
+                   env
             )
             env bindings1
         in
@@ -3378,9 +3378,12 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
             | sig_item -> sig_item)
             sg
         in
-        Option.iter (fun (_, (_, path)) -> Discourse.include_module env path)
-          discourse.alias;
-        let () = Discourse.define_signature sg in
+        (* The components of an included module path are already brought in U
+           under their full path by [include_module]: only the components of
+           an included structure are definitions of the file. *)
+        (match discourse.alias with
+         | Some (_, (_, path)) -> Discourse.include_module env path
+         | None -> Discourse.define_signature new_env sg);
         Signature_group.iter (Signature_names.check_sig_item names loc) sg;
         let incl =
           { incl_mod = modl;
