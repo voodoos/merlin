@@ -7,13 +7,17 @@ We call U the set of all paths used directly in a file:
 - 1. Any path occurring in the file is in U. For example, List.map occurring in
      the file will add both List.map and List to U.
 - 2. All paths for definitions in the current file are in U. So if module M = …
-     occurs in the file then M is in U.
+     occurs in the file then M is in U. [Definitions are items of U, recorded
+     with the environment in which they are bound, so that the D rules apply
+     to them. Module aliases are excepted as in rule 3.]
 - 3. All paths for things “defined” using include or open in the current file
      are in U. It is possible that all of these would end up in D anyway via
      other rules, but it's not entirely obvious so I've included this rule here
-     just to make sure they do. [We refined the rule a bit: opened components
-     are put in U except opened module aliases for which we only register a
-     substitution, to avoid loading their compilation unit.]
+     just to make sure they do. [We refined the rule a bit: components brought
+     in scope are put in U except module aliases for which we only register a
+     substitution, to avoid loading their compilation unit. The components of
+     an included structure (or an opened module expression) are handled the
+     same way.]
 - Note that constructors or fields only used via type-based disambiguation are
   not in U.
 
@@ -211,9 +215,7 @@ module U = struct
       not in U.
 *)
 
-  let get () = !g
-  let set v = g := v
-  let reset () = g := empty_u
+  let reset ?(substs = Path.Map.empty) () = g := { empty_u with substs }
 
   let record_usages = Config.merlin
 
