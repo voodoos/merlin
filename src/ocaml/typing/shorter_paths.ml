@@ -293,7 +293,13 @@ let normalize env kind path =
   | Module -> Env.normalize_module_path None env path
   | Module_type -> Env.normalize_modtype_path env path
 
-let find_path_by_name env kind apparent_path full_path =
+(* Candidates are apparent paths: in the presence of [open] statements they
+   cannot be looked up in the environment directly, so we find them by name.
+
+   TODO CR Ulysse if required we might use a shortcut here with "find_"
+   functions but these must be treated carefully as they do allow hidden
+   module to be used. (breaks l-repro2 for example) *)
+let canonical_path_by_name env kind apparent_path full_path =
   (* TODO it might be worth it to memoïze this function *)
   match find_path_by_name env kind apparent_path with
   (* TODO Env.find_type_by_name can raise Assertion_failure when the case Papply
@@ -310,36 +316,39 @@ let find_path_by_name env kind apparent_path full_path =
       (Fun.flip path_print full_path)
       Logger.fmt
       (Fun.flip path_print path_in_env);
-    if Path.compare full_path path_in_env == 0 then Some path_in_env
-    else
-      try
+    try
+      let canonical_path = normalize env kind path_in_env in
+      if Path.same full_path path_in_env then Some canonical_path
+      else begin
         let path = normalize env kind full_path in
-        let path' = normalize env kind path_in_env in
         log ~title:"find_path_in_env" "%a <>? %a" Logger.fmt
           (Fun.flip path_print path) Logger.fmt
-          (Fun.flip path_print path');
-        if Path.compare path path' == 0 then Some path_in_env else None
-      with Not_found -> None)
+          (Fun.flip path_print canonical_path);
+        if Path.same path canonical_path then Some canonical_path else None
+      end
+    with Not_found -> None)
 
-(* [full_path] is used to disambiguate when a lookup by name is required *)
-let find_path env kind ~full_path path =
-  (* TODO CR Ulysse if required we might use a shortcut here with "find_"
-     functions but these must be treated carefully as they do allow hidden
-     module to be used. (breaks l-repro2 for example) *)
-  find_path_by_name env kind path full_path
-
-let check_path env kind ~full_path path =
-  Option.is_some @@ find_path env kind ~full_path path
+(* Check that [path] denote [canon_path] in [env]. Used to re-validate the
+   entries of the table, which are kept across environments. *)
+let check_path env kind ~canon_path path =
+  match find_path_by_name env kind path with
+  | None | (exception Assert_failure _) -> false
+  | Some path_in_env -> (
+    Path.same path_in_env canon_path
+    ||
+    match normalize env kind path_in_env with
+    | path' -> Path.same path' canon_path
+    | exception Not_found -> false)
 
 let find_best_path env ~canon_path table target_kind =
   match Path_tbl.find_opt table canon_path with
   | None -> None
   | Some paths ->
     Path_set.to_seq paths
-    |> Seq.find_map (fun (kind, path, full_path) ->
+    |> Seq.find_map (fun (kind, path, _full_path) ->
         (* TODO we should probably have a kind*path map*)
         if kind <> target_kind then None
-        else if check_path env kind ~full_path path then Some path
+        else if check_path env kind ~canon_path path then Some path
         else None)
 
 let improve_path env ~canon_path table kind path =
@@ -380,23 +389,18 @@ let process_queue env state ~table ~canon_path target_kind best =
     log ~title:"fill_by_level" "Treating %a (%s)" Logger.fmt
       (Fun.flip path_print path) (string_of_kind kind);
     let state =
-      let is_valid_in_current_env =
-        (* In the presence of `open` statements the Discourse contains partial
+      (* In the presence of `open` statements the Discourse contains partial
            paths that cannot be looked-up in the environement directly. We can
            find by name instead. However we must then check that we did actually
            find the type we were looking (same ident) for and not an homonym. *)
-        find_path env kind ~full_path path
-      in
-      match is_valid_in_current_env with
-      | Some path_in_env -> begin
-        let canonical_path = normalize env kind full_path in
-        log ~title:"fill_by_level"
-          "Updating table: %a -> { %a (%s) (in env: %a) }" Logger.fmt
+      match canonical_path_by_name env kind path full_path with
+      | Some canonical_path -> begin
+        log ~title:"fill_by_level" "Updating table: %a -> { %a (%s) }"
+          Logger.fmt
           (fun fmt -> path_print fmt canonical_path)
           Logger.fmt
           (fun fmt -> path_print fmt path)
-          (string_of_kind kind) Logger.fmt
-          (fun fmt -> path_print fmt path_in_env);
+          (string_of_kind kind);
         let () =
           let update =
             match Path_tbl.find_opt table canonical_path with
@@ -409,7 +413,7 @@ let process_queue env state ~table ~canon_path target_kind best =
         let queue = Priority_queue.remove item state.queue in
         { state with queue }
         end
-      | _ -> begin
+      | None -> begin
         log ~title:"fill_by_level" "Path %a invalid in the current env"
           Logger.fmt (Fun.flip path_print path);
 
