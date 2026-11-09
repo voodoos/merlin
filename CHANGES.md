@@ -5,6 +5,10 @@ unreleased
     - destruct: allow to destruct let-bindings's patterns (#2117)
     - Fix detection of expression at cursor in case of type-constrained
       expression (#2120)
+    - Add `Mbrowse_parsetree`, cursor navigation (`enclosing`,
+      `deepest_before`, `range_enclosing`) over the parsetree, sharing its
+      implementation with `Mbrowse` through the new `Mbrowse_generic` functor.
+      Add the `dump -what parsetree-browse [-position]` command (#XXXX)
 
 merlin 5.8.1
 ============

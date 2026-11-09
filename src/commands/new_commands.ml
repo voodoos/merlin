@@ -873,12 +873,29 @@ let all_commands =
     command "dump"
       ~spec:
         [ arg "-what"
-            "<source|parsetree|ppxed-source|ppxed-parsetree|typedtree|env|fullenv|browse|tokens|flags|warnings|exn|paths> \
+            "<source|parsetree|ppxed-source|ppxed-parsetree|typedtree|env|fullenv|browse|parsetree-browse|tokens|flags|warnings|exn|paths> \
              Information to dump ()"
-            (Marg.param "string" (fun what _ -> what))
-        ] ~default:"" ~doc:"Not for the casual user, used for debugging merlin"
-      begin fun pipeline what ->
-      run pipeline (Query_protocol.Dump [ `String what ])
+            (Marg.param "string" (fun what (_, pos) -> (what, pos)));
+          optional "-position"
+            "<position> Position to dump at (env, fullenv, parsetree-browse)"
+            (marg_position (fun pos (what, _) -> (what, Some pos)))
+        ]
+      ~default:("", None)
+      ~doc:"Not for the casual user, used for debugging merlin"
+      begin fun pipeline (what, pos) ->
+      let json_of_position = function
+        | `Start -> `String "start"
+        | `End -> `String "end"
+        | `Offset offset -> `Int offset
+        | `Logical (line, col) ->
+          `Assoc [ ("line", `Int line); ("col", `Int col) ]
+      in
+      let args =
+        match pos with
+        | None -> [ `String what ]
+        | Some pos -> [ `String what; `String "at"; json_of_position pos ]
+      in
+      run pipeline (Query_protocol.Dump args)
       end;
     (* Used only for testing *)
     command "dump-configuration" ~spec:[] ~default:()

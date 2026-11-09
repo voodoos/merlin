@@ -113,32 +113,61 @@ let signature_of_env ?(ignore_extensions = true) env =
   (* Typemod.simplify_signature *)
   !sg
 
+let dump_attr attr =
+  let { Location.txt; loc }, payload = Ast_helper.Attr.as_tuple attr in
+  `Assoc
+    [ ("start", Lexing.json_of_position loc.Location.loc_start);
+      ("end", Lexing.json_of_position loc.Location.loc_end);
+      ("name", `String (txt ^ if payload = Parsetree.PStr [] then "" else " _"))
+    ]
+
+let dump_node ~loc ~attrs ~kind children =
+  `Assoc
+    [ ("filename", `String loc.Location.loc_start.Lexing.pos_fname);
+      ("start", Lexing.json_of_position loc.Location.loc_start);
+      ("end", Lexing.json_of_position loc.Location.loc_end);
+      ("ghost", `Bool loc.Location.loc_ghost);
+      ("attrs", `List (List.map ~f:dump_attr attrs));
+      ("kind", `String kind);
+      ("children", children)
+    ]
+
 let dump_browse node =
-  let attr attr =
-    let { Location.txt; loc }, payload = Ast_helper.Attr.as_tuple attr in
-    `Assoc
-      [ ("start", Lexing.json_of_position loc.Location.loc_start);
-        ("end", Lexing.json_of_position loc.Location.loc_end);
-        ( "name",
-          `String (txt ^ if payload = Parsetree.PStr [] then "" else " _") )
-      ]
-  in
   let rec append env node acc =
-    let loc = Mbrowse.node_loc node in
-    `Assoc
-      [ ("filename", `String loc.Location.loc_start.Lexing.pos_fname);
-        ("start", Lexing.json_of_position loc.Location.loc_start);
-        ("end", Lexing.json_of_position loc.Location.loc_end);
-        ("ghost", `Bool loc.Location.loc_ghost);
-        ("attrs", `List (List.map ~f:attr (Browse_raw.node_attributes node)));
-        ("kind", `String (Browse_raw.string_of_node node));
-        ("children", dump_list env node)
-      ]
+    dump_node ~loc:(Mbrowse.node_loc node)
+      ~attrs:(Browse_raw.node_attributes node)
+      ~kind:(Browse_raw.string_of_node node)
+      (dump_list env node)
     :: acc
   and dump_list env node =
     `List (List.sort ~cmp:compare @@ Mbrowse.fold_node append env node [])
   in
   `List (append Env.empty node [])
+
+let dump_parsetree_browse node =
+  let rec append node acc =
+    dump_node
+      ~loc:(Mbrowse_parsetree.node_loc node)
+      ~attrs:(Mbrowse_parsetree.node_attributes node)
+      ~kind:(Mbrowse_parsetree.string_of_node node)
+      (dump_list node)
+    :: acc
+  and dump_list node =
+    `List (List.sort ~cmp:compare @@ Mbrowse_parsetree.fold_node append node [])
+  in
+  `List (append node [])
+
+(* Print a path in the parsetree, leaf first. *)
+let dump_parsetree_path (path : Mbrowse_parsetree.t) =
+  `List
+    (List.map path ~f:(fun node ->
+         let loc = Mbrowse_parsetree.node_loc node in
+         `Assoc
+           [ ("kind", `String (Mbrowse_parsetree.string_of_node node));
+             ("start", Lexing.json_of_position loc.Location.loc_start);
+             ("end", Lexing.json_of_position loc.Location.loc_end);
+             ("ghost", `Bool loc.Location.loc_ghost)
+           ]))
 
 let annotate_tail_calls (ts : Mbrowse.t) :
     (Env.t * Browse_raw.node * Query_protocol.is_tail_position) list =

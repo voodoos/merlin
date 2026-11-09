@@ -70,6 +70,24 @@ let for_completion pipeline position =
 let verbosity pipeline =
   Mconfig.((Mpipeline.final_config pipeline).query.verbosity)
 
+(* Optional [at <position>] suffix of a dump command *)
+let parse_dump_position = function
+  | [ `String "at"; jpos ] ->
+    Some
+      (match jpos with
+      | `String "start" -> `Start
+      | `String "end" -> `End
+      | `Int offset -> `Offset offset
+      | `Assoc props ->
+        begin match (List.assoc "line" props, List.assoc "col" props) with
+        | `Int line, `Int col -> `Logical (line, col)
+        | _ -> failwith "Incorrect position"
+        | exception Not_found -> failwith "Incorrect position"
+        end
+      | _ -> failwith "Incorrect position")
+  | [] -> None
+  | _ -> failwith "incorrect position"
+
 let dump pipeline = function
   | [ `String "ppxed-source" ] ->
     let ppf, to_string = Format.to_string () in
@@ -110,24 +128,7 @@ let dump pipeline = function
   | `String (("env" | "fullenv") as kind) :: opt_pos ->
     let typer = Mpipeline.typer_result pipeline in
     let kind = if kind = "env" then `Normal else `Full in
-    let pos =
-      match opt_pos with
-      | [ `String "at"; jpos ] ->
-        Some
-          (match jpos with
-          | `String "start" -> `Start
-          | `String "end" -> `End
-          | `Int offset -> `Offset offset
-          | `Assoc props ->
-            begin match (List.assoc "line" props, List.assoc "col" props) with
-            | `Int line, `Int col -> `Logical (line, col)
-            | _ -> failwith "Incorrect position"
-            | exception Not_found -> failwith "Incorrect position"
-            end
-          | _ -> failwith "Incorrect position")
-      | [] -> None
-      | _ -> failwith "incorrect position"
-    in
+    let pos = parse_dump_position opt_pos in
     let env =
       match pos with
       | None -> Mtyper.get_env typer
@@ -148,6 +149,25 @@ let dump pipeline = function
     let typer = Mpipeline.typer_result pipeline in
     let structure = Mbrowse.of_typedtree (Mtyper.get_typedtree typer) in
     Browse_misc.dump_browse (snd (Mbrowse.leaf_node structure))
+  | `String "parsetree-browse" :: opt_pos ->
+    let tree =
+      Mbrowse_parsetree.of_parsetree (Mpipeline.reader_parsetree pipeline)
+    in
+    begin match parse_dump_position opt_pos with
+    | None ->
+      Browse_misc.dump_parsetree_browse (Mbrowse_parsetree.leaf_node tree)
+    | Some pos ->
+      let pos = Mpipeline.get_lexing_pos pipeline pos in
+      let disambiguate = Mbrowse_parsetree.Tie_breaker.prefer_expression in
+      `Assoc
+        [ ( "enclosing",
+            Browse_misc.dump_parsetree_path
+              (Mbrowse_parsetree.enclosing ~disambiguate pos [ tree ]) );
+          ( "deepest_before",
+            Browse_misc.dump_parsetree_path
+              (Mbrowse_parsetree.deepest_before ~disambiguate pos [ tree ]) )
+        ]
+    end
   | [ `String "current-level" ] ->
     let _typer = Mpipeline.typer_result pipeline in
     `Int (Ctype.get_current_level ())
@@ -191,8 +211,8 @@ let dump pipeline = function
   | _ ->
     failwith
       "known dump commands: paths, exn, warnings, flags, tokens, browse, \
-       source, parsetree, ppxed-source, ppxed-parsetree, typedtree, \
-       env/fullenv (at {col:, line:})"
+       parsetree-browse (at {col:, line:}), source, parsetree, ppxed-source, \
+       ppxed-parsetree, typedtree, env/fullenv (at {col:, line:})"
 
 let dispatch pipeline (type a) : a Query_protocol.t -> a = function
   | Type_expr (source, pos) ->

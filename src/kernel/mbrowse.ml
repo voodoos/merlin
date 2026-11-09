@@ -52,57 +52,27 @@ let fold_node f env t acc =
   in
   Browse_raw.fold_node f env t acc
 
-let approximate_loc get_loc node =
-  let loc = get_loc Location.none node in
-  if loc == Location.none then
-    let rec aux env node acc =
-      let loc = get_loc Location.none node in
-      if loc != Location.none then Location_aux.union loc acc
-      else fold_node aux env node acc
-    in
-    aux Env.empty node Location.none
-  else loc
+module Typed = Mbrowse_generic.Make (struct
+  type t = Env.t * node
 
-let node_loc node = approximate_loc Browse_raw.node_real_loc node
+  let fold f (env, node) acc =
+    fold_node (fun env node acc -> f (env, node) acc) env node acc
 
-(* Fuzzy locations, more likely to locate the appropriate node *)
-let node_merlin_loc node = approximate_loc Browse_raw.node_merlin_loc node
+  let real_loc loc0 (_, node) = Browse_raw.node_real_loc loc0 node
+  let merlin_loc loc0 (_, node) = Browse_raw.node_merlin_loc loc0 node
+  let is_hidden (_, node) = Browse_raw.has_attr ~name:"merlin.hide" node
+  let is_focus (_, node) = Browse_raw.has_attr ~name:"merlin.focus" node
+  let to_string (_, node) = Browse_raw.string_of_node node
+end)
 
-let leaf_node = List.hd
+(* Locations do not depend on the environment *)
+let node_loc node = Typed.loc (Env.empty, node)
 
-let drop_leaf t =
-  match t with
-  | [] | [ _ ] -> None
-  | _leaf :: parents -> Some parents
-
-let is_hidden node = Browse_raw.has_attr ~name:"merlin.hide" node
-
-let is_focus node = Browse_raw.has_attr ~name:"merlin.focus" node
-
-let select_leafs pos root =
-  let branches = ref [] in
-  let rec select_child branch env node has_selected =
-    let loc = node_merlin_loc node in
-    if Location_aux.compare_pos pos loc = 0 && not (is_hidden node) then (
-      traverse ((env, node) :: branch);
-      true)
-    else has_selected
-  and traverse branch =
-    let env, node = leaf_node branch in
-    if is_focus node then (
-      branches := [];
-      let has_leaves = fold_node (select_child branch) env node false in
-      if not has_leaves then branches := [ branch ];
-      raise Exit)
-    else if not (is_hidden node) then
-      let has_leaves = fold_node (select_child branch) env node false in
-      if not has_leaves then branches := branch :: !branches
-  in
-  (try traverse root with Exit -> ());
-  !branches
+let leaf_node = Typed.leaf_node
+let drop_leaf = Typed.drop_leaf
 
 module Tie_breaker = struct
-  type tie_break = Prefer_first | Prefer_second
+  type tie_break = Mbrowse_generic.tie_break = Prefer_first | Prefer_second
   type t = node -> node -> tie_break option
 
   let prefer_expression node1 node2 : tie_break option =
@@ -113,91 +83,17 @@ module Tie_breaker = struct
     | _ -> None
 end
 
-let compare_locations ?tie_break pos l1 l2 =
-  let t2_first = 1 in
-  let t1_first = -1 in
-  match (Location_aux.compare_pos pos l1, Location_aux.compare_pos pos l2) with
-  (* Cursor inside both locations: favor non-ghost, fallback to user-provided
-     tie-break, fallback to being closer to the end *)
-  | 0, 0 ->
-    begin match (tie_break, l1.Location.loc_ghost, l2.Location.loc_ghost) with
-    | _, true, false -> 1
-    | _, false, true -> -1
-    | Some Tie_breaker.Prefer_first, _, _ -> t1_first
-    | Some Prefer_second, _, _ -> t2_first
-    | _ -> Lexing.compare_pos l1.Location.loc_end l2.Location.loc_end
-    end
-  (* Cursor inside one location: it has priority *)
-  | 0, _ -> t1_first
-  | _, 0 -> t2_first
-  (* Cursor outside locations: favor before *)
-  | n, m when n > 0 && m < 0 -> t1_first
-  | n, m when m > 0 && n < 0 -> t2_first
-  (* Cursor is after both, select the closest one *)
-  | _, _ -> Lexing.compare_pos l2.Location.loc_end l1.Location.loc_end
-
-let best_node ?disambiguate pos = function
-  | [] -> []
-  | init :: xs ->
-    let f acc x =
-      let node1 = snd @@ leaf_node acc and node2 = snd @@ leaf_node x in
-      let tie_break =
-        Option.bind
-          ~f:(fun disambiguate -> disambiguate node1 node2)
-          disambiguate
-      in
-      if compare_locations ?tie_break pos (node_loc node1) (node_loc node2) <= 0
-      then acc
-      else x
-    in
-    List.fold_left ~f ~init xs
+let lift_disambiguate disambiguate =
+  Option.map disambiguate ~f:(fun disambiguate (_, node1) (_, node2) ->
+      disambiguate node1 node2)
 
 let enclosing ?disambiguate pos roots =
-  match best_node ?disambiguate pos roots with
-  | [] -> []
-  | root -> best_node ?disambiguate pos (select_leafs pos root)
+  Typed.enclosing ?disambiguate:(lift_disambiguate disambiguate) pos roots
 
 let deepest_before ?disambiguate pos roots =
-  match enclosing ?disambiguate pos roots with
-  | [] -> []
-  | root ->
-    let rec aux path =
-      let env0, node0 = leaf_node path in
-      let loc0 = node_merlin_loc node0 in
-      let select_candidate env node acc =
-        let loc = node_merlin_loc node in
-        if
-          path == root
-          || Location_aux.compare_pos pos loc = 0
-          || Lexing.compare_pos loc.Location.loc_end loc0.Location.loc_end = 0
-        then
-          match acc with
-          | Some (_, loc', node') ->
-            let tie_break =
-              Option.bind
-                ~f:(fun disambiguate -> disambiguate node node')
-                disambiguate
-            in
-            if compare_locations ?tie_break pos loc' loc <= 0 then acc
-            else Some (env, loc, node)
-          | None -> Some (env, loc, node)
-        else acc
-      in
-      match fold_node select_candidate env0 node0 None with
-      | None -> path
-      | Some (env, _, node) -> aux ((env, node) :: path)
-    in
-    aux root
+  Typed.deepest_before ?disambiguate:(lift_disambiguate disambiguate) pos roots
 
-let range_enclosing ~start ~stop roots =
-  List.filter
-    ~f:(fun (_, node) ->
-      let loc = node_loc node in
-      let nstart = loc.loc_start and nend = loc.loc_end in
-      let a = Lexing.compare_pos start nstart
-      and b = Lexing.compare_pos stop nend in
-      a >= 0 && b <= 0)
-    (enclosing start roots)
+let range_enclosing = Typed.range_enclosing
 
 (* Select open nodes *)
 
@@ -289,4 +185,4 @@ let is_recovered = function
 
 let print_node () node = Browse_raw.string_of_node node
 
-let print () t = List.print (fun () (_, node) -> print_node () node) () t
+let print = Typed.print
