@@ -49,15 +49,6 @@ val printed_signature : Env.t -> Types.signature -> unit
 (** Processes the recorded events and returns the domain of discourse *)
 val get : unit -> Discourse_types.discourse
 
-(** Rule D3 is applied on demand: [is_expandable path] holds when [path] is a
-    module of U with a signature, and [module_components path] are then its
-    components, rooted at [path], together with the substitutions of its alias
-    sub-modules. They are computed once. *)
-val is_expandable : Path.t -> bool
-
-val module_components :
-  Path.t -> (Discourse_types.Path_trie.t * Discourse_types.substs) option
-
 val debug_print : Format.formatter -> unit
 
 (** Empty U except for the substitutions [substs] *)

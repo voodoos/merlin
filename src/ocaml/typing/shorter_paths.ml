@@ -248,9 +248,11 @@ type search_state =
     (* Every path queued so far, substitutions applied: an expansion only
        queues the paths that are not already there, and a substitution it
        discovers must also be applied to them *)
-    substs : Discourse_types.substs
-        (* The substitutions known so far (D12, D13), from the discourse and
-           the expansions *)
+    substs : Discourse_types.substs;
+    (* The substitutions known so far (D12, D13), from the discourse and the
+       expansions *)
+    expansions : (Path_trie.t * Discourse_types.substs) Lazy.t Path.Map.t
+        (* The modules of U whose components are in D by rule lazy D3 *)
   }
 
 let empty_search =
@@ -260,7 +262,8 @@ let empty_search =
     pending = Expansions.empty;
     expanded = Expansions.empty;
     known = Path_trie.empty;
-    substs = Path.Map.empty
+    substs = Path.Map.empty;
+    expansions = Path.Map.empty
   }
 
 let search_state : search_state ref = Local_store.s_ref empty_search
@@ -268,6 +271,21 @@ let search_state : search_state ref = Local_store.s_ref empty_search
    but it does not always work. One example of that is test `sp-13` were a type
    from Deferred0 is redefined in Deferred, causing paths converging to this same
    type to have unmatching uids.*)
+
+let is_expandable search full = Path.Map.mem full search.expansions
+
+(* The components of the module of U [full], computed on first use. [None]
+   when following its alias sub-modules fails: [Discourse.add_from_u_to_d]
+   drops the consequences of an item on the same errors. *)
+let module_components search full =
+  match Path.Map.find_opt full search.expansions with
+  | None -> None
+  | Some components -> (
+    try Some (Lazy.force components)
+    with Not_found | Env.Error (Lookup_error _) ->
+      log ~title:"expand" "Components of module %a could not be computed"
+        Logger.fmt (Fun.flip path_print full);
+      None)
 
 let pp_table fmt table =
   Path.Map.iter
@@ -344,7 +362,7 @@ let enqueue search paths =
       let expansion = (apparent, full) in
       let pending =
         if
-          Discourse.is_expandable full
+          is_expandable search full
           && not (Expansions.mem expansion search.expanded)
         then Expansions.add expansion search.pending
         else search.pending
@@ -505,7 +523,7 @@ let expand search ((apparent, full) as expansion) =
       expanded = Expansions.add expansion search.expanded
     }
   in
-  match Discourse.module_components full with
+  match module_components search full with
   | None -> search
   | Some (components, component_substs) ->
     (* The components, under the apparent name of the module *)
@@ -657,7 +675,15 @@ let search_levels env search ~canon_path kind best =
 
 let rec shorten ~env ~initial ~canon_path kind =
   let discourse = Discourse.get () in
-  let state = { !search_state with substs = discourse.substs } in
+  let state =
+    { !search_state with
+      substs = discourse.substs;
+      expansions =
+        Path.Map.union
+          (fun _ kept _ -> Some kept)
+          !search_state.expansions discourse.expansions
+    }
+  in
   log_dbg ~title:"shorten" "Current discourse: %a\n%!" Logger.fmt (fun fmt ->
       Discourse.debug_print fmt);
   log_dbg ~title:"shorten" "Current queue: %a" Logger.fmt (fun fmt ->
