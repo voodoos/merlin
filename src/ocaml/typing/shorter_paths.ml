@@ -147,6 +147,11 @@ let string_of_kind = function
   | Module -> "Module"
   | Module_type -> "Module_type"
 
+module Kind_map = Map.Make (struct
+  type t = kind
+  let compare = compare
+end)
+
 module Path_trie = Discourse_types.Path_trie
 
 (* Shortening a path
@@ -232,9 +237,31 @@ let min_component_weight apparent =
   (length + 1, scope)
 
 (* The state of the search *)
+
+type queue = Candidates.t Kind_map.t
+
+let empty_queue = Kind_map.empty
+
+let queue_of_kind kind queue =
+  Option.value ~default:Candidates.empty (Kind_map.find_opt kind queue)
+
+let map_queue_of_kind kind f queue =
+  Kind_map.update kind
+    (fun candidates ->
+      Some (f (Option.value ~default:Candidates.empty candidates)))
+    queue
+
+let pp_queue fmt queue =
+  Kind_map.iter
+    (fun kind candidates ->
+      Format.fprintf fmt "@[<v 2>%s:@ %a@]@;" (string_of_kind kind)
+        (Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt)
+        (Candidates.to_seq candidates))
+    queue
+
 type search_state =
-  { queue : Candidates.t;
-    (* Candidates not validated yet, lightest first *)
+  { queue : queue;
+    (* Candidates not validated yet *)
     not_in_env : Path_trie.t;
     (* Candidates whose name is not bound in the printing environment, kept
        aside until the environment changes *)
@@ -256,7 +283,7 @@ type search_state =
   }
 
 let empty_search =
-  { queue = Candidates.empty;
+  { queue = empty_queue;
     not_in_env = Path_trie.empty;
     table = Path.Map.empty;
     pending = Expansions.empty;
@@ -349,16 +376,16 @@ let apply_substitutions_fixpoint substs paths =
    modules of U *)
 let enqueue search paths =
   let enqueue_item apparent search (kind, full) =
-    let candidate kind = { kind; apparent; full } in
-    match (kind : Shape.Sig_component_kind.t) with
-    | Type ->
-      { search with queue = Candidates.add (candidate Type) search.queue }
-    | Module_type ->
+    let add kind search =
+      let candidate = { kind; apparent; full } in
       { search with
-        queue = Candidates.add (candidate Module_type) search.queue
+        queue = map_queue_of_kind kind (Candidates.add candidate) search.queue
       }
+    in
+    match (kind : Shape.Sig_component_kind.t) with
+    | Type -> add Type search
+    | Module_type -> add Module_type search
     | Module ->
-      let queue = Candidates.add (candidate Module) search.queue in
       let expansion = (apparent, full) in
       let pending =
         if
@@ -367,7 +394,7 @@ let enqueue search paths =
         then Expansions.add expansion search.pending
         else search.pending
       in
-      { search with queue; pending }
+      add Module { search with pending }
     | Value | Extension_constructor | Class | Class_type | Constructor | Label
       -> search
   in
@@ -479,7 +506,9 @@ let validate env search candidate =
   log ~title:"fill_by_level" "Treating %a (%s)" Logger.fmt
     (Fun.flip path_print apparent)
     (string_of_kind kind);
-  let queue = Candidates.remove candidate search.queue in
+  let queue =
+    map_queue_of_kind kind (Candidates.remove candidate) search.queue
+  in
   match canonical_path_of_candidate env candidate with
   | Some canonical ->
     log ~title:"fill_by_level" "Updating table: %a -> { %a (%s) }" Logger.fmt
@@ -571,29 +600,6 @@ let expand search ((apparent, full) as expansion) =
 
 (** {1 The search} *)
 
-(* Return the lightest one with the required [kind]. The queue is
-   ordered by weight then kind, so a level without a candidate of [kind] is
-   skipped in logarithmic time. *)
-let candidates_of_kind kind queue =
-  let rec seek_from pred =
-    match Candidates.find_first_opt pred queue with
-    | None -> Seq.empty
-    | Some candidate when candidate.kind = kind ->
-      Candidates.to_seq_from candidate queue
-    | Some { kind = found_kind; apparent; _ } ->
-      let weight = path_size apparent in
-      let heavier c = compare_weight (path_size c.apparent) weight > 0 in
-      let same_level c = compare_weight (path_size c.apparent) weight = 0 in
-      if compare found_kind kind > 0 then
-        (* The candidate found is the first of its level, which therefore has
-           no candidate of [kind] *)
-        seek_from heavier
-      else
-        seek_from (fun c ->
-            heavier c || (same_level c && compare c.kind kind >= 0))
-  in
-  seek_from (fun _ -> true)
-
 (* What the search does next, with the weight it is about to reach *)
 type step =
   | Expand of Expansions.elt
@@ -603,7 +609,7 @@ type step =
           candidates from it *)
 
 let next_step search kind =
-  let candidates = candidates_of_kind kind search.queue in
+  let candidates = Candidates.to_seq (queue_of_kind kind search.queue) in
   let lightest =
     match candidates () with
     | Seq.Nil -> None
@@ -627,13 +633,10 @@ let next_step search kind =
     if compare_weight expansion_weight level_weight <= 0 then Some expansion
     else Some level
 
-(* Validates the candidates of [kind] of the level of [lightest]. The weight is
-   checked first so that the candidates of other kinds beyond the level are not
-   scanned. *)
-let validate_level env kind ~lightest candidates search =
+(* Validates the candidates of the level of [lightest] *)
+let validate_level env ~lightest candidates search =
   candidates
   |> Seq.take_while (fun c -> compare_paths_weight lightest c.apparent >= 0)
-  |> Seq.filter (fun c -> c.kind = kind)
   |> Seq.fold_left (validate env) search
 
 (* Levels are validated in increasing weight, after the expansions whose
@@ -662,7 +665,7 @@ let search_levels env search ~canon_path kind best =
       (best, search)
     | Some (_, Expand expansion) -> loop (expand search expansion) best
     | Some (_, Level (lightest, candidates)) ->
-      let search = validate_level env kind ~lightest candidates search in
+      let search = validate_level env ~lightest candidates search in
       loop search (improve search best)
   in
   loop search best
@@ -681,8 +684,7 @@ let rec shorten ~env ~initial ~canon_path kind =
   log_dbg ~title:"shorten" "Current discourse: %a\n%!" Logger.fmt (fun fmt ->
       Discourse.debug_print fmt);
   log_dbg ~title:"shorten" "Current queue: %a" Logger.fmt (fun fmt ->
-      Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt fmt
-        (Candidates.to_seq state.queue));
+      pp_queue fmt state.queue);
   log_dbg ~title:"shorten" "Current notinenv: %a" Logger.fmt (fun fmt ->
       Path_trie.pp_seq fmt state.not_in_env);
   log_dbg ~title:"shorten" "Current table: %a" Logger.fmt (fun fmt ->
@@ -702,8 +704,7 @@ let rec shorten ~env ~initial ~canon_path kind =
   in
 
   log_dbg ~title:"shorten" "Current queue: %a" Logger.fmt (fun fmt ->
-      Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt fmt
-        (Candidates.to_seq state.queue));
+      pp_queue fmt state.queue);
 
   (* A name found by a previous call ? *)
   let best = best_known_name env state ~canon_path kind in
