@@ -195,7 +195,7 @@ module Path_trie = Discourse_types.Path_trie
 (* A name that may denote the path to print. [apparent] is the name as the user
    can write it (what we print), [full] the path it stood for when it was
    recorded (what the name is checked against in the printing environment). *)
-type candidate = { kind : kind; apparent : Path.t; full : Path.t }
+type candidate = { apparent : Path.t; full : Path.t }
 
 (* Candidates ordered by the weight of their apparent path, lightest first *)
 module Candidates = struct
@@ -206,16 +206,12 @@ module Candidates = struct
       let weight = compare_paths_weight c.apparent c'.apparent in
       if weight <> 0 then weight
       else
-        let kind = compare c.kind c'.kind in
-        if kind <> 0 then kind
-        else
-          let apparent = Path.compare c.apparent c'.apparent in
-          if apparent <> 0 then apparent else Path.compare c.full c'.full
+        let apparent = Path.compare c.apparent c'.apparent in
+        if apparent <> 0 then apparent else Path.compare c.full c'.full
   end)
 
-  let pp_elt fmt { kind; apparent; full } =
-    Format.fprintf fmt "%a [%a] (%s)" path_print apparent path_print full
-      (string_of_kind kind)
+  let pp_elt fmt { apparent; full } =
+    Format.fprintf fmt "%a [%a]" path_print apparent path_print full
 end
 
 (* An expansion is a module of U (its full path) under one of its apparent
@@ -265,8 +261,8 @@ type search_state =
     not_in_env : Path_trie.t;
     (* Candidates whose name is not bound in the printing environment, kept
        aside until the environment changes *)
-    table : Candidates.t Path.Map.t;
-    (* The validated candidates, by the canonical path they denote *)
+    table : Candidates.t Path.Map.t Kind_map.t;
+    (* The validated candidates, by kind and the canonical path they denote *)
     pending : Expansions.t;
     (* Expansions not done yet, lightest first *)
     expanded : Expansions.t;
@@ -285,7 +281,7 @@ type search_state =
 let empty_search =
   { queue = empty_queue;
     not_in_env = Path_trie.empty;
-    table = Path.Map.empty;
+    table = Kind_map.empty;
     pending = Expansions.empty;
     expanded = Expansions.empty;
     known = Path_trie.empty;
@@ -314,12 +310,24 @@ let module_components search full =
         Logger.fmt (Fun.flip path_print full);
       None)
 
+let table_of_kind kind table =
+  Option.value ~default:Path.Map.empty (Kind_map.find_opt kind table)
+
+let map_table_of_kind kind f table =
+  Kind_map.update kind
+    (fun names -> Some (f (Option.value ~default:Path.Map.empty names)))
+    table
+
 let pp_table fmt table =
-  Path.Map.iter
-    (fun canonical candidates ->
-      Format.fprintf fmt "@;%a -> {%a}" path_print canonical
-        (Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt)
-        (Candidates.to_seq candidates))
+  Kind_map.iter
+    (fun kind names ->
+      Path.Map.iter
+        (fun canonical candidates ->
+          Format.fprintf fmt "@;%a (%s) -> {%a}" path_print canonical
+            (string_of_kind kind)
+            (Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt)
+            (Candidates.to_seq candidates))
+        names)
     table
 
 let normalize_type_path = Out_type.normalize_type_path ~cache:false
@@ -377,7 +385,7 @@ let apply_substitutions_fixpoint substs paths =
 let enqueue search paths =
   let enqueue_item apparent search (kind, full) =
     let add kind search =
-      let candidate = { kind; apparent; full } in
+      let candidate = { apparent; full } in
       { search with
         queue = map_queue_of_kind kind (Candidates.add candidate) search.queue
       }
@@ -452,7 +460,7 @@ let normalize env kind path =
 
 (* The canonical path a candidate denotes in [env], if its name is bound there
    and denotes what the candidate stood for (and not an homonym). *)
-let canonical_path_of_candidate env { kind; apparent; full } =
+let canonical_path_of_candidate env kind { apparent; full } =
   (* TODO it might be worth it to memoïze this function *)
   match find_path_by_name env kind apparent with
   | None ->
@@ -492,37 +500,40 @@ let denotes env kind ~canon_path apparent =
 (* The lightest valid name denoting [canon_path] known so far *)
 let best_known_name env state ~canon_path kind =
   let open Option.Syntax in
-  let* candidates = Path.Map.find_opt canon_path state.table in
+  let* candidates =
+    Path.Map.find_opt canon_path (table_of_kind kind state.table)
+  in
   Candidates.to_seq candidates
   |> Seq.find_map @@ fun candidate ->
-     if candidate.kind = kind && denotes env kind ~canon_path candidate.apparent
-     then Some candidate.apparent
+     if denotes env kind ~canon_path candidate.apparent then
+       Some candidate.apparent
      else None
 
 (* Validates a candidate: it is filed in the table under the canonical path it
    denotes, or kept aside in [not_in_env], and leaves the queue. *)
-let validate env search candidate =
-  let { kind; apparent; full } = candidate in
+let validate env kind search candidate =
+  let { apparent; full } = candidate in
   log ~title:"fill_by_level" "Treating %a (%s)" Logger.fmt
     (Fun.flip path_print apparent)
     (string_of_kind kind);
   let queue =
     map_queue_of_kind kind (Candidates.remove candidate) search.queue
   in
-  match canonical_path_of_candidate env candidate with
+  match canonical_path_of_candidate env kind candidate with
   | Some canonical ->
     log ~title:"fill_by_level" "Updating table: %a -> { %a (%s) }" Logger.fmt
       (Fun.flip path_print canonical)
       Logger.fmt
       (Fun.flip path_print apparent)
       (string_of_kind kind);
-    let table =
+    let file names =
       Path.Map.update canonical
         (function
           | None -> Some (Candidates.singleton candidate)
           | Some candidates -> Some (Candidates.add candidate candidates))
-        search.table
+        names
     in
+    let table = map_table_of_kind kind file search.table in
     { search with queue; table }
   | None ->
     log ~title:"fill_by_level" "Path %a invalid in the current env" Logger.fmt
@@ -634,10 +645,10 @@ let next_step search kind =
     else Some level
 
 (* Validates the candidates of the level of [lightest] *)
-let validate_level env ~lightest candidates search =
+let validate_level env kind ~lightest candidates search =
   candidates
   |> Seq.take_while (fun c -> compare_paths_weight lightest c.apparent >= 0)
-  |> Seq.fold_left (validate env) search
+  |> Seq.fold_left (validate env kind) search
 
 (* Levels are validated in increasing weight, after the expansions whose
    components may belong to them, until the best name found is the lightest. *)
@@ -665,7 +676,7 @@ let search_levels env search ~canon_path kind best =
       (best, search)
     | Some (_, Expand expansion) -> loop (expand search expansion) best
     | Some (_, Level (lightest, candidates)) ->
-      let search = validate_level env ~lightest candidates search in
+      let search = validate_level env kind ~lightest candidates search in
       loop search (improve search best)
   in
   loop search best
