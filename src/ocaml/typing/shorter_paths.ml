@@ -295,6 +295,8 @@ let search_state : search_state ref = Local_store.s_ref empty_search
    from Deferred0 is redefined in Deferred, causing paths converging to this same
    type to have unmatching uids.*)
 
+type request = { env : Env.t; kind : kind; canon_path : Path.t }
+
 let is_expandable search full = Path.Map.mem full search.expansions
 
 (* The components of the module of U [full], computed on first use. [None]
@@ -460,7 +462,7 @@ let normalize env kind path =
 
 (* The canonical path a candidate denotes in [env], if its name is bound there
    and denotes what the candidate stood for (and not an homonym). *)
-let canonical_path_of_candidate env kind { apparent; full } =
+let canonical_path_of_candidate { env; kind; _ } { apparent; full } =
   (* TODO it might be worth it to memoïze this function *)
   match find_path_by_name env kind apparent with
   | None ->
@@ -487,7 +489,7 @@ let canonical_path_of_candidate env kind { apparent; full } =
 
 (* Does [apparent] denote [canon_path] in [env]? The candidates of the table
    are kept across environments, so they are validated again when used. *)
-let denotes env kind ~canon_path apparent =
+let denotes { env; kind; canon_path } apparent =
   match find_path_by_name env kind apparent with
   | None -> false
   | Some found -> (
@@ -498,20 +500,21 @@ let denotes env kind ~canon_path apparent =
     | exception Not_found -> false)
 
 (* The lightest valid name denoting [canon_path] known so far *)
-let best_known_name env state ~canon_path kind =
+let best_known_name request state =
   let open Option.Syntax in
   let* candidates =
-    Path.Map.find_opt canon_path (table_of_kind kind state.table)
+    Path.Map.find_opt request.canon_path
+      (table_of_kind request.kind state.table)
   in
   Candidates.to_seq candidates
   |> Seq.find_map @@ fun candidate ->
-     if denotes env kind ~canon_path candidate.apparent then
-       Some candidate.apparent
+     if denotes request candidate.apparent then Some candidate.apparent
      else None
 
 (* Validates a candidate: it is filed in the table under the canonical path it
    denotes, or kept aside in [not_in_env], and leaves the queue. *)
-let validate env kind search candidate =
+let validate request search candidate =
+  let kind = request.kind in
   let { apparent; full } = candidate in
   log ~title:"fill_by_level" "Treating %a (%s)" Logger.fmt
     (Fun.flip path_print apparent)
@@ -519,7 +522,7 @@ let validate env kind search candidate =
   let queue =
     map_queue_of_kind kind (Candidates.remove candidate) search.queue
   in
-  match canonical_path_of_candidate env kind candidate with
+  match canonical_path_of_candidate request candidate with
   | Some canonical ->
     log ~title:"fill_by_level" "Updating table: %a -> { %a (%s) }" Logger.fmt
       (Fun.flip path_print canonical)
@@ -619,8 +622,10 @@ type step =
       (** The lightest level not validated yet: its lightest candidate and the
           candidates from it *)
 
-let next_step search kind =
-  let candidates = Candidates.to_seq (queue_of_kind kind search.queue) in
+let next_step request search =
+  let candidates =
+    Candidates.to_seq (queue_of_kind request.kind search.queue)
+  in
   let lightest =
     match candidates () with
     | Seq.Nil -> None
@@ -645,16 +650,16 @@ let next_step search kind =
     else Some level
 
 (* Validates the candidates of the level of [lightest] *)
-let validate_level env kind ~lightest candidates search =
+let validate_level request ~lightest candidates search =
   candidates
   |> Seq.take_while (fun c -> compare_paths_weight lightest c.apparent >= 0)
-  |> Seq.fold_left (validate env kind) search
+  |> Seq.fold_left (validate request) search
 
 (* Levels are validated in increasing weight, after the expansions whose
    components may belong to them, until the best name found is the lightest. *)
-let search_levels env search ~canon_path kind best =
+let search_levels request search best =
   let improve search best =
-    match best_known_name env search ~canon_path kind with
+    match best_known_name request search with
     | None -> best
     | found -> found
   in
@@ -666,7 +671,7 @@ let search_levels env search ~canon_path kind best =
   let rec loop search best =
     log ~title:"fill_by_level" "Current best: %a" Logger.fmt (fun f ->
         Format.pp_print_option path_print f best);
-    match next_step search kind with
+    match next_step request search with
     | None ->
       log ~title:"fill_by_level" "Nothing left";
       (best, search)
@@ -676,7 +681,7 @@ let search_levels env search ~canon_path kind best =
       (best, search)
     | Some (_, Expand expansion) -> loop (expand search expansion) best
     | Some (_, Level (lightest, candidates)) ->
-      let search = validate_level env kind ~lightest candidates search in
+      let search = validate_level request ~lightest candidates search in
       loop search (improve search best)
   in
   loop search best
@@ -718,13 +723,14 @@ let rec shorten ~env ~initial ~canon_path kind =
       pp_queue fmt state.queue);
 
   (* A name found by a previous call ? *)
-  let best = best_known_name env state ~canon_path kind in
+  let request = { env; kind; canon_path } in
+  let best = best_known_name request state in
   log ~title:"shorten" "Initial: %a; Canon: %a; Current best: %a" Logger.fmt
     (Fun.flip path_print initial) Logger.fmt (Fun.flip path_print canon_path)
     Logger.fmt (fun f -> Format.pp_print_option path_print f best);
 
   (* Is there a better one ? *)
-  let best, state = search_levels env state ~canon_path kind best in
+  let best, state = search_levels request state best in
 
   (* U is emptied; the substitutions, including those found by the expansions,
      are kept *)
