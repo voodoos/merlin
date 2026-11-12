@@ -232,7 +232,7 @@ let min_component_weight apparent =
   (length + 1, scope)
 
 (* The state of the search *)
-type search =
+type search_state =
   { queue : Candidates.t;
     (* Candidates not validated yet, lightest first *)
     not_in_env : Path_trie.t;
@@ -263,7 +263,7 @@ let empty_search =
     substs = Path.Map.empty
   }
 
-let state : search ref = Local_store.s_ref empty_search
+let search_state : search_state ref = Local_store.s_ref empty_search
 (* TODO CR Ulysse having a table keyed by Uids would seem to be a better choice,
    but it does not always work. One example of that is test `sp-13` were a type
    from Deferred0 is redefined in Deferred, causing paths converging to this same
@@ -366,15 +366,15 @@ let enqueue search paths =
    environment different from the one of the previous call, which is done after
    any function wrapped with [Printyp.wrap_printing_env]. *)
 let restore_ignored_paths ident =
-  let search = !state in
+  let state = !search_state in
   let restored, kept =
     match ident with
-    | None -> (Some search.not_in_env, Path_trie.empty)
-    | Some ident -> Path_trie.take ident search.not_in_env
+    | None -> (Some state.not_in_env, Path_trie.empty)
+    | Some ident -> Path_trie.take ident state.not_in_env
   in
   match restored with
   | None -> ()
-  | Some paths -> state := enqueue { search with not_in_env = kept } paths
+  | Some paths -> search_state := enqueue { state with not_in_env = kept } paths
 
 (** {1 Validation of candidates} *)
 
@@ -657,47 +657,47 @@ let search_levels env search ~canon_path kind best =
 
 let rec shorten ~env ~initial ~canon_path kind =
   let discourse = Discourse.get () in
-  let search = { !state with substs = discourse.substs } in
+  let state = { !search_state with substs = discourse.substs } in
   log_dbg ~title:"shorten" "Current discourse: %a\n%!" Logger.fmt (fun fmt ->
       Discourse.debug_print fmt);
   log_dbg ~title:"shorten" "Current queue: %a" Logger.fmt (fun fmt ->
       Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt fmt
-        (Candidates.to_seq search.queue));
+        (Candidates.to_seq state.queue));
   log_dbg ~title:"shorten" "Current notinenv: %a" Logger.fmt (fun fmt ->
-      Path_trie.pp_seq fmt search.not_in_env);
+      Path_trie.pp_seq fmt state.not_in_env);
   log_dbg ~title:"shorten" "Current table: %a" Logger.fmt (fun fmt ->
-      pp_table fmt search.table);
+      pp_table fmt state.table);
 
-  let search =
-    let paths =
+  let state =
+    let additional_paths =
       Path_trie.add initial (component_kind kind) discourse.paths
       |> Path_trie.add canon_path (component_kind kind)
-      |> apply_substitutions_fixpoint search.substs
+      |> apply_substitutions_fixpoint state.substs
     in
     log_dbg ~title:"shorten" "Discourse after substitutions: %a\n%!" Logger.fmt
-      (fun fmt -> Path_trie.pp_seq fmt paths);
+      (fun fmt -> Path_trie.pp_seq fmt additional_paths);
     (* Paths queued by a previous call were validated already *)
-    let fresh = Path_trie.diff paths search.known in
-    enqueue { search with known = Path_trie.union search.known fresh } fresh
+    let fresh = Path_trie.diff additional_paths state.known in
+    enqueue { state with known = Path_trie.union state.known fresh } fresh
   in
 
   log_dbg ~title:"shorten" "Current queue: %a" Logger.fmt (fun fmt ->
       Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt fmt
-        (Candidates.to_seq search.queue));
+        (Candidates.to_seq state.queue));
 
   (* A name found by a previous call ? *)
-  let best = best_known_name env search ~canon_path kind in
+  let best = best_known_name env state ~canon_path kind in
   log ~title:"shorten" "Initial: %a; Canon: %a; Current best: %a" Logger.fmt
     (Fun.flip path_print initial) Logger.fmt (Fun.flip path_print canon_path)
     Logger.fmt (fun f -> Format.pp_print_option path_print f best);
 
   (* Is there a better one ? *)
-  let best, search = search_levels env search ~canon_path kind best in
+  let best, state = search_levels env state ~canon_path kind best in
 
   (* U is emptied; the substitutions, including those found by the expansions,
      are kept *)
-  Discourse.reset ~substs:search.substs ();
-  state := search;
+  Discourse.reset ~substs:state.substs ();
+  search_state := state;
 
   Option.value ~default:initial best |> shorten_application_args env
 
