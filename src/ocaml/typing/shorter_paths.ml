@@ -136,135 +136,161 @@ let compare_weight (l1, s1) (l2, s2) =
 
 let compare_paths_weight p1 p2 = compare_weight (path_size p1) (path_size p2)
 type kind = Type | Module | Module_type
-let kind_of_kind = function
-  | Type -> Shape.Sig_component_kind.Type
+
+let component_kind : kind -> Shape.Sig_component_kind.t = function
+  | Type -> Type
   | Module -> Module
   | Module_type -> Module_type
+
 let string_of_kind = function
   | Type -> "Type"
   | Module -> "Module"
   | Module_type -> "Module_type"
 
-module Path_set = struct
-  module T = struct
-    type t = kind * Path.t * Path.t
+module Path_trie = Discourse_types.Path_trie
 
-    let compare (k1, p1, fp1) (k2, p2, fp2) =
-      let c = compare_paths_weight p1 p2 in
-      if c <> 0 then c
+(* Shortening a path
+
+   Typing records the paths the user wrote and the names brought in scope (U,
+   see [Discourse]). From U we derive D, the names worth trying as replacements:
+   the paths of U, the components of the modules of U (rule D3), the paths used
+   in the declarations of U, and the substitutions obtained from aliases and
+   opens (a path under an alias target can be written under the alias).
+
+   Given a path to print, we want the lightest name of D that denotes the same
+   thing in the printing environment, the weight of a name being the sum of the
+   penalties of its components (see [path_size]).
+
+   The search is best-first on that weight:
+   - candidates sit in a queue ordered by weight; levels (all candidates of the
+     same weight) are validated in increasing order. Validating a candidate
+     means finding its name in the printing environment and checking that it
+     denotes what the candidate stood for; it is then filed in a table under the
+     canonical path it denotes, or kept aside until the environment changes;
+   - after each level the table is consulted for the canonical path of the
+     request. The search stops as soon as the best name found is strictly
+     lighter than everything left.
+
+   Rule D3 is lazy: the components of a module known under the apparent path
+   [a] are only materialised ("expanded") when the search is about to validate
+   a level that one of them could belong to, that is when weight(a) + 1 is not
+   heavier than that level: a component adds at least one name to the module's
+   path, and a path regrafted under a component by a substitution is heavier
+   still. An expansion runs before any level its components could reach, so
+   when a level is validated every candidate of that weight is in the queue, and
+   when the search stops the remaining expansions can only produce heavier
+   names. (A substitution whose target is exactly a new component could name it
+   lighter than the module; such a target is a node of the trie whenever it is
+   the request's own path, which is added to the trie at every call, so that
+   name is produced by the substitution pass of the call.)
+
+   The whole search state persists across the calls of a typing: candidates are
+   validated once, and a later call resumes where the previous one stopped. *)
+
+(* A name that may denote the path to print. [apparent] is the name as the user
+   can write it (what we print), [full] the path it stood for when it was
+   recorded (what the name is checked against in the printing environment). *)
+type candidate = { kind : kind; apparent : Path.t; full : Path.t }
+
+(* Candidates ordered by the weight of their apparent path, lightest first *)
+module Candidates = struct
+  include Set.Make (struct
+    type t = candidate
+
+    let compare c c' =
+      let weight = compare_paths_weight c.apparent c'.apparent in
+      if weight <> 0 then weight
       else
-        let c = compare k1 k2 in
-        if c <> 0 then c
+        let kind = compare c.kind c'.kind in
+        if kind <> 0 then kind
         else
-          let c = Path.compare p1 p2 in
-          if c <> 0 then c else Path.compare fp1 fp2
-  end
-  let pp_elt fmt (kind, p, full_path) =
-    Format.fprintf fmt "%a [%a] (%s)" path_print p path_print full_path
-      (string_of_kind kind)
+          let apparent = Path.compare c.apparent c'.apparent in
+          if apparent <> 0 then apparent else Path.compare c.full c'.full
+  end)
 
-  include Set.Make (T)
+  let pp_elt fmt { kind; apparent; full } =
+    Format.fprintf fmt "%a [%a] (%s)" path_print apparent path_print full
+      (string_of_kind kind)
 end
 
-module Path_tbl = Hashtbl.Make (struct
-  type t = Path.t
-  let equal = Path.same
-  let hash = Hashtbl.hash
+(* An expansion is a module of U (its full path) under one of its apparent
+   paths. Expansions are ordered by the weight of the apparent path. *)
+module Expansions = Set.Make (struct
+  type t = Path.t * Path.t (* apparent path, full path *)
+
+  let compare (apparent, full) (apparent', full') =
+    let weight = compare_paths_weight apparent apparent' in
+    if weight <> 0 then weight
+    else
+      let c = Path.compare apparent apparent' in
+      if c <> 0 then c else Path.compare full full'
 end)
 
-module Kinds = Discourse_types.Kinds
-module Priority_queue = Path_set
-module Path_trie = Discourse_types.Path_trie
-module String_map = Discourse_types.String_map
+(* The minimum weight of a component of a module known as [apparent] *)
+let min_component_weight apparent =
+  let length, scope = path_size apparent in
+  (length + 1, scope)
 
-(* To shorten paths we will build a table that maps "canonical paths" - i.e. a
-   path which is not itself an alias - to a set of paths from D that are aliases
-   to it. We will build this table by putting the elements of D into a priority
-   queue ordered by their length. Then we "process" each element by looking up
-   its canonical path and then adding it to the map. We do this using whatever
-   environment we are currently trying to shorten paths with (ignoring any local
-   constraints). If an element of D is not available in that environment then we
-   skip it and leave it in the priority queue. *)
+(* The state of the search *)
+type search =
+  { queue : Candidates.t;
+    (* Candidates not validated yet, lightest first *)
+    not_in_env : Path_trie.t;
+    (* Candidates whose name is not bound in the printing environment, kept
+       aside until the environment changes *)
+    table : Candidates.t Path.Map.t;
+    (* The validated candidates, by the canonical path they denote *)
+    pending : Expansions.t;
+    (* Expansions not done yet, lightest first *)
+    expanded : Expansions.t;
+    (* Expansions done: each one is done at most once *)
+    known : Path_trie.t;
+    (* Every path queued so far, substitutions applied: an expansion only
+       queues the paths that are not already there, and a substitution it
+       discovers must also be applied to them *)
+    substs : Discourse_types.substs
+        (* The substitutions known so far (D12, D13), from the discourse and
+           the expansions *)
+  }
 
-(* When shortenning:
-   - We empty the Discourse into the priority queue.
-   - We compute all possible paths substitutions and add them to the priority
-     queue. TODO: there might be a better, lazier way.
-   - We read the priority queue in orderto sort paths by their canonical form.
-   - Once we found a valid path for the request we stop after finishing the
-     current level (when the next path in the queue is longer).
-   - The priority queue and canonical paths map are kept between queries. *)
+let empty_search =
+  { queue = Candidates.empty;
+    not_in_env = Path_trie.empty;
+    table = Path.Map.empty;
+    pending = Expansions.empty;
+    expanded = Expansions.empty;
+    known = Path_trie.empty;
+    substs = Path.Map.empty
+  }
 
-let priority_queue : Priority_queue.t ref =
-  Local_store.s_ref Priority_queue.empty
-let not_in_env : Path_trie.t ref = Local_store.s_ref Path_trie.empty
-let canon_table : Path_set.t Path_tbl.t ref =
-  Local_store.s_table Path_tbl.create 256
+let state : search ref = Local_store.s_ref empty_search
 (* TODO CR Ulysse having a table keyed by Uids would seem to be a better choice,
    but it does not always work. One example of that is test `sp-13` were a type
    from Deferred0 is redefined in Deferred, causing paths converging to this same
    type to have unmatching uids.*)
 
-(* Rule D3 (the components of a module of U are in D) is applied on demand: the
-   components of a module are all heavier than the module itself, so they are
-   only materialised ("expanded") when the search reaches the module's weight.
-   An expansion is a module of U (its full path) under one of its apparent
-   paths. *)
-module Expand_set = Set.Make (struct
-  type t = Path.t * Path.t (* apparent path, full path *)
-
-  let compare (a, f) (a', f') =
-    let c = compare_paths_weight a a' in
-    if c <> 0 then c
-    else
-      let c = Path.compare a a' in
-      if c <> 0 then c else Path.compare f f'
-end)
-
-(* Expansions not done yet, lightest first *)
-let pending_expand : Expand_set.t ref = Local_store.s_ref Expand_set.empty
-
-(* Expansions done: each pair is expanded at most once *)
-let expanded : Expand_set.t ref = Local_store.s_ref Expand_set.empty
-
-(* Every path queued so far, substitutions applied: an expansion only queues
-   the paths that are not already there, and a substitution discovered by an
-   expansion must also be applied to them. *)
-let all_paths : Path_trie.t ref = Local_store.s_ref Path_trie.empty
-
-(* The minimum weight of a component of a module known as [apparent] *)
-let min_component_weight apparent =
-  let l, s = path_size apparent in
-  (l + 1, s)
-
-let note_expansion apparent full =
-  if Discourse.is_expandable full then begin
-    let e = (apparent, full) in
-    if not (Expand_set.mem e !expanded) then
-      pending_expand := Expand_set.add e !pending_expand
-  end
-
-let pp_table fmt t =
-  Path_tbl.iter
-    (fun p paths ->
-      let paths = Path_set.to_list paths in
-      Format.fprintf fmt "@;%a -> {%a}" path_print p
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space Path_set.pp_elt)
-        paths)
-    t
+let pp_table fmt table =
+  Path.Map.iter
+    (fun canonical candidates ->
+      Format.fprintf fmt "@;%a -> {%a}" path_print canonical
+        (Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt)
+        (Candidates.to_seq candidates))
+    table
 
 let normalize_type_path = Out_type.normalize_type_path ~cache:false
 
-(* The paths obtained by applying [substs] once to [t]: every node of [t]
-   whose path is a substitution target is re-rooted under the replacements.
-   [apply_substitutions] is driven by the nodes of [t], so its cost does not
-   depend on the number of substitutions (expansions apply them to small
-   tries, many times); [apply_substitutions_by_target] is driven by the
-   substitutions, for a few of them on a large trie. *)
-let apply_substitutions_by_target (substs : Discourse_types.substs) t =
+(** {1 Substitutions} *)
+
+(* The paths obtained by applying [substs] once to [paths]: every node of
+   [paths] whose path is a substitution target is re-rooted under the
+   replacements. [apply_substitutions] is driven by the nodes of [paths], so
+   its cost does not depend on the number of substitutions (expansions apply
+   them to small tries, many times); [apply_substitutions_by_target] is driven
+   by the substitutions, for a few of them on a large trie. *)
+let apply_substitutions_by_target (substs : Discourse_types.substs) paths =
   Path.Map.fold
     (fun target replacements acc ->
-      match Path_trie.reach t target with
+      match Path_trie.reach paths target with
       | None -> acc
       | Some (Trie (kinds, children)) ->
         Path.Set.fold
@@ -273,7 +299,7 @@ let apply_substitutions_by_target (substs : Discourse_types.substs) t =
           replacements acc)
     substs Path_trie.empty
 
-let apply_substitutions (substs : Discourse_types.substs) t =
+let apply_substitutions (substs : Discourse_types.substs) paths =
   Path_trie.fold_nodes
     (fun path (Trie (kinds, children)) acc ->
       match Path.Map.find_opt path substs with
@@ -283,54 +309,74 @@ let apply_substitutions (substs : Discourse_types.substs) t =
           (fun path acc ->
             Path_trie.union acc @@ Path_trie.trie_of_path ~children path kinds)
           replacements acc)
-    t Path_trie.empty
+    paths Path_trie.empty
 
-let apply_substitutions_fixpoint t substs =
-  let rec aux ~fuel acc t =
-    let new_paths = apply_substitutions substs t in
-    if Path_trie.is_empty new_paths then acc
-    else begin
-      let acc_length = Path_trie.size acc in
-      let acc = Path_trie.union acc new_paths in
-      if fuel = 0 || acc_length = Path_trie.size acc then acc
-      else aux ~fuel:(fuel - 1) acc new_paths
-    end
+(* [paths] and the paths obtained by applying [substs] to them, repeatedly (up
+   to a small depth) *)
+let apply_substitutions_fixpoint substs paths =
+  let rec loop ~fuel acc frontier =
+    let rewritten = apply_substitutions substs frontier in
+    if Path_trie.is_empty rewritten then acc
+    else
+      let size = Path_trie.size acc in
+      let acc = Path_trie.union acc rewritten in
+      if fuel = 0 || size = Path_trie.size acc then acc
+      else loop ~fuel:(fuel - 1) acc rewritten
   in
-  aux ~fuel:2 t t
+  loop ~fuel:2 paths paths
 
-let fill_queue (paths : Path_trie.t) queue =
+(** {1 The queue} *)
+
+(* Queues the candidates of [paths], and the expansions of those that are
+   modules of U *)
+let enqueue search paths =
+  let enqueue_item apparent search (kind, full) =
+    let candidate kind = { kind; apparent; full } in
+    match (kind : Shape.Sig_component_kind.t) with
+    | Type ->
+      { search with queue = Candidates.add (candidate Type) search.queue }
+    | Module_type ->
+      { search with
+        queue = Candidates.add (candidate Module_type) search.queue
+      }
+    | Module ->
+      let queue = Candidates.add (candidate Module) search.queue in
+      let expansion = (apparent, full) in
+      let pending =
+        if
+          Discourse.is_expandable full
+          && not (Expansions.mem expansion search.expanded)
+        then Expansions.add expansion search.pending
+        else search.pending
+      in
+      { search with queue; pending }
+    | Value | Extension_constructor | Class | Class_type | Constructor | Label
+      -> search
+  in
   Path_trie.to_seq paths
   |> Seq.fold_left
-       (fun acc (path, full_paths) ->
+       (fun search (apparent, items) ->
          Discourse_types.Paths.fold
-           (fun (kind, full_path) acc ->
-             match kind with
-             | Type -> Priority_queue.add (Type, path, full_path) acc
-             | Module ->
-               note_expansion path full_path;
-               Priority_queue.add (Module, path, full_path) acc
-             | Module_type ->
-               Priority_queue.add (Module_type, path, full_path) acc
-             | _ -> acc)
-           full_paths acc)
-       queue
+           (fun item search -> enqueue_item apparent search item)
+           items search)
+       search
 
-(* This function should be called before any attempt to [shorten] paths in an
-   environment different that the one of the previous attempt.
+(* Queues again the candidates kept aside in [not_in_env]: all of them, or
+   those rooted at [ident]. This must be called before shortening in an
+   environment different from the one of the previous call, which is done after
+   any function wrapped with [Printyp.wrap_printing_env]. *)
+let restore_ignored_paths ident =
+  let search = !state in
+  let restored, kept =
+    match ident with
+    | None -> (Some search.not_in_env, Path_trie.empty)
+    | Some ident -> Path_trie.take ident search.not_in_env
+  in
+  match restored with
+  | None -> ()
+  | Some paths -> state := enqueue { search with not_in_env = kept } paths
 
-   This is called after any function wrapped with [Printyp.wrap_printing_env].
-*)
-let restore_ignored_paths id =
-  match id with
-  | None ->
-    priority_queue := fill_queue !not_in_env !priority_queue;
-    not_in_env := Path_trie.empty
-  | Some ident -> (
-    match Path_trie.take ident !not_in_env with
-    | None, _ -> ()
-    | Some t, remaining ->
-      priority_queue := fill_queue t !priority_queue;
-      not_in_env := remaining)
+(** {1 Validation of candidates} *)
 
 let find_by_name env kind lid =
   match kind with
@@ -338,9 +384,20 @@ let find_by_name env kind lid =
   | Module -> fst (Env.find_module_by_name_lazy lid env)
   | Module_type -> fst (Env.find_modtype_by_name_lazy lid env)
 
-let find_path_by_name env kind path =
-  let lid = Untypeast.lident_of_path path in
-  try Some (find_by_name env kind lid) with Not_found -> None
+(* The path a name denotes in [env], if it is bound. Candidates are apparent
+   paths: in the presence of [open] statements they cannot be looked up
+   directly, so they are found by name.
+
+   TODO CR Ulysse if required we might use a shortcut here with "find_"
+   functions but these must be treated carefully as they do allow hidden
+   module to be used. (breaks l-repro2 for example) *)
+let find_path_by_name env kind apparent =
+  let lid = Untypeast.lident_of_path apparent in
+  (* TODO Env.find_type_by_name can raise Assertion_failure when the case Papply
+     is reached in Env.lookup_type_path_full *)
+  match find_by_name env kind lid with
+  | found -> Some found
+  | exception (Not_found | Assert_failure _) -> None
 
 let normalize env kind path =
   match kind with
@@ -348,81 +405,111 @@ let normalize env kind path =
   | Module -> Env.normalize_module_path None env path
   | Module_type -> Env.normalize_modtype_path env path
 
-(* Candidates are apparent paths: in the presence of [open] statements they
-   cannot be looked up in the environment directly, so we find them by name.
-
-   TODO CR Ulysse if required we might use a shortcut here with "find_"
-   functions but these must be treated carefully as they do allow hidden
-   module to be used. (breaks l-repro2 for example) *)
-let canonical_path_by_name env kind apparent_path full_path =
+(* The canonical path a candidate denotes in [env], if its name is bound there
+   and denotes what the candidate stood for (and not an homonym). *)
+let canonical_path_of_candidate env { kind; apparent; full } =
   (* TODO it might be worth it to memoïze this function *)
-  match find_path_by_name env kind apparent_path with
-  (* TODO Env.find_type_by_name can raise Assertion_failure when the case Papply
-     is reached in Env.lookup_type_path_full *)
-  | None | (exception Assert_failure _) ->
+  match find_path_by_name env kind apparent with
+  | None ->
     log ~title:"find_path_in_env" "%s name not found: %a" (string_of_kind kind)
       Logger.fmt
-      (Fun.flip path_print apparent_path);
+      (Fun.flip path_print apparent);
     None
-  | Some path_in_env -> (
+  | Some found -> (
     log ~title:"find_path_in_env" "Lid: %a [%a] Path in env: %a" Logger.fmt
-      (Fun.flip path_print apparent_path)
-      Logger.fmt
-      (Fun.flip path_print full_path)
-      Logger.fmt
-      (Fun.flip path_print path_in_env);
+      (Fun.flip path_print apparent)
+      Logger.fmt (Fun.flip path_print full) Logger.fmt
+      (Fun.flip path_print found);
     try
-      let canonical_path = normalize env kind path_in_env in
-      if Path.same full_path path_in_env then Some canonical_path
-      else begin
-        let path = normalize env kind full_path in
+      let canonical = normalize env kind found in
+      if Path.same full found then Some canonical
+      else
+        let full_canonical = normalize env kind full in
         log ~title:"find_path_in_env" "%a <>? %a" Logger.fmt
-          (Fun.flip path_print path) Logger.fmt
-          (Fun.flip path_print canonical_path);
-        if Path.same path canonical_path then Some canonical_path else None
-      end
+          (Fun.flip path_print full_canonical)
+          Logger.fmt
+          (Fun.flip path_print canonical);
+        if Path.same full_canonical canonical then Some canonical else None
     with Not_found -> None)
 
-(* Check that [path] denote [canon_path] in [env]. Used to re-validate the
-   entries of the table, which are kept across environments. *)
-let check_path env kind ~canon_path path =
-  match find_path_by_name env kind path with
-  | None | (exception Assert_failure _) -> false
-  | Some path_in_env -> (
-    Path.same path_in_env canon_path
+(* Does [apparent] denote [canon_path] in [env]? The candidates of the table
+   are kept across environments, so they are validated again when used. *)
+let denotes env kind ~canon_path apparent =
+  match find_path_by_name env kind apparent with
+  | None -> false
+  | Some found -> (
+    Path.same found canon_path
     ||
-    match normalize env kind path_in_env with
-    | path' -> Path.same path' canon_path
+    match normalize env kind found with
+    | canonical -> Path.same canonical canon_path
     | exception Not_found -> false)
 
-let find_best_path env ~canon_path table target_kind =
-  match Path_tbl.find_opt table canon_path with
+(* The lightest name of [canon_path] found so far, if it is valid in [env] *)
+let best_known_name env search ~canon_path kind =
+  match Path.Map.find_opt canon_path search.table with
   | None -> None
-  | Some paths ->
-    Path_set.to_seq paths
-    |> Seq.find_map (fun (kind, path, _full_path) ->
-        (* TODO we should probably have a kind*path map*)
-        if kind <> target_kind then None
-        else if check_path env kind ~canon_path path then Some path
+  | Some candidates ->
+    (* TODO we should probably have a kind*path map*)
+    Candidates.to_seq candidates
+    |> Seq.find_map (fun candidate ->
+        if
+          candidate.kind = kind
+          && denotes env kind ~canon_path candidate.apparent
+        then Some candidate.apparent
         else None)
 
-let improve_path env ~canon_path table kind path =
-  find_best_path env ~canon_path table kind
-  |> Option.fold ~none:path ~some:Option.some
+(* Validates a candidate: it is filed in the table under the canonical path it
+   denotes, or kept aside in [not_in_env], and leaves the queue. *)
+let validate env search candidate =
+  let { kind; apparent; full } = candidate in
+  log ~title:"fill_by_level" "Treating %a (%s)" Logger.fmt
+    (Fun.flip path_print apparent)
+    (string_of_kind kind);
+  let queue = Candidates.remove candidate search.queue in
+  match canonical_path_of_candidate env candidate with
+  | Some canonical ->
+    log ~title:"fill_by_level" "Updating table: %a -> { %a (%s) }" Logger.fmt
+      (Fun.flip path_print canonical)
+      Logger.fmt
+      (Fun.flip path_print apparent)
+      (string_of_kind kind);
+    let table =
+      Path.Map.update canonical
+        (function
+          | None -> Some (Candidates.singleton candidate)
+          | Some candidates -> Some (Candidates.add candidate candidates))
+        search.table
+    in
+    { search with queue; table }
+  | None ->
+    log ~title:"fill_by_level" "Path %a invalid in the current env" Logger.fmt
+      (Fun.flip path_print apparent);
+    (* Candidates not bound in the current environment are kept aside: this
+       prevents testing them again when [shorten] is called repeatedly with the
+       same environment, as when printing a large module signature. *)
+    let not_in_env =
+      Path_trie.add ~full_path:full apparent (component_kind kind)
+        search.not_in_env
+    in
+    { search with queue; not_in_env }
 
-type state = { queue : Priority_queue.t; not_in_env : Path_trie.t }
+(** {1 Expansion (rule D3)} *)
 
 (* Materialises the components of the module [full], known as [apparent]: they
-   are added to the queue, substitutions applied, and the substitutions of
-   their alias sub-modules to [substs]. Returns the weight of the lightest
-   path added, if any. *)
-let expand substs state (apparent, full) =
-  expanded := Expand_set.add (apparent, full) !expanded;
+   are queued, substitutions applied, and the substitutions of their alias
+   sub-modules are recorded. *)
+let expand search ((apparent, full) as expansion) =
+  let search =
+    { search with
+      pending = Expansions.remove expansion search.pending;
+      expanded = Expansions.add expansion search.expanded
+    }
+  in
   match Discourse.module_components full with
-  | None -> (state, None)
+  | None -> search
   | Some (components, component_substs) ->
     (* The components, under the apparent name of the module *)
-    let new_paths =
+    let rerooted =
       if Path.same apparent full then components
       else
         match Path_trie.reach components full with
@@ -431,33 +518,31 @@ let expand substs state (apparent, full) =
           Path_trie.trie_of_path ~children apparent kinds
     in
     (* D12: paths under an alias target can be written under the alias. The
-       substitutions known so far were applied to the paths queued so far, the
+       substitutions known so far were applied to the paths known so far: the
        new ones are applied to them here. *)
     let new_substs =
       Path.Map.filter_map
         (fun target replacements ->
           let known =
             Option.value ~default:Path.Set.empty
-              (Path.Map.find_opt target !substs)
+              (Path.Map.find_opt target search.substs)
           in
           let fresh = Path.Set.diff replacements known in
           if Path.Set.is_empty fresh then None else Some fresh)
         component_substs
     in
-    let new_paths =
-      if Path.Map.is_empty new_substs then new_paths
-      else begin
-        substs :=
-          Path.Map.union
-            (fun _ a b -> Some (Path.Set.union a b))
-            !substs new_substs;
-        Path_trie.union new_paths
-          (apply_substitutions_by_target new_substs !all_paths)
-      end
+    let substs =
+      Path.Map.union
+        (fun _ a b -> Some (Path.Set.union a b))
+        search.substs new_substs
     in
-    let new_paths = apply_substitutions_fixpoint new_paths !substs in
-    (* Paths already in [all_paths] were queued (and possibly treated) before *)
-    let fresh = Path_trie.diff new_paths !all_paths in
+    let rewritten =
+      Path_trie.union rerooted
+        (apply_substitutions_by_target new_substs search.known)
+      |> apply_substitutions_fixpoint substs
+    in
+    (* Paths already known were queued (and possibly validated) before *)
+    let fresh = Path_trie.diff rewritten search.known in
     log ~title:"expand"
       "Expanding %a [%a]: %a components, %d new substs, %a new paths" Logger.fmt
       (Fun.flip path_print apparent)
@@ -466,265 +551,155 @@ let expand substs state (apparent, full) =
       (Path.Map.cardinal new_substs)
       Logger.fmt
       (fun fmt -> Format.pp_print_int fmt (Path_trie.size fresh));
-    all_paths := Path_trie.union !all_paths fresh;
-    let queue = fill_queue fresh state.queue in
-    let lightest =
-      Path_trie.to_seq fresh
-      |> Seq.fold_left
-           (fun acc (path, _) ->
-             let w = path_size path in
-             match acc with
-             | Some w' when compare_weight w' w <= 0 -> acc
-             | _ -> Some w)
-           None
-    in
-    ({ state with queue }, lightest)
+    enqueue
+      { search with substs; known = Path_trie.union search.known fresh }
+      fresh
 
-let process_queue env substs state ~table ~canon_path target_kind best =
-  (* The items of the queue from the first one of the requested kind heavier
-     than [lb], the weight of the last treated level: nothing lighter of that
-     kind is left, and the weight is the primary key of the queue, so the
-     level is sought directly. *)
-  let candidates lb queue =
-    (* Items are ordered by weight, then kind: a level that has no item of
-       the requested kind is skipped in logarithmic time. *)
-    let rec seek pred =
-      match Priority_queue.find_first_opt pred queue with
-      | None -> Seq.empty
-      | Some ((kind, path, _) as item) ->
-        if kind = target_kind then Priority_queue.to_seq_from item queue
-        else
-          let w = path_size path in
-          if compare kind target_kind > 0 then
-            (* [item] is the first of its level: no item of the requested
-               kind there *)
-            seek (fun (_, p, _) -> compare_weight (path_size p) w > 0)
-          else
-            seek (fun (k, p, _) ->
-                let c = compare_weight (path_size p) w in
-                c > 0 || (c = 0 && compare k target_kind >= 0))
-    in
-    match lb with
-    | None -> seek (fun _ -> true)
-    | Some lb -> seek (fun (_, p, _) -> compare_weight (path_size p) lb > 0)
+(** {1 The search} *)
+
+(* The candidates from the lightest one of [kind]. The queue is ordered by
+   weight then kind, so a level without a candidate of [kind] is skipped in
+   logarithmic time. *)
+let candidates_of_kind kind queue =
+  let rec seek_from first =
+    match Candidates.find_first_opt first queue with
+    | None -> Seq.empty
+    | Some candidate when candidate.kind = kind ->
+      Candidates.to_seq_from candidate queue
+    | Some { kind = found_kind; apparent; _ } ->
+      let weight = path_size apparent in
+      let heavier c = compare_weight (path_size c.apparent) weight > 0 in
+      let same_level c = compare_weight (path_size c.apparent) weight = 0 in
+      if compare found_kind kind > 0 then
+        (* The candidate found is the first of its level, which therefore has
+           no candidate of [kind] *)
+        seek_from heavier
+      else
+        seek_from (fun c ->
+            heavier c || (same_level c && compare c.kind kind >= 0))
   in
-  (* Validates one candidate: in the presence of [open] statements the
-     Discourse contains partial paths that cannot be looked up in the
-     environment directly, so it is found by name and checked against its full
-     path. It is then filed in the table under its canonical path, or kept
-     aside in [not_in_env]. *)
-  let treat state ((kind, path, full_path) as item) =
-    log ~title:"fill_by_level" "Treating %a (%s)" Logger.fmt
-      (Fun.flip path_print path) (string_of_kind kind);
-    match canonical_path_by_name env kind path full_path with
-    | Some canonical_path ->
-      log ~title:"fill_by_level" "Updating table: %a -> { %a (%s) }" Logger.fmt
-        (fun fmt -> path_print fmt canonical_path)
-        Logger.fmt
-        (fun fmt -> path_print fmt path)
-        (string_of_kind kind);
-      let () =
-        let update =
-          match Path_tbl.find_opt table canonical_path with
-          | None -> Path_set.singleton item
-          | Some set -> Path_set.add item set
-        in
-        Path_tbl.replace table canonical_path update
-      in
-      (* And remove it from the queue *)
-      let queue = Priority_queue.remove item state.queue in
-      { state with queue }
-    | None ->
-      log ~title:"fill_by_level" "Path %a invalid in the current env" Logger.fmt
-        (Fun.flip path_print path);
-      (* Elements not valid in the current environement are kept in a separate
-         queue. This prevent uselessly re-testing them when [shorten] is
-         called multiple times with the same environment. This notably happens
-         when printing module signatures, and they can be quite large. *)
-      let queue = Priority_queue.remove item state.queue in
-      let not_in_env =
-        Path_trie.add ~full_path path (kind_of_kind kind) state.not_in_env
-      in
-      { queue; not_in_env }
+  seek_from (fun _ -> true)
+
+(* What the search does next, with the weight it is about to reach *)
+type step =
+  | Expand of Expansions.elt
+      (** A module whose components may belong to the next level *)
+  | Level of Path.t * candidate Seq.t
+      (** The lightest level not validated yet: its lightest candidate and the
+          candidates from it *)
+
+let next_step search kind =
+  let candidates = candidates_of_kind kind search.queue in
+  let lightest =
+    match candidates () with
+    | Seq.Nil -> None
+    | Seq.Cons (candidate, _) -> Some candidate.apparent
   in
-  (* Treats the candidates of one level: those of the weight of [first] and
-     of the requested kind. The weight is checked first so that the items of
-     other kinds beyond the level are not scanned. *)
-  let rec one_level ~first seq state =
-    match seq () with
-    | Seq.Nil -> state
-    | Seq.Cons (((kind, path, _full_path) as item), next) ->
-      if compare_paths_weight first path < 0 then state
-      else if kind <> target_kind then one_level ~first next state
-      else one_level ~first next (treat state item)
+  let level =
+    Option.map
+      (fun lightest -> (path_size lightest, Level (lightest, candidates)))
+      lightest
   in
-  (* Levels are treated in increasing weight. Before a level, the pending
-     expansions whose components may belong to it are done. The search stops
-     when the best candidate found so far is lighter than anything left. *)
-  let rec by_level ~lb ?candidates:cached state best =
+  let expansion =
+    Option.map
+      (fun ((apparent, _) as expansion) ->
+        (min_component_weight apparent, Expand expansion))
+      (Expansions.min_elt_opt search.pending)
+  in
+  match (expansion, level) with
+  | None, step | step, None -> step
+  | Some ((expansion_weight, _) as expansion), Some ((level_weight, _) as level)
+    ->
+    if compare_weight expansion_weight level_weight <= 0 then Some expansion
+    else Some level
+
+(* Validates the candidates of [kind] of the level of [lightest]. The weight is
+   checked first so that the candidates of other kinds beyond the level are not
+   scanned. *)
+let validate_level env kind ~lightest candidates search =
+  candidates
+  |> Seq.take_while (fun c -> compare_paths_weight lightest c.apparent >= 0)
+  |> Seq.filter (fun c -> c.kind = kind)
+  |> Seq.fold_left (validate env) search
+
+(* The search for the lightest name of [canon_path] of [kind] in [env], from
+   [best], the lightest name known before the call. Levels are validated in
+   increasing weight, after the expansions whose components may belong to them,
+   until the best name found is lighter than anything left. *)
+let search_levels env search ~canon_path kind best =
+  let improve search best =
+    match best_known_name env search ~canon_path kind with
+    | None -> best
+    | found -> found
+  in
+  let lighter_than_anything_left best weight =
+    match best with
+    | None -> false
+    | Some best -> compare_weight (path_size best) weight < 0
+  in
+  let rec loop search best =
     log ~title:"fill_by_level" "Current best: %a" Logger.fmt (fun f ->
         Format.pp_print_option path_print f best);
-    (* [cached] holds the candidates of the previous iteration when an
-       expansion added nothing that could come before them. *)
-    let seq, first =
-      match cached with
-      | Some cached -> cached
-      | None ->
-        let seq = candidates lb state.queue in
-        let first =
-          match seq () with
-          | Seq.Nil -> None
-          | Seq.Cons ((_, path, _), _) -> Some path
-        in
-        (seq, first)
-    in
-    let first_weight = Option.map path_size first in
-    (* The lightest pending expansion, if its components can belong to the
-       next level *)
-    let expansion =
-      match Expand_set.min_elt_opt !pending_expand with
-      | None -> None
-      | Some ((apparent, _) as e) -> (
-        let weight = min_component_weight apparent in
-        match first_weight with
-        | Some first_weight when compare_weight weight first_weight > 0 -> None
-        | _ -> Some (e, weight))
-    in
-    let next_weight =
-      match (expansion, first_weight) with
-      | Some (_, weight), _ -> Some weight
-      | None, first_weight -> first_weight
-    in
-    match (next_weight, best) with
-    | None, _ ->
-      log ~title:"fill_by_level" "Empty queue";
-      (improve_path env ~canon_path table target_kind best, state)
-    | Some next_weight, Some best_path
-      when compare_weight (path_size best_path) next_weight < 0 ->
-      log ~title:"fill_by_level"
-        "Found a name shorter than the next level:\n %a" Logger.fmt
-        (Fun.flip path_print best_path);
-      (Some best_path, state)
-    | Some _, _ -> (
-      match (expansion, first) with
-      | Some (e, _), _ ->
-        pending_expand := Expand_set.remove e !pending_expand;
-        let state, lightest = expand substs state e in
-        let unchanged = Some (seq, first) in
-        let lb, candidates =
-          match (lightest, first_weight) with
-          | None, _ -> (lb, unchanged)
-          | Some w, Some first_weight when compare_weight w first_weight > 0 ->
-            (lb, unchanged)
-          | Some w, _ -> (
-            (* A substitution can make a new path lighter than the levels
-               already treated: start again from the lightest candidate. *)
-            match lb with
-            | Some lb when compare_weight w lb <= 0 -> (None, None)
-            | _ -> (lb, None))
-        in
-        by_level ~lb ?candidates state best
-      | None, Some first ->
-        let state = one_level ~first seq state in
-        let best = improve_path env ~canon_path table target_kind best in
-        by_level ~lb:(Some (path_size first)) state best
-      | None, None -> assert false)
+    match next_step search kind with
+    | None ->
+      log ~title:"fill_by_level" "Nothing left";
+      (improve search best, search)
+    | Some (weight, _) when lighter_than_anything_left best weight ->
+      log ~title:"fill_by_level" "Found a name lighter than anything left: %a"
+        Logger.fmt (fun f -> Format.pp_print_option path_print f best);
+      (best, search)
+    | Some (_, Expand expansion) -> loop (expand search expansion) best
+    | Some (_, Level (lightest, candidates)) ->
+      let search = validate_level env kind ~lightest candidates search in
+      loop search (improve search best)
   in
-  by_level ~lb:None state best
-
-(* Given a Path and a Longident that represents a suffix  of that path,
-   [path_mask] returns the paths corresponding to that suffix. *)
-
-(* This cache prevent the same ident to be given different stamps in the same query *)
-(* todo: we should probably store the masking in the table instead. *)
-let path_masks_cache : (Longident.t * Path.t, Path.t) Hashtbl.t ref =
-  Local_store.s_table Hashtbl.create 32
-
-(* The print function expect a path but we have longidents.
-
-   TODO What we should really do is modify the printing function to expect a
-   longident. *)
-let rec path_mask (path : Path.t) (lid : Longident.t) : Path.t =
-  match Hashtbl.find_opt !path_masks_cache (lid, path) with
-  | Some path -> path
-  | None ->
-    let masked_path : Path.t =
-      match (path, lid) with
-      | Pident id, Lident _ -> Pident id
-      | Pdot (p, s), Ldot (l, _) -> Pdot (path_mask p l.txt, s)
-      | Papply (p1, p2), Lapply (l1, l2) ->
-        Papply (path_mask p1 l1.txt, path_mask p2 l2.txt)
-      | (Pdot _ | Papply _), Lident s ->
-        let scope = Path.scope path in
-        Pident (Ident.create_scoped ~scope s)
-      | _ -> path
-    in
-    Hashtbl.add !path_masks_cache (lid, path) masked_path;
-    masked_path
+  loop search best
 
 let rec shorten ~env ~initial ~canon_path kind =
   let discourse = Discourse.get () in
-  let queue, table = (!priority_queue, !canon_table) in
-  let substs = ref discourse.substs in
+  let search = { !state with substs = discourse.substs } in
   log_dbg ~title:"shorten" "Current discourse: %a\n%!" Logger.fmt (fun fmt ->
       Discourse.debug_print fmt);
   log_dbg ~title:"shorten" "Current queue: %a" Logger.fmt (fun fmt ->
-      Format.pp_print_seq ~pp_sep:Format.pp_print_space Path_set.pp_elt fmt
-        (Priority_queue.to_seq queue));
+      Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt fmt
+        (Candidates.to_seq search.queue));
   log_dbg ~title:"shorten" "Current notinenv: %a" Logger.fmt (fun fmt ->
-      Discourse_types.Path_trie.pp_seq fmt !not_in_env);
+      Path_trie.pp_seq fmt search.not_in_env);
   log_dbg ~title:"shorten" "Current table: %a" Logger.fmt (fun fmt ->
-      pp_table fmt table);
+      pp_table fmt search.table);
 
-  let queue =
+  let search =
     let paths =
-      Path_trie.add initial (kind_of_kind kind) discourse.paths
-      |> Path_trie.add canon_path (kind_of_kind kind)
+      Path_trie.add initial (component_kind kind) discourse.paths
+      |> Path_trie.add canon_path (component_kind kind)
+      |> apply_substitutions_fixpoint search.substs
     in
-    let paths = apply_substitutions_fixpoint paths !substs in
     log_dbg ~title:"shorten" "Discourse after substitutions: %a\n%!" Logger.fmt
       (fun fmt -> Path_trie.pp_seq fmt paths);
-    (* Paths queued by a previous call were treated already *)
-    let fresh = Path_trie.diff paths !all_paths in
-    all_paths := Path_trie.union !all_paths fresh;
-    fill_queue fresh queue
+    (* Paths queued by a previous call were validated already *)
+    let fresh = Path_trie.diff paths search.known in
+    enqueue { search with known = Path_trie.union search.known fresh } fresh
   in
 
   log_dbg ~title:"shorten" "Current queue: %a" Logger.fmt (fun fmt ->
-      Format.pp_print_seq ~pp_sep:Format.pp_print_space Path_set.pp_elt fmt
-        (Priority_queue.to_seq queue));
+      Format.pp_print_seq ~pp_sep:Format.pp_print_space Candidates.pp_elt fmt
+        (Candidates.to_seq search.queue));
 
-  (* Do we already have a candidate ? *)
-  let best = find_best_path env ~canon_path table kind in
-
+  (* A name found by a previous call ? *)
+  let best = best_known_name env search ~canon_path kind in
   log ~title:"shorten" "Initial: %a; Canon: %a; Current best: %a" Logger.fmt
     (Fun.flip path_print initial) Logger.fmt (Fun.flip path_print canon_path)
     Logger.fmt (fun f -> Format.pp_print_option path_print f best);
 
-  (* Is there a better one in the queue ? *)
-  let best_path, { queue = queue'; not_in_env = not_in_env' } =
-    let not_in_env = !not_in_env in
-    process_queue env substs { queue; not_in_env } ~table ~canon_path kind best
-  in
+  (* Is there a better one ? *)
+  let best, search = search_levels env search ~canon_path kind best in
 
-  (* Empty the discourse *)
-  Discourse.reset ~substs:!substs ();
+  (* U is emptied; the substitutions, including those found by the expansions,
+     are kept *)
+  Discourse.reset ~substs:search.substs ();
+  state := search;
 
-  (* Update the persistent queues and table *)
-  priority_queue := queue';
-  not_in_env := not_in_env';
-
-  Option.value ~default:initial best_path |> shorten_application_args env
-(* match best_path with
-  | None ->
-    log ~title:"shorten" "Falling-back on initial path %a" Logger.fmt
-      (Fun.flip path_print initial);
-    initial
-  | Some (lid, path) ->
-    log ~title:"shorten" "%a" Logger.fmt (fun fmt ->
-        Format.fprintf fmt "Masking path %a with lid %a" path_print path
-          Pprintast.longident lid);
-    path_mask path lid *)
+  Option.value ~default:initial best |> shorten_application_args env
 
 and shorten_application_args env path =
   match (path : Path.t) with
