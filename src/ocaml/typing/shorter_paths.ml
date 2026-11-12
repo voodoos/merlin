@@ -462,19 +462,15 @@ let denotes env kind ~canon_path apparent =
     | canonical -> Path.same canonical canon_path
     | exception Not_found -> false)
 
-(* The lightest name of [canon_path] found so far, if it is valid in [env] *)
-let best_known_name env search ~canon_path kind =
-  match Path.Map.find_opt canon_path search.table with
-  | None -> None
-  | Some candidates ->
-    (* TODO we should probably have a kind*path map*)
-    Candidates.to_seq candidates
-    |> Seq.find_map (fun candidate ->
-        if
-          candidate.kind = kind
-          && denotes env kind ~canon_path candidate.apparent
-        then Some candidate.apparent
-        else None)
+(* The lightest valid name denoting [canon_path] known so far *)
+let best_known_name env state ~canon_path kind =
+  let open Option.Syntax in
+  let* candidates = Path.Map.find_opt canon_path state.table in
+  Candidates.to_seq candidates
+  |> Seq.find_map @@ fun candidate ->
+     if candidate.kind = kind && denotes env kind ~canon_path candidate.apparent
+     then Some candidate.apparent
+     else None
 
 (* Validates a candidate: it is filed in the table under the canonical path it
    denotes, or kept aside in [not_in_env], and leaves the queue. *)
@@ -575,12 +571,12 @@ let expand search ((apparent, full) as expansion) =
 
 (** {1 The search} *)
 
-(* The candidates from the lightest one of [kind]. The queue is ordered by
-   weight then kind, so a level without a candidate of [kind] is skipped in
-   logarithmic time. *)
+(* Return the lightest one with the required [kind]. The queue is
+   ordered by weight then kind, so a level without a candidate of [kind] is
+   skipped in logarithmic time. *)
 let candidates_of_kind kind queue =
-  let rec seek_from first =
-    match Candidates.find_first_opt first queue with
+  let rec seek_from pred =
+    match Candidates.find_first_opt pred queue with
     | None -> Seq.empty
     | Some candidate when candidate.kind = kind ->
       Candidates.to_seq_from candidate queue
@@ -640,20 +636,18 @@ let validate_level env kind ~lightest candidates search =
   |> Seq.filter (fun c -> c.kind = kind)
   |> Seq.fold_left (validate env) search
 
-(* The search for the lightest name of [canon_path] of [kind] in [env], from
-   [best], the lightest name known before the call. Levels are validated in
-   increasing weight, after the expansions whose components may belong to them,
-   until the best name found is lighter than anything left. *)
+(* Levels are validated in increasing weight, after the expansions whose
+   components may belong to them, until the best name found is the lightest. *)
 let search_levels env search ~canon_path kind best =
   let improve search best =
     match best_known_name env search ~canon_path kind with
     | None -> best
     | found -> found
   in
-  let lighter_than_anything_left best weight =
-    match best with
+  let lighter_than path ~weight =
+    match path with
     | None -> false
-    | Some best -> compare_weight (path_size best) weight < 0
+    | Some path -> compare_weight (path_size path) weight < 0
   in
   let rec loop search best =
     log ~title:"fill_by_level" "Current best: %a" Logger.fmt (fun f ->
@@ -661,8 +655,8 @@ let search_levels env search ~canon_path kind best =
     match next_step search kind with
     | None ->
       log ~title:"fill_by_level" "Nothing left";
-      (improve search best, search)
-    | Some (weight, _) when lighter_than_anything_left best weight ->
+      (best, search)
+    | Some (weight, _) when lighter_than best ~weight ->
       log ~title:"fill_by_level" "Found a name lighter than anything left: %a"
         Logger.fmt (fun f -> Format.pp_print_option path_print f best);
       (best, search)
