@@ -95,14 +95,8 @@ let pp_d fmt d =
         (Path.Map.bindings map)
   in
   fprintf fmt
-    "@[<v 2>Discourse {@;\
-     size = %i;@;\
-     paths =@ %a;@;\
-     substs =@ %a;@;\
-     unexpanded =@ %a@;\
-     <-2>}@]"
+    "@[<v 2>Discourse {@;size = %i;@;paths =@ %a;@;substs =@ %a@;<-2>}@]"
     (Path_trie.size d.paths) Path_trie.pp_seq d.paths pp_substs d.substs
-    pp_path_set d.unexpanded
 
 (* A more verbose section which logs every addition to U or D, along with the
    reason the element is added (U1, U2, U3, D2, …, D12) *)
@@ -629,11 +623,38 @@ module D = struct
         | SigL_class_type (id, _, _, _) -> (add Class_type id, substs))
       (paths, substs) items
 
+  (* Rule D3 is applied on demand by [Shorter_paths]: the components of a
+     module of U are only computed the first time the search reaches the
+     module's weight. The memo is keyed by the full path recorded in U, and
+     the signature (and the environment of the U item, for the alias
+     sub-modules) is captured here. *)
+  let expansions : (Path_trie.t * substs) Lazy.t Path.Map.t ref =
+    Local_store.s_ref Path.Map.empty
+
+  let register_expansion path components =
+    if not (Path.Map.mem path !expansions) then
+      expansions := Path.Map.add path components !expansions
+
+  let is_expandable path = Path.Map.mem path !expansions
+
+  let module_components path =
+    match Path.Map.find_opt path !expansions with
+    | None -> None
+    | Some components -> (
+      (* [add_from_u_to_d] drops the consequences of an item on these
+         errors; the components are dropped the same way here. *)
+      try Some (Lazy.force components)
+      with Not_found | Env.Error (Lookup_error _) ->
+        log ~title:"D3" "D3: components of module %a could not be computed"
+          Logger.fmt
+          (Fun.flip (Format_doc.compat Path.print) path);
+        None)
+
   let module_consequences d env path =
     let md = Env.find_module_lazy path env in
 
     (* D13 If a module in U is an alias then this alias is also in U. *)
-    let { paths; substs; unexpanded }, more =
+    let { paths; substs }, more =
       match md.mdl_discourse_alias with
       | None -> (d, [])
       | Some (alias_lid, (_Module, alias_path)) ->
@@ -642,13 +663,15 @@ module D = struct
 
     (* D3. If a module path is in U then all the paths of its subcomponents
            are in D. We only expand on demand. *)
-    let paths, substs =
+    let () =
       match md.mdl_type with
       | MtyL_signature sig_ ->
-        log ~title:"D3" "D3: components of module %a are in D" Logger.fmt
+        log ~title:"D3" "D3: components of module %a are in D (on demand)"
+          Logger.fmt
           (Fun.flip (Format_doc.compat Path.print) path);
-        d3_rule env path paths substs sig_
-      | _ -> (paths, substs)
+        register_expansion path
+          (lazy (d3_rule env path Path_trie.empty Path.Map.empty sig_))
+      | _ -> ()
     in
 
     (* D5. If a module path is in U and its module description was written then
@@ -660,7 +683,7 @@ module D = struct
     let md_discourse = trie_of_paths md.mdl_discourse in
     let paths = Path_trie.union paths md_discourse in
 
-    ({ paths; substs; unexpanded }, more)
+    ({ paths; substs }, more)
 
   (* The consequences of an item are its contribution to D, together with the
      additional items found to be in U while computing it (alias targets). *)
@@ -763,13 +786,7 @@ module D = struct
           loop (Paths.add item seen) d
         end
     in
-    let d =
-      loop Paths.empty
-        { paths = u.U.discourse;
-          substs = u.U.substs;
-          unexpanded = Path.Set.empty
-        }
-    in
+    let d = loop Paths.empty { paths = u.U.discourse; substs = u.U.substs } in
     log_recap ~title:"D" "Final D:\n%a" Logger.fmt (Fun.flip pp_d d);
     d
 
@@ -840,5 +857,8 @@ let force_g () =
   u
 
 let get () = D.of_U (force_g ())
+
+let is_expandable = D.is_expandable
+let module_components = D.module_components
 
 let debug_print fmt = D.pp fmt (D.of_U (force_g ()))
