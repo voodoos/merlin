@@ -167,35 +167,24 @@ module Path_trie = Discourse_types.Path_trie
    thing in the printing environment, the weight of a name being the sum of the
    penalties of its components (see [path_size]).
 
-   The search is best-first on that weight:
    - candidates sit in a queue ordered by weight; levels (all candidates of the
      same weight) are validated in increasing order. Validating a candidate
      means finding its name in the printing environment and checking that it
-     denotes what the candidate stood for; it is then filed in a table under the
-     canonical path it denotes, or kept aside until the environment changes;
+     denotes the same item as the one we expect. Valid names are added to a
+     table indexed by canonical paths, invalid ones are kept aside.
    - after each level the table is consulted for the canonical path of the
      request. The search stops as soon as the best name found is strictly
-     lighter than everything left.
+     shorter than everything left.
 
    Rule D3 is lazy: the components of a module known under the apparent path
    [a] are only materialised ("expanded") when the search is about to validate
    a level that one of them could belong to, that is when weight(a) + 1 is not
-   heavier than that level: a component adds at least one name to the module's
-   path, and a path regrafted under a component by a substitution is heavier
-   still. An expansion runs before any level its components could reach, so
-   when a level is validated every candidate of that weight is in the queue, and
-   when the search stops the remaining expansions can only produce heavier
-   names. (A substitution whose target is exactly a new component could name it
-   lighter than the module; such a target is a node of the trie whenever it is
-   the request's own path, which is added to the trie at every call, so that
-   name is produced by the substitution pass of the call.)
+   heavier than that level.
 
-   The whole search state persists across the calls of a typing: candidates are
-   validated once, and a later call resumes where the previous one stopped. *)
+   The search state persists across the calls. *)
 
-(* A name that may denote the path to print. [apparent] is the name as the user
-   can write it (what we print), [full] the path it stood for when it was
-   recorded (what the name is checked against in the printing environment). *)
+(* A name that may denote the path to print. [apparent] is the user-facing name
+   while [full] is the actual path in the environment. *)
 type candidate = { apparent : Path.t; full : Path.t }
 
 (* Candidates ordered by the weight of their apparent path, lightest first *)
@@ -252,37 +241,33 @@ let pp_queue fmt queue =
     queue
 
 type search_state =
-  { queue : queue;
-    (* Candidates not validated yet *)
+  { queue : queue;  (** Candidates not tested yet *)
+    canon_table : Candidates.t Path.Map.t Kind_map.t;
+        (** The validated candidates, by kind and the canonical path they denote *)
     not_in_env : Path_trie.t;
-    (* Candidates whose name is not bound in the printing environment, kept
-       aside until the environment changes *)
-    table : Candidates.t Path.Map.t Kind_map.t;
-    (* The validated candidates, by kind and the canonical path they denote *)
-    pending_expansions : Expansions.t;
-    (* Expansions not done yet, lightest first *)
-    expanded : Expansions.t;
-    (* Expansions done: each one is done at most once *)
+        (** Candidates whose name is not bound in the printing environment, kept
+            aside until the environment changes *)
     known : Path_trie.t;
-    (* Every path queued so far, substitutions applied: an expansion only
-       queues the paths that are not already there, and a substitution it
-       discovers must also be applied to them *)
+        (** Every path queued so far to prevent queueing the same path twice *)
     substs : Discourse_types.substs;
-    (* The substitutions known so far (D12, D13), from the discourse and the
-       expansions *)
-    expansions : (Path_trie.t * Discourse_types.substs) Lazy.t Path.Map.t
-        (* The modules of U whose components are in D by rule lazy D3 *)
+        (** The substitutions known so far (D12, D13) *)
+    available_expansions :
+      (Path_trie.t * Discourse_types.substs) Lazy.t Path.Map.t;
+        (** The modules of U whose components are in D by rule lazy D3 *)
+    pending_expansions : Expansions.t;  (** Scheduled expansions *)
+    expanded : Expansions.t
+        (** Already expanded paths (to prevent expanding them again) *)
   }
 
 let initial_search_state =
   { queue = empty_queue;
+    canon_table = Kind_map.empty;
     not_in_env = Path_trie.empty;
-    table = Kind_map.empty;
-    pending_expansions = Expansions.empty;
-    expanded = Expansions.empty;
     known = Path_trie.empty;
     substs = Path.Map.empty;
-    expansions = Path.Map.empty
+    available_expansions = Path.Map.empty;
+    pending_expansions = Expansions.empty;
+    expanded = Expansions.empty
   }
 
 let search_state : search_state ref = Local_store.s_ref initial_search_state
@@ -293,7 +278,7 @@ let search_state : search_state ref = Local_store.s_ref initial_search_state
 
 type request = { env : Env.t; kind : kind; canon_path : Path.t }
 
-let is_expandable search full = Path.Map.mem full search.expansions
+let is_expandable search full = Path.Map.mem full search.available_expansions
 
 let table_of_kind kind table =
   Option.value ~default:Path.Map.empty (Kind_map.find_opt kind table)
@@ -361,10 +346,9 @@ let apply_substitutions_fixpoint substs paths =
   in
   loop ~fuel:2 paths paths
 
-(** {1 The queue} *)
+(** {1 The priority queue handling} *)
 
-(* Queues the candidates of [paths], and the expansions of those that are
-   modules of U *)
+(* Queues the [paths] candidates and appropriate pending expansions *)
 let enqueue search paths =
   let enqueue_item apparent search (kind, full) =
     let add kind search =
@@ -397,7 +381,7 @@ let enqueue search paths =
            items search)
        search
 
-(* Queues again the candidates kept aside in [not_in_env]: all of them, or
+(* Queues again the candidates kept aside in [not_in_env]: all of them, or only
    those rooted at [ident]. This must be called before shortening in an
    environment different from the one of the previous call, which is done after
    any function wrapped with [Printyp.wrap_printing_env]. *)
@@ -412,7 +396,7 @@ let restore_ignored_paths ident =
   | None -> ()
   | Some paths -> search_state := enqueue { state with not_in_env = kept } paths
 
-(** {1 Validation of candidates} *)
+(** {1 Canonical paths of candidates} *)
 
 let find_by_name env kind lid =
   match kind with
@@ -485,17 +469,17 @@ let best_known_name request state =
   let open Option.Syntax in
   let* candidates =
     Path.Map.find_opt request.canon_path
-      (table_of_kind request.kind state.table)
+      (table_of_kind request.kind state.canon_table)
   in
   Candidates.to_seq candidates
   |> Seq.find_map @@ fun candidate ->
      if denotes request candidate.apparent then Some candidate.apparent
      else None
 
-(** {1 Expansion (rule D3)} *)
+(** {1 Expansion forcing (rule D3)} *)
 
 let module_components search full =
-  match Path.Map.find_opt full search.expansions with
+  match Path.Map.find_opt full search.available_expansions with
   | None -> None
   | Some components -> (
     try Some (Lazy.force components)
@@ -634,8 +618,8 @@ let validate request search candidate =
           | Some candidates -> Some (Candidates.add candidate candidates))
         names
     in
-    let table = map_table_of_kind kind file search.table in
-    { search with queue; table }
+    let canon_table = map_table_of_kind kind file search.canon_table in
+    { search with queue; canon_table }
   | None ->
     log ~title:"fill_by_level" "Path %a invalid in the current env" Logger.fmt
       (Fun.flip path_print apparent);
@@ -690,10 +674,10 @@ let rec shorten ~env ~initial ~canon_path kind =
   let state =
     { !search_state with
       substs = discourse.substs;
-      expansions =
+      available_expansions =
         Path.Map.union
           (fun _ kept _ -> Some kept)
-          !search_state.expansions discourse.expansions
+          !search_state.available_expansions discourse.expansions
     }
   in
   log_dbg ~title:"shorten" "Current discourse: %a\n%!" Logger.fmt (fun fmt ->
@@ -703,7 +687,7 @@ let rec shorten ~env ~initial ~canon_path kind =
   log_dbg ~title:"shorten" "Current notinenv: %a" Logger.fmt (fun fmt ->
       Path_trie.pp_seq fmt state.not_in_env);
   log_dbg ~title:"shorten" "Current table: %a" Logger.fmt (fun fmt ->
-      pp_table fmt state.table);
+      pp_table fmt state.canon_table);
 
   let state =
     let additional_paths =
