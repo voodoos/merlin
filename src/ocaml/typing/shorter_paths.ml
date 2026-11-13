@@ -751,7 +751,7 @@ type type_resolution = Short_paths.type_resolution =
 
 let find_type env initial : type_result =
   match normalize_type_path env initial with
-  | _, Nth i -> (* TODO, this looks like this is incorrect *) Nth i
+  | _, Nth i -> Nth i
   | canon_path, Id -> Path (None, shorten ~env ~initial ~canon_path Type)
   | canon_path, Map l -> Path (Some l, shorten ~env ~initial ~canon_path Type)
 
