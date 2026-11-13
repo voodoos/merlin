@@ -116,6 +116,7 @@ let ident_scope id =
 
    TODO CR Ulysse there is room for adjustment here. Scope is not always a very
    good metric, proximity of the last usage might be better. *)
+(* Returns a couple with the name weight and the scope *)
 let path_size path =
   let name_penalty = Out_type.name_penalty in
   let rec size = function
@@ -227,11 +228,6 @@ module Expansions = Set.Make (struct
       if c <> 0 then c else Path.compare full full'
 end)
 
-(* The minimum weight of a component of a module known as [apparent] *)
-let min_component_weight apparent =
-  let length, scope = path_size apparent in
-  (length + 1, scope)
-
 (* The state of the search *)
 
 type queue = Candidates.t Kind_map.t
@@ -263,7 +259,7 @@ type search_state =
        aside until the environment changes *)
     table : Candidates.t Path.Map.t Kind_map.t;
     (* The validated candidates, by kind and the canonical path they denote *)
-    pending : Expansions.t;
+    pending_expansions : Expansions.t;
     (* Expansions not done yet, lightest first *)
     expanded : Expansions.t;
     (* Expansions done: each one is done at most once *)
@@ -278,18 +274,18 @@ type search_state =
         (* The modules of U whose components are in D by rule lazy D3 *)
   }
 
-let empty_search =
+let initial_search_state =
   { queue = empty_queue;
     not_in_env = Path_trie.empty;
     table = Kind_map.empty;
-    pending = Expansions.empty;
+    pending_expansions = Expansions.empty;
     expanded = Expansions.empty;
     known = Path_trie.empty;
     substs = Path.Map.empty;
     expansions = Path.Map.empty
   }
 
-let search_state : search_state ref = Local_store.s_ref empty_search
+let search_state : search_state ref = Local_store.s_ref initial_search_state
 (* TODO CR Ulysse having a table keyed by Uids would seem to be a better choice,
    but it does not always work. One example of that is test `sp-13` were a type
    from Deferred0 is redefined in Deferred, causing paths converging to this same
@@ -298,19 +294,6 @@ let search_state : search_state ref = Local_store.s_ref empty_search
 type request = { env : Env.t; kind : kind; canon_path : Path.t }
 
 let is_expandable search full = Path.Map.mem full search.expansions
-
-(* The components of the module of U [full], computed on first use. [None]
-   when following its alias sub-modules fails: [Discourse.add_from_u_to_d]
-   drops the consequences of an item on the same errors. *)
-let module_components search full =
-  match Path.Map.find_opt full search.expansions with
-  | None -> None
-  | Some components -> (
-    try Some (Lazy.force components)
-    with Not_found | Env.Error (Lookup_error _) ->
-      log ~title:"expand" "Components of module %a could not be computed"
-        Logger.fmt (Fun.flip path_print full);
-      None)
 
 let table_of_kind kind table =
   Option.value ~default:Path.Map.empty (Kind_map.find_opt kind table)
@@ -336,12 +319,8 @@ let normalize_type_path = Out_type.normalize_type_path ~cache:false
 
 (** {1 Substitutions} *)
 
-(* The paths obtained by applying [substs] once to [paths]: every node of
-   [paths] whose path is a substitution target is re-rooted under the
-   replacements. [apply_substitutions] is driven by the nodes of [paths], so
-   its cost does not depend on the number of substitutions (expansions apply
-   them to small tries, many times); [apply_substitutions_by_target] is driven
-   by the substitutions, for a few of them on a large trie. *)
+(** [apply_substitutions_by_target] is cheaper than [apply_substitutions] when
+   there are only few substitutions to apply. *)
 let apply_substitutions_by_target (substs : Discourse_types.substs) paths =
   Path.Map.fold
     (fun target replacements acc ->
@@ -354,6 +333,8 @@ let apply_substitutions_by_target (substs : Discourse_types.substs) paths =
           replacements acc)
     substs Path_trie.empty
 
+(** [apply_substitutions] is cheaper than [apply_substitutions_by_target] when
+   the trie is small. *)
 let apply_substitutions (substs : Discourse_types.substs) paths =
   Path_trie.fold_nodes
     (fun path (Trie (kinds, children)) acc ->
@@ -397,14 +378,14 @@ let enqueue search paths =
     | Module_type -> add Module_type search
     | Module ->
       let expansion = (apparent, full) in
-      let pending =
+      let pending_expansions =
         if
           is_expandable search full
           && not (Expansions.mem expansion search.expanded)
-        then Expansions.add expansion search.pending
-        else search.pending
+        then Expansions.add expansion search.pending_expansions
+        else search.pending_expansions
       in
-      add Module { search with pending }
+      add Module { search with pending_expansions }
     | Value | Extension_constructor | Class | Class_type | Constructor | Label
       -> search
   in
@@ -511,8 +492,125 @@ let best_known_name request state =
      if denotes request candidate.apparent then Some candidate.apparent
      else None
 
-(* Validates a candidate: it is filed in the table under the canonical path it
-   denotes, or kept aside in [not_in_env], and leaves the queue. *)
+(** {1 Expansion (rule D3)} *)
+
+let module_components search full =
+  match Path.Map.find_opt full search.expansions with
+  | None -> None
+  | Some components -> (
+    try Some (Lazy.force components)
+    with Not_found | Env.Error (Lookup_error _) ->
+      log ~title:"expand" "Components of module %a could not be obtained"
+        Logger.fmt (Fun.flip path_print full);
+      None)
+
+(* Materialises the components of the module [full], known as [apparent]: they
+   are queued, known substitutions are applied to them, and potential new
+   substitutions are recorded. *)
+let expand search ((apparent, full) as expansion) =
+  let search =
+    { search with
+      pending_expansions = Expansions.remove expansion search.pending_expansions;
+      expanded = Expansions.add expansion search.expanded
+    }
+  in
+  match module_components search full with
+  | None -> search
+  | Some (components, component_substs) ->
+    let rerooted =
+      if Path.same apparent full then components
+      else
+        (* Compute apparent paths (for opens) *)
+        match Path_trie.reach components full with
+        | None -> Path_trie.empty
+        | Some (Trie (kinds, children)) ->
+          Path_trie.trie_of_path ~children apparent kinds
+    in
+    (* D12: register only new substitutions *)
+    let new_substs =
+      Path.Map.filter_map
+        (fun target replacements ->
+          let known =
+            Option.value ~default:Path.Set.empty
+              (Path.Map.find_opt target search.substs)
+          in
+          let fresh = Path.Set.diff replacements known in
+          if Path.Set.is_empty fresh then None else Some fresh)
+        component_substs
+    in
+    let substs =
+      Path.Map.union
+        (fun _ a b -> Some (Path.Set.union a b))
+        search.substs new_substs
+    in
+    let rewritten =
+      (* Apply new subtitutions to known paths and all substitutions to new paths *)
+      Path_trie.union rerooted
+        (apply_substitutions_by_target new_substs search.known)
+      |> apply_substitutions_fixpoint substs
+    in
+    (* We only queue paths never seen before *)
+    let fresh = Path_trie.diff rewritten search.known in
+    log ~title:"expand"
+      "Expanding %a [%a]: %a components, %d new substs, %a new paths" Logger.fmt
+      (Fun.flip path_print apparent)
+      Logger.fmt (Fun.flip path_print full) Logger.fmt
+      (fun fmt -> Format.pp_print_int fmt (Path_trie.size components))
+      (Path.Map.cardinal new_substs)
+      Logger.fmt
+      (fun fmt -> Format.pp_print_int fmt (Path_trie.size fresh));
+    enqueue
+      { search with substs; known = Path_trie.union search.known fresh }
+      fresh
+
+(** {1 The search} *)
+
+(** Search alternates between two phases:
+   1. expand modules whose paths' weights are less than the next level's weight.
+   2. treat each item in the next level. *)
+type step =
+  | Expand of Expansions.elt
+      (** A module whose components may belong to the next level *)
+  | Level of Path.t * candidate Seq.t
+      (** The lightest level not validated yet: its lightest candidate and the
+          candidates from it *)
+
+(** The minimum weight of a component of a module known as [path] *)
+let min_component_weight path =
+  let length, scope = path_size path in
+  (length + 1, scope)
+
+(** Returns the next action to perform along with the weight of the shortest path
+   that can result from it *)
+let next_step request search =
+  let candidates =
+    Candidates.to_seq (queue_of_kind request.kind search.queue)
+  in
+  let lightest =
+    match candidates () with
+    | Seq.Nil -> None
+    | Seq.Cons (candidate, _) -> Some candidate.apparent
+  in
+  let level =
+    Option.map
+      (fun lightest -> (path_size lightest, Level (lightest, candidates)))
+      lightest
+  in
+  let expansion =
+    Option.map
+      (fun ((apparent, _) as expansion) ->
+        (min_component_weight apparent, Expand expansion))
+      (Expansions.min_elt_opt search.pending_expansions)
+  in
+  match (expansion, level) with
+  | None, step | step, None -> step
+  | Some ((expansion_weight, _) as expansion), Some ((level_weight, _) as level)
+    ->
+    if compare_weight expansion_weight level_weight <= 0 then Some expansion
+    else Some level
+
+(* Valid (in the current [env]) candidate are moved to the canonical lookup
+   table while invalid ones are moved to [not_in_env] for later re-check. *)
 let validate request search candidate =
   let kind = request.kind in
   let { apparent; full } = candidate in
@@ -549,105 +647,6 @@ let validate request search candidate =
         search.not_in_env
     in
     { search with queue; not_in_env }
-
-(** {1 Expansion (rule D3)} *)
-
-(* Materialises the components of the module [full], known as [apparent]: they
-   are queued, substitutions applied, and the substitutions of their alias
-   sub-modules are recorded. *)
-let expand search ((apparent, full) as expansion) =
-  let search =
-    { search with
-      pending = Expansions.remove expansion search.pending;
-      expanded = Expansions.add expansion search.expanded
-    }
-  in
-  match module_components search full with
-  | None -> search
-  | Some (components, component_substs) ->
-    (* The components, under the apparent name of the module *)
-    let rerooted =
-      if Path.same apparent full then components
-      else
-        match Path_trie.reach components full with
-        | None -> Path_trie.empty
-        | Some (Trie (kinds, children)) ->
-          Path_trie.trie_of_path ~children apparent kinds
-    in
-    (* D12: paths under an alias target can be written under the alias. The
-       substitutions known so far were applied to the paths known so far: the
-       new ones are applied to them here. *)
-    let new_substs =
-      Path.Map.filter_map
-        (fun target replacements ->
-          let known =
-            Option.value ~default:Path.Set.empty
-              (Path.Map.find_opt target search.substs)
-          in
-          let fresh = Path.Set.diff replacements known in
-          if Path.Set.is_empty fresh then None else Some fresh)
-        component_substs
-    in
-    let substs =
-      Path.Map.union
-        (fun _ a b -> Some (Path.Set.union a b))
-        search.substs new_substs
-    in
-    let rewritten =
-      Path_trie.union rerooted
-        (apply_substitutions_by_target new_substs search.known)
-      |> apply_substitutions_fixpoint substs
-    in
-    (* Paths already known were queued (and possibly validated) before *)
-    let fresh = Path_trie.diff rewritten search.known in
-    log ~title:"expand"
-      "Expanding %a [%a]: %a components, %d new substs, %a new paths" Logger.fmt
-      (Fun.flip path_print apparent)
-      Logger.fmt (Fun.flip path_print full) Logger.fmt
-      (fun fmt -> Format.pp_print_int fmt (Path_trie.size components))
-      (Path.Map.cardinal new_substs)
-      Logger.fmt
-      (fun fmt -> Format.pp_print_int fmt (Path_trie.size fresh));
-    enqueue
-      { search with substs; known = Path_trie.union search.known fresh }
-      fresh
-
-(** {1 The search} *)
-
-(* What the search does next, with the weight it is about to reach *)
-type step =
-  | Expand of Expansions.elt
-      (** A module whose components may belong to the next level *)
-  | Level of Path.t * candidate Seq.t
-      (** The lightest level not validated yet: its lightest candidate and the
-          candidates from it *)
-
-let next_step request search =
-  let candidates =
-    Candidates.to_seq (queue_of_kind request.kind search.queue)
-  in
-  let lightest =
-    match candidates () with
-    | Seq.Nil -> None
-    | Seq.Cons (candidate, _) -> Some candidate.apparent
-  in
-  let level =
-    Option.map
-      (fun lightest -> (path_size lightest, Level (lightest, candidates)))
-      lightest
-  in
-  let expansion =
-    Option.map
-      (fun ((apparent, _) as expansion) ->
-        (min_component_weight apparent, Expand expansion))
-      (Expansions.min_elt_opt search.pending)
-  in
-  match (expansion, level) with
-  | None, step | step, None -> step
-  | Some ((expansion_weight, _) as expansion), Some ((level_weight, _) as level)
-    ->
-    if compare_weight expansion_weight level_weight <= 0 then Some expansion
-    else Some level
 
 (* Validates the candidates of the level of [lightest] *)
 let validate_level request ~lightest candidates search =
