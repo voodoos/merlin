@@ -94,15 +94,20 @@ let pp_d fmt d =
         (pp_print_list ~pp_sep pp_substs_binding)
         (Path.Map.bindings map)
   in
+  let pp_expandable fmt map =
+    fprintf fmt "@[<1>[%a]@]"
+      (pp_print_list ~pp_sep (Format_doc.compat Path.print))
+      (List.map fst (Path.Map.bindings map))
+  in
   fprintf fmt
     "@[<v 2>Discourse {@;\
      size = %i;@;\
      paths =@ %a;@;\
      substs =@ %a;@;\
-     unexpanded =@ %a@;\
+     expandable =@ %a@;\
      <-2>}@]"
     (Path_trie.size d.paths) Path_trie.pp_seq d.paths pp_substs d.substs
-    pp_path_set d.unexpanded
+    pp_expandable d.expansions
 
 (* A more verbose section which logs every addition to U or D, along with the
    reason the element is added (U1, U2, U3, D2, …, D12) *)
@@ -633,7 +638,7 @@ module D = struct
     let md = Env.find_module_lazy path env in
 
     (* D13 If a module in U is an alias then this alias is also in U. *)
-    let { paths; substs; unexpanded }, more =
+    let d, more =
       match md.mdl_discourse_alias with
       | None -> (d, [])
       | Some (alias_lid, (_Module, alias_path)) ->
@@ -641,14 +646,25 @@ module D = struct
     in
 
     (* D3. If a module path is in U then all the paths of its subcomponents
-           are in D. We only expand on demand. *)
-    let paths, substs =
+       are in D. They are only computed on demand when shortening. *)
+    let d =
       match md.mdl_type with
       | MtyL_signature sig_ ->
-        log ~title:"D3" "D3: components of module %a are in D" Logger.fmt
+        log ~title:"D3" "D3: components of module %a are in D (on demand)"
+          Logger.fmt
           (Fun.flip (Format_doc.compat Path.print) path);
-        d3_rule env path paths substs sig_
-      | _ -> (paths, substs)
+        let components =
+          lazy (d3_rule env path Path_trie.empty Path.Map.empty sig_)
+        in
+        let expansions =
+          Path.Map.update path
+            (function
+              | None -> Some components
+              | already -> already)
+            d.expansions
+        in
+        { d with expansions }
+      | _ -> d
     in
 
     (* D5. If a module path is in U and its module description was written then
@@ -658,9 +674,7 @@ module D = struct
     log ~title:"D5" "D5: merging discourse of module %a" Logger.fmt
       (Fun.flip (Format_doc.compat Path.print) path);
     let md_discourse = trie_of_paths md.mdl_discourse in
-    let paths = Path_trie.union paths md_discourse in
-
-    ({ paths; substs; unexpanded }, more)
+    ({ d with paths = Path_trie.union d.paths md_discourse }, more)
 
   (* The consequences of an item are its contribution to D, together with the
      additional items found to be in U while computing it (alias targets). *)
@@ -767,7 +781,7 @@ module D = struct
       loop Paths.empty
         { paths = u.U.discourse;
           substs = u.U.substs;
-          unexpanded = Path.Set.empty
+          expansions = Path.Map.empty
         }
     in
     log_recap ~title:"D" "Final D:\n%a" Logger.fmt (Fun.flip pp_d d);

@@ -404,7 +404,11 @@ let pp fmt t = pp_items fmt (merge_sorted t.local t.extern)
 type substs = Path.Set.t Path.Map.t
 
 type discourse =
-  { paths : Path_trie.t; substs : substs; unexpanded : Path.Set.t }
+  { paths : Path_trie.t;
+    substs : substs;
+    expansions : (Path_trie.t * substs) Lazy.t Path.Map.t
+        (** Lazyly applied D3 rule *)
+  }
 
 let pp_path = Format_doc.compat Path.print
 
