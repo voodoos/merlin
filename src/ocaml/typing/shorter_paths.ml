@@ -725,8 +725,7 @@ let find_type_resolution env path : type_resolution =
 
 let find_type_simple env initial =
   let canon_path, _subst = normalize_type_path env initial in
-  let short = shorten ~env ~initial ~canon_path Type in
-  short
+  shorten ~env ~initial ~canon_path Type
 
 let find_module_type env initial =
   let canon_path = Env.normalize_modtype_path env initial in
