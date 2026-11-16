@@ -1,30 +1,5 @@
 (* This module exists to prevent a dependency cycle with Types. *)
 
-let rec compare_longidents ?(compare_strings = String.compare)
-    (l1 : Longident.t) (l2 : Longident.t) =
-  match (l1, l2) with
-  | Lident s1, Lident s2 -> compare_strings s1 s2
-  | Lident _, _ -> -1
-  | _, Lident _ -> 1
-  | Ldot (l1, s1), Ldot (l2, s2) ->
-    let c = compare_longidents l1.txt l2.txt in
-    if c = 0 then compare_strings s1.txt s2.txt else c
-  | Lapply (l1, l'1), Lapply (l2, l'2) ->
-    let c = compare_longidents l1.txt l2.txt in
-    if c = 0 then compare_longidents l'1.txt l'2.txt else c
-  | Ldot _, Lapply _ -> -1
-  | Lapply _, Ldot _ -> 1
-
-module Lid_set = Set.Make (struct
-  type t = Longident.t
-  let compare a b = compare_longidents a b
-end)
-
-module Lid_map = Map.Make (struct
-  type t = Longident.t
-  let compare a b = compare_longidents a b
-end)
-
 module Item = struct
   type t = Shape.Sig_component_kind.t * Path.t
 
@@ -38,22 +13,6 @@ module Item = struct
 end
 
 module Paths = Set.Make (Item)
-
-let pp_item_list ppf items =
-  let pp_sep ppf () = Format.fprintf ppf ";@;" in
-  let paths = List.map (fun (_, p) -> p) items in
-  Format.pp_print_list ~pp_sep (Format_doc.compat Path.print) ppf paths
-
-let pp_paths ppf t = pp_item_list ppf (Paths.elements t)
-
-module String_map = Map.Make (String)
-
-module Kinds = Set.Make (struct
-  type t = Shape.Sig_component_kind.t
-
-  (* Only constant constructors: structural comparison is exact. *)
-  let compare = Stdlib.compare
-end)
 
 module Segment = struct
   (* One step of a path: [Root] is the ident a path starts with, [Apply] holds
@@ -79,7 +38,7 @@ module Segment = struct
     | Extra e, Extra e' -> Path.compare_extra e e'
     | (Root _ | Dot _ | Apply _ | Extra _), _ -> Int.compare (rank s) (rank s')
 
-  let print ppf = function
+  let pp ppf = function
     | Root id -> Ident.print ppf id
     | Dot name -> Format.pp_print_string ppf name
     | Apply p -> Format.fprintf ppf "(%a)" (Format_doc.compat Path.print) p
@@ -108,7 +67,7 @@ module Path_trie = struct
   let rec pp fmt (Trie (paths, tries)) =
     Format.fprintf fmt "%a :> %a" pp_kinds paths
       (Format.pp_print_seq (fun fmt (segment, trie) ->
-           Format.fprintf fmt "@[<v 2>%a: %a@]" Segment.print segment pp trie))
+           Format.fprintf fmt "@[<v 2>%a: %a@]" Segment.pp segment pp trie))
       (Segment_map.to_seq tries)
 
   let node ?(children = Segment_map.empty) paths = Trie (paths, children)
@@ -359,8 +318,6 @@ let fold f t acc =
   let fold items acc = Array.fold_left (fun acc item -> f item acc) acc items in
   fold t.extern (fold t.local acc)
 
-let pp_items ppf items = pp_item_list ppf (Array.to_list items)
-
 (* We record the stamp at the time of entering a new struct or sig during
    typing. This allows us to filter out siblings of the currently typed item
    from its discourse. *)
@@ -397,8 +354,6 @@ let union t t' =
   { local = merge_sorted t.local t'.local;
     extern = merge_sorted t.extern t'.extern
   }
-
-let pp fmt t = pp_items fmt (merge_sorted t.local t.extern)
 
 (* A substitution maps a path to the paths it can be replaced with. *)
 type substs = Path.Set.t Path.Map.t
