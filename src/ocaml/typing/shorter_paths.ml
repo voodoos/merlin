@@ -84,30 +84,7 @@ module Out_type = struct
       match find_double_underscore s with
       | None -> 2
       | Some _ -> penalty_size
-
-  let penalty s =
-    if s <> "" && s.[0] = '_' then 10
-    else
-      match find_double_underscore s with
-      | None -> 1
-      | Some _ -> 10
 end
-
-let rec longident_cost = function
-  | Longident.Lident id -> Out_type.penalty id
-  | Ldot (l, id) -> Out_type.penalty id.txt + longident_cost l.txt
-  | Lapply (l1, l2) -> longident_cost l1.txt + longident_cost l2.txt
-
-let compare_strings s1 s2 =
-  let length_diff = String.length s1 - String.length s2 in
-  if length_diff <> 0 then length_diff else String.compare s1 s2
-
-let compare_longidents l1 l2 =
-  let l1_cost = longident_cost l1 in
-  let l2_cost = longident_cost l2 in
-  let cost_diff = l1_cost - l2_cost in
-  if cost_diff <> 0 then cost_diff
-  else Discourse_types.compare_longidents ~compare_strings l1 l2
 
 let ident_scope id =
   if Ident.is_predef id then Ident.highest_scope else Ident.scope id
