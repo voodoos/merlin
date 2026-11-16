@@ -157,29 +157,18 @@ module Path_trie = Discourse_types.Path_trie
 
 (* Shortening a path
 
-   Typing records the paths the user wrote and the names brought in scope (U,
-   see [Discourse]). From U we derive D, the names worth trying as replacements:
-   the paths of U, the components of the modules of U (rule D3), the paths used
-   in the declarations of U, and the substitutions obtained from aliases and
-   opens (a path under an alias target can be written under the alias).
-
-   Given a path to print, we want the lightest name of D that denotes the same
+   Given a path to print, we want the lightest name in D that denotes the same
    thing in the printing environment, the weight of a name being the sum of the
    penalties of its components (see [path_size]).
 
-   - candidates sit in a queue ordered by weight; levels (all candidates of the
+   - candidates sit in a queue ordered by weight: levels (all candidates of the
      same weight) are validated in increasing order. Validating a candidate
      means finding its name in the printing environment and checking that it
      denotes the same item as the one we expect. Valid names are added to a
      table indexed by canonical paths, invalid ones are kept aside.
    - after each level the table is consulted for the canonical path of the
      request. The search stops as soon as the best name found is strictly
-     shorter than everything left.
-
-   Rule D3 is lazy: the components of a module known under the apparent path
-   [a] are only materialised ("expanded") when the search is about to validate
-   a level that one of them could belong to, that is when weight(a) + 1 is not
-   heavier than that level.
+     shorter than everything left in the queue.
 
    The search state persists across the calls. *)
 
@@ -404,9 +393,7 @@ let find_by_name env kind lid =
   | Module -> fst (Env.find_module_by_name_lazy lid env)
   | Module_type -> fst (Env.find_modtype_by_name_lazy lid env)
 
-(* The path a name denotes in [env], if it is bound. Candidates are apparent
-   paths: in the presence of [open] statements they cannot be looked up
-   directly, so they are found by name.
+(* The path a name denotes in [env], if it is bound.
 
    TODO CR Ulysse if required we might use a shortcut here with "find_"
    functions but these must be treated carefully as they do allow hidden
@@ -423,8 +410,10 @@ let normalize env kind path =
   | Module -> Env.normalize_module_path None env path
   | Module_type -> Env.normalize_modtype_path env path
 
-(* The canonical path a candidate denotes in [env], if its name is bound there
-   and denotes what the candidate stood for (and not an homonym). *)
+(* The canonical path of a candidate in [env]. In the presence of [open]
+   statements, candidates [apparent] paths they cannot be looked up directly, so
+   they are found by name and then we check that the result is coherent with
+   their [full] path. *)
 let canonical_path_of_candidate { env; kind; _ } { apparent; full } =
   (* TODO it might be worth it to memoïze this function *)
   match find_path_by_name env kind apparent with
