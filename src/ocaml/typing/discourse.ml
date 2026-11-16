@@ -129,7 +129,7 @@ module U = struct
   (* Origin of signature components additions *)
   type origin = Open | Include | Module_type_of | Printing
 
-  (* The rule that record [Used] event in U for printing *)
+  (* The rule that recorded a [Used] event in U for printing *)
   type rule = U1 | U2
 
   (* We build U lazily: during typing we only log [event]s, and the actual work
@@ -340,9 +340,10 @@ module U = struct
 
      A component [x] is known under two paths: [path_under_open.x], the one the
      user can write now that the module is opened (and the one we want to print)
-     and [open_path.x], the one valid in the current environment. We record the
-     pair, so that a candidate coming out of an [open] can still be checked
-     against an environment and filed under the right canonical path. *)
+     and [open_path.path_under_open.x], the one valid in the current
+     environment. We remember both, so that a candidate coming out of an [open]
+     can still be checked against an environment and filed under the right
+     canonical path. *)
   let define_signature_components ~mode ~origin ~env ?open_path ?path_under_open
       (sg : Subst.Lazy.signature) u =
     let from, by =
@@ -400,9 +401,6 @@ module U = struct
           let u =
             match mdl_type with
             | MtyL_alias alias_path ->
-              (* TODO CR Ulysse Maybe we could have some lazynes here to keep
-                      the benefit of adding to U while preventing unnecessary
-                      CMI loads ? *)
               let target = Env.normalize_module_path None env alias_path in
               add_subst_u target ~by:path_under_open u
             | _ -> use_module env (lid id) full_path u
