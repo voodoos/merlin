@@ -220,7 +220,7 @@ module U = struct
       not in U.
 *)
 
-  let reset ?(substs = Path.Map.empty) () = g := { empty_u with substs }
+  let reset () = g := empty_u
 
   let record_usages = Config.merlin
 

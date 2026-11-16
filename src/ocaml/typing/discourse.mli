@@ -51,5 +51,5 @@ val get : unit -> Discourse_types.discourse
 
 val debug_print : Format.formatter -> unit
 
-(** Empty U except for the substitutions [substs] *)
-val reset : ?substs:Discourse_types.substs -> unit -> unit
+(** Empty U *)
+val reset : unit -> unit

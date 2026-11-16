@@ -293,6 +293,9 @@ let normalize_type_path = Out_type.normalize_type_path ~cache:false
 
 (** {1 Substitutions} *)
 
+let merge_substs (substs : Discourse_types.substs) substs' =
+  Path.Map.union (fun _ a b -> Some (Path.Set.union a b)) substs substs'
+
 (** [apply_substitutions_by_target] is cheaper than [apply_substitutions] when
    there are only few substitutions to apply. *)
 let apply_substitutions_by_target (substs : Discourse_types.substs) paths =
@@ -509,11 +512,7 @@ let expand search ((apparent, full) as expansion) =
           if Path.Set.is_empty fresh then None else Some fresh)
         component_substs
     in
-    let substs =
-      Path.Map.union
-        (fun _ a b -> Some (Path.Set.union a b))
-        search.substs new_substs
-    in
+    let substs = merge_substs search.substs new_substs in
     let rewritten =
       (* Apply new subtitutions to known paths and all substitutions to new paths *)
       Path_trie.union rerooted
@@ -660,7 +659,7 @@ let rec shorten ~env ~initial ~canon_path kind =
   let discourse = Discourse.get () in
   let state =
     { !search_state with
-      substs = discourse.substs;
+      substs = merge_substs !search_state.substs discourse.substs;
       available_expansions =
         Path.Map.union
           (fun _ kept _ -> Some kept)
@@ -702,9 +701,8 @@ let rec shorten ~env ~initial ~canon_path kind =
   (* Is there a better one ? *)
   let best, state = search_levels request state best in
 
-  (* U is emptied; the substitutions, including those found by the expansions,
-     are kept *)
-  Discourse.reset ~substs:state.substs ();
+  (* Empty U, every relevant information is kept in the search state *)
+  Discourse.reset ();
   search_state := state;
 
   Option.value ~default:initial best |> shorten_application_args env
