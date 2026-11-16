@@ -413,11 +413,9 @@ let find_by_name env kind lid =
    module to be used. (breaks l-repro2 for example) *)
 let find_path_by_name env kind apparent =
   let lid = Untypeast.lident_of_path apparent in
-  (* TODO Env.find_type_by_name can raise Assertion_failure when the case Papply
-     is reached in Env.lookup_type_path_full *)
   match find_by_name env kind lid with
   | found -> Some found
-  | exception (Not_found | Assert_failure _) -> None
+  | exception Not_found -> None
 
 let normalize env kind path =
   match kind with
